@@ -1,0 +1,10 @@
+{
+  "name": "@easyping/database",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Supabase migrations and database schemas",
+  "main": "index.js",
+  "scripts": {
+    "typecheck": "echo 'No TypeScript in database package'"
+  }
+}

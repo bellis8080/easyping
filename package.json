@@ -11,10 +11,13 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json}\"",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "analyze": "ANALYZE=true pnpm --filter=@easyping/web build",
+    "lighthouse": "lhci autorun",
     "prepare": "husky"
   },
   "devDependencies": {
     "@eslint/js": "^9.38.0",
+    "@lhci/cli": "^0.15.1",
     "@typescript-eslint/eslint-plugin": "^8.46.2",
     "@typescript-eslint/parser": "^8.46.2",
     "eslint": "^9",

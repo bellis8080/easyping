@@ -155,6 +155,10 @@ git push origin feature/add-ticket-search
 
 ## Coding Standards
 
+> **📘 Comprehensive Guide:** For complete coding standards, see [docs/architecture/coding-standards.md](./docs/architecture/coding-standards.md)
+
+This section provides a quick reference for common coding patterns. For detailed guidelines, naming conventions, file structure, and best practices, refer to the full documentation.
+
 ### TypeScript
 
 **Strict Mode Enforced:**

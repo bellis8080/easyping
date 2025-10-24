@@ -8,22 +8,30 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
 
 // Zod validation schema with password strength requirements
-const resetPasswordSchema = z.object({
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-    .regex(/[0-9]/, 'Password must contain at least one number'),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ['confirmPassword'],
-});
+const resetPasswordSchema = z
+  .object({
+    password: z
+      .string()
+      .min(8, 'Password must be at least 8 characters')
+      .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+      .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+      .regex(/[0-9]/, 'Password must contain at least one number'),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ['confirmPassword'],
+  });
 
 type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
@@ -44,7 +52,9 @@ export default function ResetPasswordPage() {
   const password = watch('password');
 
   // Calculate password strength
-  const getPasswordStrength = (pwd: string): { strength: number; label: string; color: string } => {
+  const getPasswordStrength = (
+    pwd: string
+  ): { strength: number; label: string; color: string } => {
     if (!pwd) return { strength: 0, label: '', color: '' };
 
     let strength = 0;
@@ -55,8 +65,10 @@ export default function ResetPasswordPage() {
     if (/[^A-Za-z0-9]/.test(pwd)) strength++;
 
     if (strength <= 2) return { strength, label: 'Weak', color: 'bg-red-500' };
-    if (strength === 3) return { strength, label: 'Fair', color: 'bg-yellow-500' };
-    if (strength === 4) return { strength, label: 'Good', color: 'bg-blue-500' };
+    if (strength === 3)
+      return { strength, label: 'Fair', color: 'bg-yellow-500' };
+    if (strength === 4)
+      return { strength, label: 'Good', color: 'bg-blue-500' };
     return { strength, label: 'Strong', color: 'bg-green-500' };
   };
 
@@ -79,7 +91,9 @@ export default function ResetPasswordPage() {
       // Redirect to login on success
       router.push('/login?message=Password reset successful');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+      setError(
+        err instanceof Error ? err.message : 'An unexpected error occurred'
+      );
     }
   };
 
@@ -108,7 +122,9 @@ export default function ResetPasswordPage() {
                 {...register('password')}
               />
               {errors.password && (
-                <p className="text-sm text-red-600">{errors.password.message}</p>
+                <p className="text-sm text-red-600">
+                  {errors.password.message}
+                </p>
               )}
 
               {/* Password strength indicator */}
@@ -119,13 +135,18 @@ export default function ResetPasswordPage() {
                       <div
                         key={i}
                         className={`h-1 flex-1 rounded-full ${
-                          i < passwordStrength.strength ? passwordStrength.color : 'bg-gray-200'
+                          i < passwordStrength.strength
+                            ? passwordStrength.color
+                            : 'bg-gray-200'
                         }`}
                       />
                     ))}
                   </div>
                   <p className="text-xs text-gray-600">
-                    Password strength: <span className="font-medium">{passwordStrength.label}</span>
+                    Password strength:{' '}
+                    <span className="font-medium">
+                      {passwordStrength.label}
+                    </span>
                   </p>
                 </div>
               )}
@@ -141,7 +162,9 @@ export default function ResetPasswordPage() {
                 {...register('confirmPassword')}
               />
               {errors.confirmPassword && (
-                <p className="text-sm text-red-600">{errors.confirmPassword.message}</p>
+                <p className="text-sm text-red-600">
+                  {errors.confirmPassword.message}
+                </p>
               )}
             </div>
 

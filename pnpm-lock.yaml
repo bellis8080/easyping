@@ -44,6 +44,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@easyping/types':
+        specifier: workspace:^
+        version: link:../../packages/types
       '@hookform/resolvers':
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.65.0)
@@ -72,6 +75,9 @@ importers:
         specifier: ^4.1.12
         version: 4.1.12
     devDependencies:
+      '@eslint/eslintrc':
+        specifier: ^3.3.1
+        version: 3.3.1
       '@next/bundle-analyzer':
         specifier: ^16.0.0
         version: 16.0.0

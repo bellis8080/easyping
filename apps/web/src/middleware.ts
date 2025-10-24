@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
+import { UserRole } from '@easyping/types';
+import { canAccessRoute } from '@/lib/auth/permissions';
 
 export async function middleware(request: NextRequest) {
   // Refresh session and set tenant context
@@ -7,22 +9,40 @@ export async function middleware(request: NextRequest) {
 
   // Check if user is authenticated
   const userId = response.headers.get('x-user-id');
+  const userRole = response.headers.get('x-user-role') as UserRole | null;
 
   // Define protected route patterns
   const protectedPaths = ['/dashboard', '/tickets', '/kb', '/settings'];
-  const authPaths = ['/login', '/signup', '/forgot-password', '/reset-password'];
+  const authPaths = [
+    '/login',
+    '/signup',
+    '/forgot-password',
+    '/reset-password',
+  ];
 
   const { pathname } = request.nextUrl;
 
   // Check if current path is protected
-  const isProtectedPath = protectedPaths.some(path => pathname.startsWith(path));
-  const isAuthPath = authPaths.some(path => pathname.startsWith(path));
+  const isProtectedPath = protectedPaths.some((path) =>
+    pathname.startsWith(path)
+  );
+  const isAuthPath = authPaths.some((path) => pathname.startsWith(path));
 
   // Redirect to login if accessing protected route without auth
   if (isProtectedPath && !userId) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Check role-based access for authenticated users
+  if (userId && userRole && isProtectedPath) {
+    if (!canAccessRoute(userRole, pathname)) {
+      // User doesn't have permission for this route
+      const dashboardUrl = new URL('/dashboard', request.url);
+      dashboardUrl.searchParams.set('error', 'insufficient_permissions');
+      return NextResponse.redirect(dashboardUrl);
+    }
   }
 
   // Redirect to dashboard if accessing auth pages while authenticated

@@ -24,7 +24,8 @@ export async function GET(request: Request) {
     );
 
     // Exchange the code for a session
-    const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+    const { data: sessionData, error: sessionError } =
+      await supabase.auth.exchangeCodeForSession(code);
 
     if (sessionError) {
       console.error('OAuth session exchange error:', sessionError);
@@ -39,11 +40,12 @@ export async function GET(request: Request) {
     const user = sessionData.user;
 
     // Check if user profile exists in database (use admin client to bypass RLS)
-    const { data: existingProfile, error: profileCheckError } = await supabaseAdmin
-      .from('users')
-      .select('id')
-      .eq('id', user.id)
-      .maybeSingle();
+    const { data: existingProfile, error: profileCheckError } =
+      await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
 
     if (profileCheckError) {
       console.error('Error checking user profile:', profileCheckError);
@@ -53,8 +55,12 @@ export async function GET(request: Request) {
     if (!existingProfile) {
       // Extract user data from OAuth provider
       const email = user.email || '';
-      const full_name = user.user_metadata?.full_name || user.user_metadata?.name || email.split('@')[0];
-      const avatar_url = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
+      const full_name =
+        user.user_metadata?.full_name ||
+        user.user_metadata?.name ||
+        email.split('@')[0];
+      const avatar_url =
+        user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
 
       // Get default organization UUID (use admin client to bypass RLS)
       const { data: defaultOrg, error: orgError } = await supabaseAdmin
@@ -69,33 +75,35 @@ export async function GET(request: Request) {
       }
 
       // Check if this is the first user in the organization (should be owner)
-      const { data: existingUsers, error: usersCheckError } = await supabaseAdmin
-        .from('users')
-        .select('id')
-        .eq('tenant_id', defaultOrg.id)
-        .limit(1);
+      const { data: existingUsers, error: usersCheckError } =
+        await supabaseAdmin
+          .from('users')
+          .select('id')
+          .eq('tenant_id', defaultOrg.id)
+          .limit(1);
 
       if (usersCheckError) {
         console.error('Error checking existing users:', usersCheckError);
       }
 
-      const role = existingUsers && existingUsers.length === 0 ? 'owner' : 'end_user';
+      const role =
+        existingUsers && existingUsers.length === 0 ? 'owner' : 'end_user';
 
       // Create user profile (use admin client to bypass RLS)
-      const { error: createError } = await supabaseAdmin
-        .from('users')
-        .insert({
-          id: user.id,
-          tenant_id: defaultOrg.id,
-          email,
-          full_name,
-          avatar_url,
-          role,
-        });
+      const { error: createError } = await supabaseAdmin.from('users').insert({
+        id: user.id,
+        tenant_id: defaultOrg.id,
+        email,
+        full_name,
+        avatar_url,
+        role,
+      });
 
       if (createError) {
         console.error('Error creating user profile:', createError);
-        return NextResponse.redirect(`${origin}/login?error=profile_creation_failed`);
+        return NextResponse.redirect(
+          `${origin}/login?error=profile_creation_failed`
+        );
       }
     }
 

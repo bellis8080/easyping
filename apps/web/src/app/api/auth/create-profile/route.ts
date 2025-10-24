@@ -11,13 +11,13 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
 
     // Get current authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Use admin client for database operations (bypasses RLS)
@@ -55,7 +55,10 @@ export async function POST(request: NextRequest) {
         id: user.id,
         tenant_id: DEFAULT_ORG_ID,
         email: user.email!,
-        full_name: full_name || user.user_metadata.full_name || user.email!.split('@')[0],
+        full_name:
+          full_name ||
+          user.user_metadata.full_name ||
+          user.email!.split('@')[0],
         avatar_url: avatar_url || user.user_metadata.avatar_url || null,
         role,
       })

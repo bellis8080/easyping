@@ -8,7 +8,13 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
 
 // Zod validation schema
@@ -37,9 +43,12 @@ export default function ForgotPasswordPage() {
       setSuccess(false);
 
       // Request password reset email
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(data.email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+        data.email,
+        {
+          redirectTo: `${window.location.origin}/reset-password`,
+        }
+      );
 
       if (resetError) {
         setError(resetError.message);
@@ -48,7 +57,9 @@ export default function ForgotPasswordPage() {
 
       setSuccess(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+      setError(
+        err instanceof Error ? err.message : 'An unexpected error occurred'
+      );
     }
   };
 
@@ -58,7 +69,8 @@ export default function ForgotPasswordPage() {
         <CardHeader>
           <CardTitle>Reset your password</CardTitle>
           <CardDescription>
-            Enter your email address and we&apos;ll send you a link to reset your password
+            Enter your email address and we&apos;ll send you a link to reset
+            your password
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -66,7 +78,8 @@ export default function ForgotPasswordPage() {
             <div className="space-y-4">
               <div className="rounded-md bg-green-50 p-4">
                 <p className="text-sm text-green-800">
-                  Check your email for a password reset link. If you don&apos;t see it, check your spam folder.
+                  Check your email for a password reset link. If you don&apos;t
+                  see it, check your spam folder.
                 </p>
               </div>
               <Link href="/login">
@@ -103,7 +116,10 @@ export default function ForgotPasswordPage() {
 
               <p className="text-center text-sm text-gray-600">
                 Remember your password?{' '}
-                <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500">
+                <Link
+                  href="/login"
+                  className="font-medium text-blue-600 hover:text-blue-500"
+                >
                   Back to login
                 </Link>
               </p>

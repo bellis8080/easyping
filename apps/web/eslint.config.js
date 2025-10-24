@@ -1,17 +1,16 @@
-export default [
-  {
-    ignores: [
-      '**/node_modules/**',
-      '**/.next/**',
-      '**/out/**',
-      '**/build/**',
-      '**/dist/**',
-      '**/.turbo/**',
-      '**/coverage/**',
-      '**/.cache/**',
-      '**/tests/**',
-    ],
-  },
+import { FlatCompat } from '@eslint/eslintrc';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const compat = new FlatCompat({
+  baseDirectory: __dirname,
+});
+
+const eslintConfig = [
+  ...compat.extends('next/core-web-vitals', 'next/typescript'),
   {
     languageOptions: {
       parserOptions: {
@@ -57,7 +56,33 @@ export default [
       },
     },
     rules: {
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
+      '@typescript-eslint/no-non-null-assertion': 'warn',
+      '@typescript-eslint/no-empty-object-type': 'warn',
       'no-undef': 'off', // TypeScript handles this
     },
   },
+  {
+    ignores: [
+      'node_modules/**',
+      '.next/**',
+      'out/**',
+      'build/**',
+      'dist/**',
+      '.turbo/**',
+      'coverage/**',
+      '.cache/**',
+      'tests/**',
+    ],
+  },
 ];
+
+export default eslintConfig;

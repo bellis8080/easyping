@@ -12,3 +12,6 @@ export type {
   UpdateOrganization,
   UpdateUser,
 } from './models';
+
+// Re-export enums and helpers
+export { UserRole, isUserRole, getAllUserRoles } from './enums';

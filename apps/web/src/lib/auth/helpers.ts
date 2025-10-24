@@ -1,5 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { redirect } from 'next/navigation';
+import { UserRole, User } from '@easyping/types';
+import { hasPermission as hasRolePermission } from './permissions';
 
 /**
  * Get the current authenticated user (server-side)
@@ -9,7 +12,10 @@ export async function getCurrentUser() {
   const supabase = await createClient();
 
   try {
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
 
     if (error || !user) {
       return null;
@@ -23,12 +29,11 @@ export async function getCurrentUser() {
 }
 
 /**
- * Get user profile with tenant information (server-side)
+ * Get user profile with tenant and role information (server-side)
+ * Uses admin client to bypass RLS policies
  * Returns null if not authenticated or profile doesn't exist
  */
-export async function getUserProfile() {
-  const supabase = await createClient();
-
+export async function getUserProfile(): Promise<User | null> {
   try {
     const user = await getCurrentUser();
 
@@ -36,7 +41,9 @@ export async function getUserProfile() {
       return null;
     }
 
-    const { data: profile, error } = await supabase
+    // Use admin client to bypass RLS
+    const adminClient = createAdminClient();
+    const { data: profile, error } = await adminClient
       .from('users')
       .select('*')
       .eq('id', user.id)
@@ -47,7 +54,7 @@ export async function getUserProfile() {
       return null;
     }
 
-    return profile;
+    return profile as User;
   } catch (error) {
     console.error('Error getting user profile:', error);
     return null;
@@ -58,39 +65,56 @@ export async function getUserProfile() {
  * Get the current user's role (server-side)
  * Returns null if not authenticated or profile doesn't exist
  */
-export async function getUserRole(): Promise<'owner' | 'admin' | 'agent' | 'end_user' | null> {
+export async function getUserRole(): Promise<UserRole | null> {
   const profile = await getUserProfile();
-  return profile?.role || null;
+  return profile?.role ? (profile.role as UserRole) : null;
 }
 
 /**
  * Require authentication - redirects to login if not authenticated
+ * Optionally checks for minimum role requirement
  * Use this in Server Components or Server Actions
  */
-export async function requireAuth(redirectTo?: string) {
-  const user = await getCurrentUser();
+export async function requireAuth(options?: {
+  redirectTo?: string;
+  minRole?: UserRole;
+}): Promise<User> {
+  const profile = await getUserProfile();
 
-  if (!user) {
-    const loginUrl = redirectTo
-      ? `/login?redirect=${encodeURIComponent(redirectTo)}`
+  if (!profile) {
+    const loginUrl = options?.redirectTo
+      ? `/login?redirect=${encodeURIComponent(options.redirectTo)}`
       : '/login';
     redirect(loginUrl);
   }
 
-  return user;
+  // Check minimum role requirement
+  if (options?.minRole) {
+    const userRole = profile.role as UserRole;
+    if (!hasRolePermission(userRole, options.minRole)) {
+      redirect('/dashboard?error=insufficient_permissions');
+    }
+  }
+
+  return profile;
 }
 
 /**
  * Require specific role - redirects to dashboard if unauthorized
  * Use this in Server Components or Server Actions
+ * @deprecated Use requireAuth({ minRole }) instead
  */
-export async function requireRole(allowedRoles: Array<'owner' | 'admin' | 'agent' | 'end_user'>) {
-  await requireAuth();
+export async function requireRole(allowedRoles: UserRole[]): Promise<UserRole> {
+  const profile = await getUserProfile();
 
-  const role = await getUserRole();
+  if (!profile) {
+    redirect('/login');
+  }
 
-  if (!role || !allowedRoles.includes(role)) {
-    redirect('/dashboard?error=unauthorized');
+  const role = profile.role as UserRole;
+
+  if (!allowedRoles.includes(role)) {
+    redirect('/dashboard?error=insufficient_permissions');
   }
 
   return role;
@@ -110,11 +134,12 @@ export async function hasPermission(permission: string): Promise<boolean> {
   // Define role-based permissions
   const rolePermissions: Record<string, string[]> = {
     owner: ['*'], // Owner has all permissions
-    admin: [
+    manager: [
       'tickets:*',
       'kb:*',
       'users:read',
-      'users:update',
+      'categories:*',
+      'sla:*',
       'settings:read',
       'settings:update',
     ],
@@ -124,12 +149,9 @@ export async function hasPermission(permission: string): Promise<boolean> {
       'tickets:create',
       'kb:read',
       'kb:create',
+      'analytics:read',
     ],
-    end_user: [
-      'tickets:read',
-      'tickets:create',
-      'kb:read',
-    ],
+    end_user: ['tickets:read', 'tickets:create', 'kb:read'],
   };
 
   const permissions = rolePermissions[role] || [];

@@ -23,7 +23,10 @@ export function useAuth() {
     // Get initial session
     const getInitialSession = async () => {
       try {
-        const { data: { user }, error } = await supabase.auth.getUser();
+        const {
+          data: { user },
+          error,
+        } = await supabase.auth.getUser();
 
         setState({
           user: user || null,
@@ -43,15 +46,15 @@ export function useAuth() {
     getInitialSession();
 
     // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setState({
-          user: session?.user || null,
-          isLoading: false,
-          isAuthenticated: !!session?.user,
-        });
-      }
-    );
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setState({
+        user: session?.user || null,
+        isLoading: false,
+        isAuthenticated: !!session?.user,
+      });
+    });
 
     return () => {
       subscription.unsubscribe();

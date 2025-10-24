@@ -8,7 +8,13 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
 
 // Zod validation schema
@@ -83,7 +89,9 @@ export default function SignUpPage() {
       // Use window.location to force a full page reload and refresh the session
       window.location.href = '/dashboard';
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+      setError(
+        err instanceof Error ? err.message : 'An unexpected error occurred'
+      );
     }
   };
 
@@ -103,7 +111,9 @@ export default function SignUpPage() {
         setError(oauthError.message);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+      setError(
+        err instanceof Error ? err.message : 'An unexpected error occurred'
+      );
     }
   };
 
@@ -112,7 +122,9 @@ export default function SignUpPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Create an account</CardTitle>
-          <CardDescription>Enter your details to get started with EasyPing</CardDescription>
+          <CardDescription>
+            Enter your details to get started with EasyPing
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -132,7 +144,9 @@ export default function SignUpPage() {
                 {...register('full_name')}
               />
               {errors.full_name && (
-                <p className="text-sm text-red-600">{errors.full_name.message}</p>
+                <p className="text-sm text-red-600">
+                  {errors.full_name.message}
+                </p>
               )}
             </div>
 
@@ -160,15 +174,13 @@ export default function SignUpPage() {
                 {...register('password')}
               />
               {errors.password && (
-                <p className="text-sm text-red-600">{errors.password.message}</p>
+                <p className="text-sm text-red-600">
+                  {errors.password.message}
+                </p>
               )}
             </div>
 
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isSubmitting}
-            >
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? 'Creating account...' : 'Sign up'}
             </Button>
 
@@ -212,7 +224,10 @@ export default function SignUpPage() {
 
             <p className="text-center text-sm text-gray-600">
               Already have an account?{' '}
-              <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500">
+              <Link
+                href="/login"
+                className="font-medium text-blue-600 hover:text-blue-500"
+              >
                 Log in
               </Link>
             </p>

@@ -2,6 +2,7 @@
   "name": "@easyping/web",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev -p 4000",
     "build": "next build",
@@ -10,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@easyping/types": "workspace:^",
     "@hookform/resolvers": "^5.2.2",
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.76.1",
@@ -21,6 +23,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
     "@next/bundle-analyzer": "^16.0.0",
     "@types/node": "^20",
     "@types/react": "^19",

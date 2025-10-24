@@ -1,6 +1,8 @@
 // Data model interfaces matching database schema
 // These provide a cleaner interface for application code
 
+import { UserRole } from './enums';
+
 export interface Organization {
   id: string; // UUID
   name: string;
@@ -15,7 +17,7 @@ export interface User {
   email: string;
   full_name: string;
   avatar_url: string | null;
-  role: 'end_user' | 'agent' | 'manager' | 'owner';
+  role: UserRole;
   created_at: string; // ISO timestamp
   last_seen_at: string | null; // ISO timestamp
 }

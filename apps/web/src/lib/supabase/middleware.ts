@@ -16,7 +16,9 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value)
+          );
           response = NextResponse.next({
             request,
           });
@@ -29,7 +31,10 @@ export async function updateSession(request: NextRequest) {
   );
 
   // Refresh session automatically - this also validates the session
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
   // If authenticated, set tenant context for RLS policies
   if (user && !authError) {
@@ -47,22 +52,23 @@ export async function updateSession(request: NextRequest) {
         }
       );
 
-      // Fetch user's tenant_id from users table using admin client
+      // Fetch user's tenant_id and role from users table using admin client
       const { data: userProfile, error: profileError } = await adminClient
         .from('users')
-        .select('tenant_id')
+        .select('tenant_id, role')
         .eq('id', user.id)
         .single();
 
       if (!profileError && userProfile) {
         // Set tenant context for RLS policies
         await supabase.rpc('set_tenant_context', {
-          tenant_uuid: userProfile.tenant_id
+          tenant_uuid: userProfile.tenant_id,
         });
 
-        // Add user ID to response headers for middleware consumption
+        // Add user ID, tenant ID, and role to response headers for middleware consumption
         response.headers.set('x-user-id', user.id);
         response.headers.set('x-tenant-id', userProfile.tenant_id);
+        response.headers.set('x-user-role', userProfile.role);
       }
     } catch (error) {
       console.error('Error setting tenant context:', error);

@@ -86,9 +86,14 @@ cp .env.example .env.local
 # Generate TypeScript types from database
 pnpm db:types
 
-# Start dev server
+# Start dev server (runs on port 4000)
 pnpm dev
 ```
+
+**Port Configuration:**
+- Next.js dev server: `http://localhost:4000`
+- Supabase local instance: `http://localhost:54321`
+- All project URLs use port 4000 (not the default 3000)
 
 ### Build & Test
 
@@ -149,6 +154,32 @@ supabase db reset
 # Seed database
 pnpm db:seed
 ```
+
+**Accessing Local Database:**
+
+The local Supabase database runs in a Docker container. To access it directly:
+
+```bash
+# Find the database container name (should be supabase_db_pingdb)
+docker ps --filter "name=db" --format "{{.Names}}"
+
+# Execute SQL queries directly
+docker exec supabase_db_pingdb psql -U postgres -c "SELECT * FROM users;"
+
+# Open interactive psql session
+docker exec -it supabase_db_pingdb psql -U postgres
+
+# Dump current schema
+npx supabase db dump --schema public --local
+```
+
+**Important Notes:**
+- Container name pattern: `supabase_db_<project_name>` (e.g., `supabase_db_pingdb`)
+- Default credentials: username `postgres`, password `postgres`
+- Database port: `54322` (mapped from container's 5432)
+- **DO NOT use `mcp__supabase__*` MCP tools** - they may be connected to a different project
+- Always use Supabase CLI or Docker commands for this project's database
+- Other MCP tools (e.g., GitHub) are fine to use
 
 ### Performance Analysis
 
@@ -376,7 +407,7 @@ This project uses BMAD™ Core for AI-driven development workflows.
 NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<from supabase start>
 SUPABASE_SERVICE_ROLE_KEY=<from supabase start>
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_APP_URL=http://localhost:4000
 ```
 
 **Optional (configured later):**

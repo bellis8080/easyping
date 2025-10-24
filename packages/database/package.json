@@ -5,6 +5,15 @@
   "description": "Supabase migrations and database schemas",
   "main": "index.js",
   "scripts": {
-    "typecheck": "echo 'No TypeScript in database package'"
+    "typecheck": "echo 'No TypeScript in database package'",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:reset": "supabase db reset",
+    "db:migrate": "supabase db push",
+    "db:types": "supabase gen types typescript --local > ../types/src/supabase.ts",
+    "db:seed": "supabase db reset"
+  },
+  "devDependencies": {
+    "supabase": "^2.53.6"
   }
 }

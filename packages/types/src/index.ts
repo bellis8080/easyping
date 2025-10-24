@@ -1,4 +1,14 @@
 // Shared TypeScript types and interfaces for EasyPing
-// This file will be populated in future stories
 
-export {};
+// Re-export Supabase auto-generated types
+export type { Database, Json } from './supabase';
+
+// Re-export application data models
+export type {
+  Organization,
+  User,
+  InsertOrganization,
+  InsertUser,
+  UpdateOrganization,
+  UpdateUser,
+} from './models';

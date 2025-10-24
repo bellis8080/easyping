@@ -53,7 +53,7 @@ cp .env.example .env.local
 pnpm dev
 ```
 
-Access the app at **http://localhost:3000**
+Access the app at **http://localhost:4000**
 
 ---
 
@@ -277,3 +277,21 @@ Built with:
 ---
 
 **Built with ❤️ by the EasyPing team**
+
+## Local Development Ports
+
+EasyPing uses the following port configuration to avoid conflicts with other projects:
+
+| Service | Port | URL |
+|---------|------|-----|
+| **Next.js Web App** | 4000 | http://localhost:4000 |
+| **Supabase API (Kong)** | 54321 | http://localhost:54321 |
+| **PostgreSQL Database** | 54322 | postgresql://postgres:postgres@localhost:54322/postgres |
+| **Supabase Studio** | 54323 | http://localhost:54323 |
+| **Mailpit (Email Testing)** | 54324 | http://localhost:54324 |
+
+### Docker Containers
+
+The local development stack uses Docker containers with the project ID `pingdb`:
+- Database: `supabase_db_pingdb` (PingDB)
+- All Supabase services: `supabase_*_pingdb`

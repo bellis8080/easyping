@@ -1,3 +1,5 @@
+import tsParser from '@typescript-eslint/parser';
+
 export default [
   {
     ignores: [
@@ -13,7 +15,9 @@ export default [
     ],
   },
   {
+    files: ['**/*.{js,mjs,cjs,ts,jsx,tsx}'],
     languageOptions: {
+      parser: tsParser,
       parserOptions: {
         ecmaVersion: 'latest',
         sourceType: 'module',

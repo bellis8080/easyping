@@ -80,7 +80,7 @@ export async function PATCH(
 
     if (!validation.success) {
       return NextResponse.json(
-        { error: 'Invalid role value', details: validation.error.errors },
+        { error: 'Invalid role value', details: validation.error.issues },
         { status: 400 }
       );
     }

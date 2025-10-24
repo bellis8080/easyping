@@ -3,6 +3,9 @@
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
 
+// Force dynamic rendering to avoid build-time errors with Supabase client
+export const dynamic = 'force-dynamic';
+
 export default function DashboardPage() {
   const supabase = createClient();
 

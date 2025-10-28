@@ -31,6 +31,16 @@ interface Ping {
   updated_at: string;
 }
 
+interface StatusConfig {
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  label: string;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  pulse?: boolean;
+  ripple?: boolean;
+}
+
 // Mock data
 const mockPings: Ping[] = [
   {
@@ -124,8 +134,8 @@ const mockPings: Ping[] = [
 ];
 
 // Status configuration with ping theme
-const getStatusConfig = (status: Ping['status']) => {
-  const configs = {
+const getStatusConfig = (status: Ping['status']): StatusConfig => {
+  const configs: Record<Ping['status'], StatusConfig> = {
     resolved: {
       icon: CheckCircle2,
       label: 'Resolved',

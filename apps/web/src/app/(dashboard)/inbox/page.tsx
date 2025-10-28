@@ -10,7 +10,6 @@ import {
   CheckCircle2,
   Pause,
 } from 'lucide-react';
-import Link from 'next/link';
 
 // Mock ticket type
 interface Ticket {

@@ -1,14 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  Search,
-  BookOpen,
-  ThumbsUp,
-  ThumbsDown,
-  Filter,
-  X,
-} from 'lucide-react';
+import { Search, BookOpen, Filter, X } from 'lucide-react';
 
 // Mock KB article type
 interface KBArticle {

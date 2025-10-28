@@ -106,9 +106,9 @@ graph TD
     LoadTicket --> ShowSummary[Display AI-generated summary at top - pinned]
     ShowSummary --> ShowThread[Display full conversation thread below]
     ShowThread --> AgentReads[Agent reads summary + messages]
-    AgentReads --> CheckCopilot{AI Copilot available?}
-    CheckCopilot -->|Yes| ShowSuggestion[Show AI response suggestion in sidebar]
-    CheckCopilot -->|No| AgentTypes[Agent types response manually]
+    AgentReads --> CheckEcho{Echo available?}
+    CheckEcho -->|Yes| ShowSuggestion[Show Echo response suggestion in sidebar]
+    CheckEcho -->|No| AgentTypes[Agent types response manually]
     ShowSuggestion --> AgentReviews{Agent reviews suggestion}
     AgentReviews -->|Accepts| CopySuggestion[Copy suggestion to message input]
     AgentReviews -->|Edits| EditSuggestion[Agent edits suggestion in message input]
@@ -136,7 +136,7 @@ graph TD
 
 ### Edge Cases & Error Handling:
 - **AI summary fails to generate:** Show message "Summary unavailable" but display full thread
-- **AI copilot timeout:** Hide suggestion panel, don't block agent from typing
+- **Echo timeout:** Hide suggestion panel, don't block agent from typing
 - **Message send fails:** Show error banner with retry button, preserve message in input
 - **File upload fails:** Show inline error under file, allow message send without attachment
 - **Realtime connection dropped:** Show warning banner "Updates may be delayed"
@@ -150,10 +150,11 @@ graph TD
 - When user responds and status is "Waiting on User", automatically changes back to "In Progress" (resumes SLA timer)
 - Agent can manually set status to "Waiting on User" when asking user to test/provide info (pauses SLA timer)
 
-**AI Copilot:**
-- AI Copilot runs asynchronously—suggestions appear within 2-3 seconds but never block the agent
+**Echo (AI Assistant):**
+- Echo runs asynchronously—suggestions appear within 2-3 seconds but never block the agent
 - Typing indicators show to the user when agent is composing
 - Cmd+Enter keyboard shortcut sends message
+- Echo panel can be toggled with Cmd+Shift+E
 
 ---
 

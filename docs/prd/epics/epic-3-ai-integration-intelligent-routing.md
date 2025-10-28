@@ -1,6 +1,6 @@
 # Epic 3: AI Integration & Intelligent Routing
 
-**Goal:** Transform EasyPing from basic ticketing to AI-native support desk. Integrate multiple AI providers (OpenAI, Anthropic, Azure) with bring-your-own-key model, automatically categorize and route incoming tickets, generate AI summaries pinned at top of threads, and provide agent copilot with suggested responses. This epic delivers the core AI value proposition that differentiates EasyPing from traditional help desks.
+**Goal:** Transform EasyPing from basic ticketing to AI-native support desk. Integrate multiple AI providers (OpenAI, Anthropic, Azure) with bring-your-own-key model, automatically categorize and route incoming tickets, generate AI summaries pinned at top of threads, and provide Echo (AI assistant) with suggested responses for agents. This epic delivers the core AI value proposition that differentiates EasyPing from traditional help desks.
 
 ## Story 3.1: AI Provider Abstraction Layer
 
@@ -131,22 +131,24 @@
 7. Loading state shown while AI generates summary
 8. Fallback message if AI unavailable: "Summary unavailable"
 
-## Story 3.7: Agent Copilot - Response Suggestions
+## Story 3.7: Echo - AI Response Suggestions
 
 **As an** agent,
-**I want** AI to suggest response drafts while composing replies,
+**I want** Echo to suggest response drafts while composing replies,
 **so that** I can respond faster and more consistently.
 
 **Acceptance Criteria:**
 
-1. When agent focuses on message input box, AI analyzes ticket context
-2. Suggested response appears as "ghost text" (light gray, italic) in input box or side panel
-3. Agent can press Tab or click "Use Suggestion" to accept AI draft
-4. Agent can edit AI suggestion before sending
-5. "Generate Another" button requests alternative suggestion
-6. Suggestions based on ticket history, category, and KB articles
-7. Suggestions appear within 2 seconds of focusing input
-8. Agent can disable copilot in personal settings if preferred
+1. When agent focuses on message input box, Echo analyzes ticket context
+2. Suggested response appears in Echo panel (collapsible sidebar)
+3. Agent can click "Use This Response" to copy Echo's draft into reply box
+4. Agent can edit Echo's suggestion before sending
+5. Suggested response is editable within Echo panel before using it
+6. "Generate Another" button requests alternative suggestion
+7. Suggestions based on ticket history, category, and KB articles
+8. Suggestions appear within 2 seconds of focusing input
+9. Agent can hide/show Echo panel with keyboard shortcut (Cmd+Shift+E)
+10. Agent can disable Echo in personal settings if preferred
 
 ## Story 3.8: KB Article Suggestions During Resolution
 

@@ -72,7 +72,7 @@
 
 ---
 
-### Screen 3: Agent Inbox (Split View with AI Copilot)
+### Screen 3: Agent Inbox (Split View with Echo)
 
 **Purpose:** Unified queue for agents to triage and respond to tickets efficiently
 
@@ -104,8 +104,8 @@
   - **Pinned AI Summary:** Collapsed by default, expandable
   - **Conversation Thread:** Chronological message list, alternating left/right for user/agent
   - **Message Input:** Bottom-fixed textarea with Send button
-- **AI Copilot Panel (Far Right, 20% width, collapsible):**
-  - Title: "AI Suggestions"
+- **Echo Panel (Far Right, 20% width, collapsible):**
+  - Title: "Echo" (your AI assistant)
   - Response suggestion with "Use this response" button
   - Suggested KB articles to share
   - Suggested category/priority changes
@@ -118,7 +118,7 @@
 - **SLA breach toast:** Notification appears when ticket enters red zone or breaches
 - Agent can drag-drop files into message input
 - Typing indicator shows to user when agent is composing
-- AI Copilot panel can be toggled with `Cmd+Shift+A`
+- Echo panel can be toggled with `Cmd+Shift+E`
 - **Sort by SLA Risk:** Breached tickets first, then at-risk (yellow), then on-track (green)
 
 **Design File Reference:** [Figma frame to be linked]

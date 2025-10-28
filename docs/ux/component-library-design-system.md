@@ -123,7 +123,7 @@
 - `alert` - Non-dismissible, requires action
 - `confirm` - Confirm destructive action with Cancel/Confirm buttons
 - `form` - Larger modal with multi-field form
-- `slideout` - Side panel that slides in from right (for ticket detail, AI copilot)
+- `slideout` - Side panel that slides in from right (for ticket detail, Echo panel)
 
 **States:**
 - `open` - Modal visible with overlay backdrop

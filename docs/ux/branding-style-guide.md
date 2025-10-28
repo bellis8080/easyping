@@ -102,7 +102,7 @@
 - Status (in progress): `Clock`
 - Priority (urgent): `AlertCircle`
 - Attachment: `Paperclip`
-- AI Copilot: `Sparkles` or `Zap`
+- Echo (AI assistant): `Sparkles` or `Zap`
 
 ## Spacing & Layout
 
@@ -113,7 +113,7 @@
 - Sidebar width: 240px (fixed)
 - Ticket list panel: 35% of viewport width (min 320px)
 - Ticket detail panel: 45% of viewport width
-- AI Copilot panel: 20% of viewport width (collapsible)
+- Echo panel: 20% of viewport width (collapsible)
 
 **Spacing Scale (Tailwind):**
 - `space-1`: 4px - Tight spacing (icon to text)

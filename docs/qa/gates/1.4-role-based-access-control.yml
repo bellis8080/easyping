@@ -1,0 +1,94 @@
+schema: 1
+story: '1.4'
+story_title: 'Role-Based Access Control (RBAC)'
+gate: FAIL
+status_reason: 'Story marked Done but only 4 of 10 tasks complete. Critical functionality missing: RLS policies, role assignment API/UI, and comprehensive testing.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2025-10-24T22:00:00Z'
+
+top_issues:
+  - id: 'REQ-001'
+    severity: high
+    finding: 'Story status is Done but 60% of tasks incomplete (Tasks 5-10 not done)'
+    suggested_action: 'Change story status back to In Progress and complete remaining tasks'
+    suggested_owner: dev
+  - id: 'SEC-001'
+    severity: high
+    finding: 'RLS policies not updated - end users may be able to view all tickets'
+    suggested_action: 'Complete Task 5 to update RLS policies for role-based ticket access'
+    suggested_owner: dev
+  - id: 'REQ-002'
+    severity: high
+    finding: 'Acceptance Criteria 5 not met - no role assignment functionality (API or UI)'
+    suggested_action: 'Complete Tasks 6-7 to implement role assignment feature'
+    suggested_owner: dev
+  - id: 'REQ-003'
+    severity: high
+    finding: 'Acceptance Criteria 7 not met - UI does not check roles or hide features'
+    suggested_action: 'Complete Task 8 to add role-based UI conditionals'
+    suggested_owner: dev
+  - id: 'TEST-001'
+    severity: high
+    finding: 'No integration or E2E tests for role-based access control'
+    suggested_action: 'Complete Task 10 - add API integration tests and manual testing checklist'
+    suggested_owner: dev
+  - id: 'REQ-004'
+    severity: medium
+    finding: 'Auth helpers not updated with role support (Task 9 incomplete)'
+    suggested_action: 'Update requireAuth() to accept optional minRole parameter'
+    suggested_owner: dev
+
+waiver: { active: false }
+
+quality_score: 40
+# 100 - (20 × 3 high-severity ACs) = 40
+
+evidence:
+  tests_reviewed: 1
+  # Only permission helper unit tests exist
+  risks_identified: 6
+  trace:
+    ac_covered: [1, 2, 4]
+    # AC 1: UserRole enum created ✓
+    # AC 2: Role column with default ✓
+    # AC 3: Middleware checks (partial - backend only) ⚠️
+    # AC 4: First user assigned owner ✓
+    ac_gaps: [3, 5, 6, 7]
+    # AC 3: UI role checks missing
+    # AC 5: Role assignment not implemented
+    # AC 6: RLS policies not updated
+    # AC 7: UI conditionals missing
+
+nfr_validation:
+  security:
+    status: FAIL
+    notes: 'RLS policies not updated. Potential security vulnerability - end users may access all tickets. Middleware protection exists but database-level enforcement missing.'
+  performance:
+    status: PASS
+    notes: 'Permission helpers are efficient O(1) lookups. No performance concerns in implemented code.'
+  reliability:
+    status: CONCERNS
+    notes: 'Incomplete implementation creates reliability risk. Missing error handling for role assignment operations.'
+  maintainability:
+    status: PASS
+    notes: 'Excellent code quality for completed tasks. Clear documentation, comprehensive tests, clean structure.'
+
+recommendations:
+  immediate: # Must fix before production
+    - action: 'Change story status from Done to In Progress'
+      refs: ['Story 1.4 status']
+    - action: 'Complete Task 5: Update RLS policies for role-based ticket access'
+      refs: ['packages/database/supabase/migrations/']
+    - action: 'Complete Task 6: Create role assignment API route'
+      refs: ['apps/web/src/app/api/users/[userId]/role/route.ts']
+    - action: 'Complete Task 7: Create user management settings page'
+      refs: ['apps/web/src/app/(dashboard)/settings/users/page.tsx']
+    - action: 'Complete Task 8: Add role-based UI conditionals to sidebar'
+      refs: ['apps/web/src/components/layout/sidebar.tsx']
+    - action: 'Complete Task 10: Add integration tests for API routes'
+      refs: ['apps/web/tests/unit/api/users/role.test.ts']
+  future: # Can be addressed in next sprint
+    - action: 'Consider caching user role in JWT claims to reduce middleware DB queries'
+      refs: ['apps/web/src/middleware.ts']
+    - action: 'Add E2E tests for complete role-based workflows'
+      refs: ['apps/web/tests/e2e/rbac.spec.ts']

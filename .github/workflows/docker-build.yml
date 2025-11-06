@@ -51,6 +51,10 @@ jobs:
           push: false
           load: true
           tags: ${{ env.IMAGE_NAME }}:test
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=http://localhost/api
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE
+            NEXT_PUBLIC_APP_URL=http://localhost
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -85,14 +89,14 @@ jobs:
         run: |
           cd docker
           cp ../.env.test .env
-          docker-compose up -d
+          docker compose up -d
           sleep 30  # Wait for services to start
 
       - name: Check service health
         run: |
           cd docker
-          docker-compose ps
-          docker-compose logs web
+          docker compose ps
+          docker compose logs web
 
       - name: Test health endpoint
         run: |
@@ -111,14 +115,14 @@ jobs:
           done
 
           echo "Health check failed after $max_attempts attempts"
-          cd docker && docker-compose logs
+          cd docker && docker compose logs
           exit 1
 
       - name: Cleanup
         if: always()
         run: |
           cd docker
-          docker-compose down -v
+          docker compose down -v
 
   # Job 2: Push Docker image (main branch only)
   push-main:
@@ -160,6 +164,10 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=http://localhost/api
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE
+            NEXT_PUBLIC_APP_URL=http://localhost
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -208,6 +216,10 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=http://localhost/api
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE
+            NEXT_PUBLIC_APP_URL=http://localhost
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

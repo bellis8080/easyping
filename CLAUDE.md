@@ -56,6 +56,21 @@ packages/types/    # Shared TypeScript types
 - `app/(dashboard)/` - Protected dashboard routes (tickets, KB, analytics)
 - Layouts defined per route group
 
+**Port Configuration & Constraints:**
+
+⚠️ **CRITICAL:** Ports 3000-3999 are RESERVED for other projects on this machine. DO NOT use these ports.
+
+- **Local Development (pnpm dev):** Port **4000** (configured in apps/web/package.json)
+- **Docker Production:** Port **8000** internally, **80/443** externally via Caddy
+- **Docker Development:** Port **8000** internally with hot reload
+- **Local Supabase:** Uses ports 54321, 54322, etc. (NOT 3000 series)
+
+**When working with Docker:**
+- Next.js containers use port 8000 internally (NOT 3000)
+- Caddy reverse proxy exposes ports 80 (HTTP) and 443 (HTTPS) to host
+- All other services (Postgres, Auth, Storage, etc.) communicate on internal Docker network
+- Never expose or reference ports 3000-3999 in Docker configurations
+
 **AI Provider Abstraction:**
 - `packages/ai/` defines provider-agnostic interface
 - Implementations for OpenAI, Anthropic, Azure OpenAI
@@ -91,9 +106,10 @@ pnpm dev
 ```
 
 **Port Configuration:**
-- Next.js dev server: `http://localhost:4000`
+- Local dev server: `http://localhost:4000` (configured in package.json)
 - Supabase local instance: `http://localhost:54321`
-- All project URLs use port 4000 (not the default 3000)
+- Docker deployment: `http://localhost` (ports 80/443)
+- **IMPORTANT:** Ports 3000-3999 are OFF-LIMITS (reserved for other projects)
 
 ### Build & Test
 

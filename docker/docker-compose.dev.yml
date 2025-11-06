@@ -1,0 +1,38 @@
+# Docker Compose Development Override
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+version: '3.8'
+
+services:
+  # Override web service for development with hot reload
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    environment:
+      - NODE_ENV=development
+      - NEXT_TELEMETRY_DISABLED=1
+    volumes:
+      # Mount source code for hot reload
+      - ../apps/web:/app/apps/web
+      - ../packages:/app/packages
+      # Exclude node_modules from mounts (use container's node_modules)
+      - /app/apps/web/node_modules
+      - /app/packages/types/node_modules
+      - /app/packages/ui/node_modules
+      - /app/packages/ai/node_modules
+      - /app/packages/database/node_modules
+      # Exclude build artifacts
+      - /app/apps/web/.next
+    # Development-specific command (already in Dockerfile.dev, but can override here if needed)
+    # command: pnpm dev -p 3000
+
+  # Optional: Enable PostgreSQL port exposure for development tools
+  postgres:
+    ports:
+      - "54322:5432"  # Already exposed, but explicitly defined here
+
+  # Optional: Disable Caddy healthchecks in development (faster startup)
+  caddy:
+    # Removed health_uri to avoid delays during development
+    command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile

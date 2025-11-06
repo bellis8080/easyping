@@ -7,8 +7,13 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
+  // Use NEXT_PUBLIC_SUPABASE_URL for cookie storage key consistency
+  // Browser client uses this URL, so middleware must use the same URL to read cookies
+  const publicUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const internalUrl = process.env.SUPABASE_URL || publicUrl;
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    publicUrl, // Use public URL for cookie key consistency
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
@@ -27,6 +32,14 @@ export async function updateSession(request: NextRequest) {
           );
         },
       },
+      global: {
+        fetch: async (url, options) => {
+          // Rewrite public URL to internal URL for Docker networking
+          const urlStr = url.toString();
+          const rewrittenUrl = urlStr.replace(publicUrl, internalUrl);
+          return fetch(rewrittenUrl, options);
+        },
+      },
     }
   );
 
@@ -41,8 +54,9 @@ export async function updateSession(request: NextRequest) {
     try {
       // Create admin client to bypass RLS for initial tenant_id lookup
       // This is necessary because we need the tenant_id to SET the tenant context
+      // Use internal URL for server-to-server API calls
       const adminClient = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        internalUrl,
         process.env.SUPABASE_SERVICE_ROLE_KEY!,
         {
           auth: {

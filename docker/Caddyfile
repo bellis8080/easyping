@@ -1,0 +1,210 @@
+# Caddyfile for EasyPing reverse proxy
+# Handles automatic HTTPS with Let's Encrypt
+
+# Global options
+{
+	# Enable admin API on localhost
+	admin localhost:2019
+}
+
+# Main site configuration
+{$DOMAIN:localhost} {
+	# Logging configuration
+	log {
+		output stdout
+		format json
+		level INFO
+	}
+
+	# Security headers
+	header {
+		# Prevent clickjacking
+		X-Frame-Options "DENY"
+
+		# Prevent MIME type sniffing
+		X-Content-Type-Options "nosniff"
+
+		# Referrer policy
+		Referrer-Policy "strict-origin-when-cross-origin"
+
+		# Permissions policy
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+
+		# Strict Transport Security (HSTS) - only for HTTPS
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+		# Remove server information
+		-Server
+	}
+
+	# Enable gzip compression
+	encode gzip zstd
+
+	# Route Supabase Auth requests to GoTrue (most specific first)
+	# Strips /api/auth/v1 prefix, so /api/auth/v1/signup becomes /signup
+	handle /api/auth/v1/* {
+		uri strip_prefix /api/auth/v1
+		reverse_proxy gotrue:9999 {
+			# Pass original client information
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# Route PostgREST database API requests (most specific first)
+	# Strips /api/rest/v1 prefix so /api/rest/v1/users becomes /users
+	handle /api/rest/v1/* {
+		uri strip_prefix /api/rest/v1
+		reverse_proxy postgrest:3000 {
+			# Pass original client information
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# Route Next.js API requests (like /api/health, /api/auth/create-profile)
+	handle /api/health {
+		reverse_proxy web:8000 {
+			# Pass original client information
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	handle /api/auth/* {
+		reverse_proxy web:8000 {
+			# Pass original client information
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# Catch-all for other /api/* requests (fallback)
+	handle /api/* {
+		uri strip_prefix /api
+		reverse_proxy postgrest:3000 {
+			# Pass original client information
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# Everything else goes to Next.js application
+	handle {
+		reverse_proxy web:8000 {
+			# Health check
+			health_uri /api/health
+			health_interval 30s
+			health_timeout 5s
+			health_status 200
+
+			# Timeouts
+			transport http {
+				dial_timeout 10s
+				response_header_timeout 30s
+				read_timeout 60s
+			}
+
+			# Pass original client information
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# TLS configuration
+	# For localhost, Caddy auto-generates self-signed certificate
+	# For production with a real domain, configure TLS_EMAIL in .env
+	tls internal {
+		protocols tls1.2 tls1.3
+	}
+
+	# Custom error pages (optional)
+	handle_errors {
+		@5xx expression `{err.status_code} >= 500 && {err.status_code} < 600`
+		handle @5xx {
+			respond "Service temporarily unavailable. Please try again later." 503
+		}
+
+		@4xx expression `{err.status_code} >= 400 && {err.status_code} < 500`
+		handle @4xx {
+			respond "Resource not found or access denied." {err.status_code}
+		}
+	}
+}
+
+# HTTP-only endpoint for internal service-to-service communication
+# This allows the web container to connect without SSL issues
+:80 {
+	# Logging configuration
+	log {
+		output stdout
+		format json
+		level INFO
+	}
+
+	# Route Supabase Auth requests to GoTrue
+	handle /api/auth/v1/* {
+		uri strip_prefix /api/auth/v1
+		reverse_proxy gotrue:9999 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# Route PostgREST database API requests (most specific first)
+	# Strips /api/rest/v1 prefix so /api/rest/v1/users becomes /users
+	handle /api/rest/v1/* {
+		uri strip_prefix /api/rest/v1
+		reverse_proxy postgrest:3000 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# Route Next.js API requests (internal use)
+	handle /api/auth/* {
+		reverse_proxy web:8000 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# Catch-all for other /api/* requests (fallback)
+	handle /api/* {
+		uri strip_prefix /api
+		reverse_proxy postgrest:3000 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# Everything else - return 404 for HTTP-only endpoint
+	handle {
+		respond "HTTP endpoint for internal use only" 404
+	}
+}
+
+# Health check endpoint for Caddy itself
+:2019 {
+	respond /health 200
+}

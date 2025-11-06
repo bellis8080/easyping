@@ -24,11 +24,20 @@ export async function POST(request: NextRequest) {
     const adminClient = createAdminClient();
 
     // Check if user profile already exists
-    const { data: existingProfile } = await adminClient
+    const { data: existingProfile, error: checkError } = await adminClient
       .from('users')
       .select('id')
       .eq('id', user.id)
       .single();
+
+    // Only treat as error if there's an actual error code (not just empty object)
+    if (checkError && checkError.code && checkError.code !== 'PGRST116') {
+      // PGRST116 is "not found" error, which is expected
+      return NextResponse.json(
+        { error: `Check failed: ${checkError.message}` },
+        { status: 500 }
+      );
+    }
 
     if (existingProfile) {
       return NextResponse.json(
@@ -42,9 +51,16 @@ export async function POST(request: NextRequest) {
     const { full_name, avatar_url } = body;
 
     // Check if this is the first user in the organization (becomes owner)
-    const { count } = await adminClient
+    const { count, error: countError } = await adminClient
       .from('users')
       .select('*', { count: 'exact', head: true });
+
+    if (countError) {
+      return NextResponse.json(
+        { error: `Count failed: ${countError.message}` },
+        { status: 500 }
+      );
+    }
 
     const role = count === 0 ? 'owner' : 'end_user';
 

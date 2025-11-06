@@ -57,6 +57,203 @@ Access the app at **http://localhost:4000**
 
 ---
 
+## Docker Compose Deployment
+
+EasyPing can be deployed using Docker Compose for production or testing environments. This provides a complete, self-contained deployment with all services.
+
+### Prerequisites
+
+- **Docker 20.10+**
+- **Docker Compose 2.0+**
+- **2 CPU cores minimum**
+- **4GB RAM minimum**
+- **20GB disk space**
+
+### Quick Deploy
+
+```bash
+# Clone the repository
+git clone https://github.com/bellis8080/easyping.git
+cd easyping/docker
+
+# Copy and configure environment variables
+cp .env.example .env
+# Edit .env with your configuration (see below)
+
+# Start all services
+docker-compose up -d
+
+# Check service status
+docker-compose ps
+
+# View logs
+docker-compose logs -f web
+```
+
+Access the application at:
+- **Web Application**: https://localhost (or your configured domain)
+- **Supabase Studio**: http://localhost:8001
+- **Database**: localhost:54325 (PostgreSQL)
+
+### Environment Configuration
+
+Edit `docker/.env` with your settings:
+
+```bash
+# Domain Configuration
+DOMAIN=localhost                    # Your domain (or localhost for testing)
+TLS_EMAIL=admin@example.com        # Email for Let's Encrypt SSL
+
+# Database
+POSTGRES_PASSWORD=<generate-strong-password>
+POSTGRES_DB=postgres
+
+# Supabase Keys (generate with: openssl rand -base64 32)
+GOTRUE_JWT_SECRET=<generate-secret>
+SUPABASE_ANON_KEY=<generate-key>
+SUPABASE_SERVICE_ROLE_KEY=<generate-key>
+
+# Auth Configuration
+GOTRUE_SITE_URL=https://localhost
+GOTRUE_URI_ALLOW_LIST=*
+NEXT_PUBLIC_APP_URL=https://localhost
+NEXT_PUBLIC_SUPABASE_URL=https://localhost/api
+```
+
+### Database Access
+
+The Docker deployment includes PostgreSQL with automatic schema initialization.
+
+#### Using TablePlus (Recommended GUI)
+
+```bash
+# Install TablePlus
+brew install --cask tableplus
+
+# Connection details:
+Host: localhost
+Port: 54325
+User: postgres
+Password: <your POSTGRES_PASSWORD from .env>
+Database: postgres
+```
+
+#### Using psql (Command Line)
+
+```bash
+# Connect via Docker exec
+docker exec -it easyping-postgres psql -U postgres
+
+# Or from host machine
+psql -h localhost -p 54325 -U postgres
+```
+
+#### Verify Installation
+
+```sql
+-- Check tables were created
+\dt
+
+-- Should show:
+-- public | organizations | table | postgres
+-- public | users         | table | postgres
+
+-- Check default organization
+SELECT id, name FROM organizations;
+
+-- Should show:
+-- a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11 | Default Organization
+```
+
+### Docker Services
+
+The deployment includes the following services:
+
+| Service | Container | Description |
+|---------|-----------|-------------|
+| **postgres** | easyping-postgres | PostgreSQL 15 with pgvector |
+| **gotrue** | easyping-gotrue | Supabase Auth service |
+| **postgrest** | easyping-postgrest | Auto-generated REST API |
+| **meta** | easyping-meta | Database metadata API |
+| **studio** | easyping-studio | Supabase Studio UI |
+| **web** | easyping-web | Next.js application |
+| **caddy** | easyping-caddy | Reverse proxy with SSL |
+
+### Common Operations
+
+```bash
+# Stop all services
+docker-compose down
+
+# Stop and remove volumes (deletes all data!)
+docker-compose down -v
+
+# Restart a specific service
+docker-compose restart web
+
+# View service logs
+docker-compose logs -f postgres
+docker-compose logs -f web
+
+# Rebuild web application after code changes
+cd /path/to/EasyPing
+docker-compose build web
+docker-compose up -d web
+```
+
+### Fresh Deployment Test
+
+To test a completely fresh deployment:
+
+```bash
+# Stop and remove everything
+docker-compose down -v
+
+# Start fresh
+docker-compose up -d
+
+# Wait for services to be healthy
+sleep 10
+
+# Verify tables were created automatically
+docker exec easyping-postgres psql -U postgres -c "\dt"
+
+# Access application
+open https://localhost
+```
+
+### Troubleshooting
+
+**Services not starting:**
+```bash
+# Check logs for errors
+docker-compose logs
+
+# Verify ports are available
+lsof -i :80
+lsof -i :443
+lsof -i :54325
+```
+
+**Database tables missing:**
+```bash
+# Check init script logs
+docker logs easyping-postgres | grep "docker-entrypoint-initdb"
+
+# Manually apply migrations if needed
+docker exec -i easyping-postgres psql -U postgres < docker/init/01-create-tables.sql
+```
+
+**SSL certificate issues:**
+```bash
+# For local testing, accept self-signed certificate in browser
+# For production, ensure DNS points to your server and TLS_EMAIL is set
+```
+
+For detailed deployment documentation, see [DEPLOYMENT.md](./DEPLOYMENT.md).
+
+---
+
 ## Development
 
 ### Environment Setup
@@ -245,12 +442,12 @@ We chose AGPL to ensure that if anyone offers EasyPing as a service, the communi
 **Current Phase: Epic 1 - Foundation & Authentication**
 
 - [x] Story 1.1: Project Setup & Monorepo Infrastructure
-- [ ] Story 1.2: Supabase Local Setup (In Progress)
-- [ ] Story 1.3: Authentication Flow
-- [ ] Story 1.4: Database Schema Design
-- [ ] Story 1.5: UI Component Library
-- [ ] Story 1.6: Role-Based Access Control (RBAC)
-- [ ] Story 1.7: Deployment & Infrastructure
+- [x] Story 1.2: Supabase Local Setup
+- [x] Story 1.3: Authentication Flow
+- [x] Story 1.4: Database Schema Design
+- [x] Story 1.5: Docker Compose Deployment
+- [ ] Story 1.6: UI Component Library (In Progress)
+- [ ] Story 1.7: Role-Based Access Control (RBAC)
 - [ ] Story 1.8: Testing Infrastructure
 
 See [docs/prd/epics/](./docs/prd/epics/) for detailed product requirements.

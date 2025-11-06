@@ -10,12 +10,15 @@ import { createClient } from '@supabase/supabase-js';
  * Always validate user authentication before using this client
  */
 export function createAdminClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  // Use internal SUPABASE_URL for server-side requests (Docker environment)
+  // Falls back to NEXT_PUBLIC_SUPABASE_URL for local development
+  const supabaseUrl =
+    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseServiceRoleKey) {
     throw new Error(
-      'Missing Supabase environment variables. Ensure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.'
+      'Missing Supabase environment variables. Ensure SUPABASE_URL/NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.'
     );
   }
 

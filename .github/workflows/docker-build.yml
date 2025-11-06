@@ -1,0 +1,256 @@
+name: Docker Build and Test
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches:
+      - main
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: easyping/easyping
+
+jobs:
+  # Job 1: Build and test Docker image
+  build-and-test:
+    name: Build and Test Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix={{branch}}-
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: false
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Create test environment file
+        run: |
+          cat > .env.test <<EOF
+          POSTGRES_PASSWORD=test_password_123
+          POSTGRES_DB=postgres
+          GOTRUE_JWT_SECRET=test_jwt_secret_minimum_32_characters_long
+          GOTRUE_JWT_EXP=3600
+          GOTRUE_SITE_URL=http://localhost
+          GOTRUE_URI_ALLOW_LIST=*
+          GOTRUE_DISABLE_SIGNUP=false
+          GOTRUE_EXTERNAL_EMAIL_ENABLED=true
+          GOTRUE_MAILER_AUTOCONFIRM=true
+          GOTRUE_SMTP_ADMIN_EMAIL=admin@example.com
+          GOTRUE_EXTERNAL_GOOGLE_ENABLED=false
+          PGRST_DB_SCHEMAS=public
+          PGRST_DB_ANON_ROLE=anon
+          STORAGE_BACKEND=file
+          FILE_SIZE_LIMIT=52428800
+          REALTIME_SECRET_KEY_BASE=test_realtime_secret_key_base_64_characters_long
+          SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE
+          SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJzZXJ2aWNlX3JvbGUiLAogICAgImlzcyI6ICJzdXBhYmFzZS1kZW1vIiwKICAgICJpYXQiOiAxNjQxNzY5MjAwLAogICAgImV4cCI6IDE3OTk1MzU2MDAKfQ.DaYlNEoUrrEn2Ig7tqibS-PHK5vgusbcbo7X36XVt4Q
+          NEXT_PUBLIC_SUPABASE_URL=http://localhost/api
+          NEXT_PUBLIC_APP_URL=http://localhost
+          DOMAIN=localhost
+          TLS_EMAIL=
+          EOF
+
+      - name: Start Docker Compose services
+        run: |
+          cd docker
+          cp ../.env.test .env
+          docker-compose up -d
+          sleep 30  # Wait for services to start
+
+      - name: Check service health
+        run: |
+          cd docker
+          docker-compose ps
+          docker-compose logs web
+
+      - name: Test health endpoint
+        run: |
+          max_attempts=10
+          attempt=0
+
+          while [ $attempt -lt $max_attempts ]; do
+            if curl -f http://localhost/api/health; then
+              echo "Health check passed!"
+              exit 0
+            fi
+
+            echo "Health check failed, retrying in 5 seconds... ($attempt/$max_attempts)"
+            attempt=$((attempt + 1))
+            sleep 5
+          done
+
+          echo "Health check failed after $max_attempts attempts"
+          cd docker && docker-compose logs
+          exit 1
+
+      - name: Cleanup
+        if: always()
+        run: |
+          cd docker
+          docker-compose down -v
+
+  # Job 2: Push Docker image (main branch only)
+  push-main:
+    name: Push to Docker Hub (main)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=main-
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Job 3: Create release (tags only)
+  release:
+    name: Create GitHub Release
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## EasyPing Release ${{ steps.version.outputs.VERSION }}
+
+            ### Docker Image
+
+            ```bash
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
+            ```
+
+            ### Deployment Instructions
+
+            1. **Update your `.env` file** with the new version settings (if any)
+            2. **Pull the new image:**
+               ```bash
+               docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
+               ```
+            3. **Update your docker-compose.yml** to use the new version
+            4. **Restart services:**
+               ```bash
+               docker-compose down
+               docker-compose up -d
+               ```
+            5. **Verify health:**
+               ```bash
+               curl http://localhost/api/health
+               ```
+
+            ### Documentation
+
+            See [docker/README.md](docker/README.md) for complete deployment documentation.
+
+            ### Changelog
+
+            See commit history for detailed changes in this release.
+          draft: false
+          prerelease: false

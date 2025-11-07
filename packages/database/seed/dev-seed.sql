@@ -1,16 +1,9 @@
 -- Development Seed Data
 -- This file is automatically loaded by Supabase on database reset
 
--- Insert default organization for local development
-INSERT INTO organizations (id, name, domain, created_at, settings)
-VALUES (
-  'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',  -- Fixed UUID for development
-  'Default Organization',
-  'localhost',
-  NOW(),
-  '{"features": {"ai_enabled": true, "max_agents": 10}}'::JSONB
-)
-ON CONFLICT (id) DO NOTHING;
+-- NOTE: No default organization inserted (Story 1.6 requirement)
+-- Setup wizard creates the first organization on initial deployment
+-- This ensures the setup wizard is triggered correctly on fresh deployments
 
 -- Test Users for Development
 -- NOTE: Supabase Auth manages the auth.users table, so test users must be created

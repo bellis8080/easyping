@@ -8,10 +8,6 @@ CREATE SCHEMA IF NOT EXISTS _realtime;
 CREATE SCHEMA IF NOT EXISTS realtime;
 CREATE SCHEMA IF NOT EXISTS extensions;
 
--- Note: uuid-ossp and pgcrypto extensions are not needed
--- PostgreSQL 15+ has gen_random_uuid() built-in which we use instead
--- The Supabase image requires supabase_admin role for extension creation which we don't have
-
 -- Create roles if they don't exist
 DO $$
 BEGIN
@@ -38,6 +34,10 @@ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'supabase_realtime_admin') THEN
     CREATE ROLE supabase_realtime_admin NOLOGIN NOINHERIT CREATEROLE;
   END IF;
+
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'supabase_admin') THEN
+    CREATE ROLE supabase_admin NOLOGIN NOINHERIT CREATEROLE CREATEDB;
+  END IF;
 END
 $$;
 
@@ -48,6 +48,7 @@ GRANT service_role TO postgres;
 GRANT supabase_auth_admin TO postgres;
 GRANT supabase_storage_admin TO postgres;
 GRANT supabase_realtime_admin TO postgres;
+GRANT supabase_admin TO postgres;
 
 -- Grant usage and create on schemas
 GRANT USAGE ON SCHEMA auth TO postgres, supabase_auth_admin;
@@ -93,3 +94,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
 -- (Note: set_tenant_context is created in a separate migration)
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
   GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
+
+-- Enable pgcrypto extension for encryption (Story 1.6)
+-- NOTE: Skipping pgcrypto here due to Supabase image restrictions
+-- Will be created in 01-create-tables.sql after roles are fully configured

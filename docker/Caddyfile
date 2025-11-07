@@ -87,6 +87,17 @@
 		}
 	}
 
+	# Route Next.js setup wizard API (Story 1.6)
+	handle /api/setup {
+		reverse_proxy web:8000 {
+			# Pass original client information
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
 	# Catch-all for other /api/* requests (fallback)
 	handle /api/* {
 		uri strip_prefix /api
@@ -179,6 +190,16 @@
 
 	# Route Next.js API requests (internal use)
 	handle /api/auth/* {
+		reverse_proxy web:8000 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# Route Next.js setup wizard API (Story 1.6 - internal use)
+	handle /api/setup {
 		reverse_proxy web:8000 {
 			header_up X-Real-IP {remote_host}
 			header_up X-Forwarded-For {remote_host}

@@ -2,8 +2,25 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
 import { UserRole } from '@easyping/types';
 import { canAccessRoute } from '@/lib/auth/permissions';
+import { isSetupComplete } from '@/lib/setup';
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const isSetupRoute = pathname.startsWith('/setup');
+
+  // Check if setup is complete (organization exists)
+  const setupComplete = await isSetupComplete();
+
+  // Redirect to setup wizard if not complete and not already on setup page
+  if (!setupComplete && !isSetupRoute) {
+    return NextResponse.redirect(new URL('/setup', request.url));
+  }
+
+  // Redirect away from setup if already complete
+  if (setupComplete && isSetupRoute) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+
   // Refresh session and set tenant context
   const response = await updateSession(request);
 
@@ -19,8 +36,6 @@ export async function middleware(request: NextRequest) {
     '/forgot-password',
     '/reset-password',
   ];
-
-  const { pathname } = request.nextUrl;
 
   // Check if current path is protected
   const isProtectedPath = protectedPaths.some((path) =>
@@ -63,6 +78,6 @@ export const config = {
      * - public folder
      * - api routes (handled separately)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

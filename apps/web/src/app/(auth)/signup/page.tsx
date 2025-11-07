@@ -95,6 +95,9 @@ export default function SignUpPage() {
     }
   };
 
+  // Google OAuth handler - Reserved for ServicePing (paid edition)
+  // Commented out for EasyPing, uncomment for ServicePing:
+  /*
   const handleGoogleSignIn = async () => {
     try {
       setError(null);
@@ -116,80 +119,88 @@ export default function SignUpPage() {
       );
     }
   };
+  */
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Create an account</CardTitle>
-          <CardDescription>
-            Enter your details to get started with EasyPing
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {error && (
-              <div className="rounded-md bg-red-50 p-3 text-sm text-red-800">
-                {error}
-              </div>
+    <Card className="w-full bg-white dark:bg-slate-800 shadow-xl border-2 border-orange-500">
+      <CardHeader>
+        <CardTitle className="text-white">Create an account</CardTitle>
+        <CardDescription>
+          Enter your details to get started with EasyPing
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {error && (
+            <div className="rounded-md bg-red-50 p-3 text-sm text-red-800">
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="full_name" className="text-white">
+              Full Name
+            </Label>
+            <Input
+              id="full_name"
+              type="text"
+              placeholder="John Doe"
+              error={errors.full_name?.message}
+              {...register('full_name')}
+            />
+            {errors.full_name && (
+              <p className="text-sm text-red-600">{errors.full_name.message}</p>
             )}
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="full_name">Full Name</Label>
-              <Input
-                id="full_name"
-                type="text"
-                placeholder="John Doe"
-                error={errors.full_name?.message}
-                {...register('full_name')}
-              />
-              {errors.full_name && (
-                <p className="text-sm text-red-600">
-                  {errors.full_name.message}
-                </p>
-              )}
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-white">
+              Email
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="john@example.com"
+              error={errors.email?.message}
+              {...register('email')}
+            />
+            {errors.email && (
+              <p className="text-sm text-red-600">{errors.email.message}</p>
+            )}
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="john@example.com"
-                error={errors.email?.message}
-                {...register('email')}
-              />
-              {errors.email && (
-                <p className="text-sm text-red-600">{errors.email.message}</p>
-              )}
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="password" className="text-white">
+              Password
+            </Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              error={errors.password?.message}
+              {...register('password')}
+            />
+            {errors.password && (
+              <p className="text-sm text-red-600">{errors.password.message}</p>
+            )}
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                error={errors.password?.message}
-                {...register('password')}
-              />
-              {errors.password && (
-                <p className="text-sm text-red-600">
-                  {errors.password.message}
-                </p>
-              )}
-            </div>
+          <Button
+            type="submit"
+            className="w-full bg-blue-600 hover:bg-blue-700"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Creating account...' : 'Sign up'}
+          </Button>
 
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? 'Creating account...' : 'Sign up'}
-            </Button>
-
+          {/* Google OAuth sign-up - Reserved for ServicePing (paid edition) */}
+          {/*
             <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300"></div>
+                <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="bg-white px-2 text-gray-500">
+                <span className="bg-white dark:bg-slate-800 px-2 text-gray-500 dark:text-gray-400">
                   Or continue with
                 </span>
               </div>
@@ -221,19 +232,19 @@ export default function SignUpPage() {
               </svg>
               Sign up with Google
             </Button>
+            */}
 
-            <p className="text-center text-sm text-gray-600">
-              Already have an account?{' '}
-              <Link
-                href="/login"
-                className="font-medium text-blue-600 hover:text-blue-500"
-              >
-                Log in
-              </Link>
-            </p>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+          <p className="text-center text-sm text-gray-600 dark:text-gray-300 mt-6">
+            Already have an account?{' '}
+            <Link
+              href="/login"
+              className="font-medium text-blue-600 hover:text-blue-500"
+            >
+              Log in
+            </Link>
+          </p>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

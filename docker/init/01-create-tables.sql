@@ -87,7 +87,35 @@ GRANT ALL ON TABLE public.users TO anon;
 GRANT ALL ON TABLE public.users TO authenticated;
 GRANT ALL ON TABLE public.users TO service_role;
 
--- Insert default organization (from Story 1.2)
-INSERT INTO public.organizations (id, name, domain, settings)
-VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Default Organization', NULL, '{}'::jsonb)
-ON CONFLICT (id) DO NOTHING;
+-- Enable pgcrypto extension for encryption (Story 1.6)
+CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA extensions;
+
+-- Create encryption functions for AI API keys (Story 1.6)
+CREATE OR REPLACE FUNCTION public.encrypt_data(data TEXT, key TEXT)
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN encode(extensions.pgp_sym_encrypt(data, key), 'base64');
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.decrypt_data(encrypted_data TEXT, key TEXT)
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN extensions.pgp_sym_decrypt(decode(encrypted_data, 'base64'), key);
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE EXCEPTION 'Decryption failed: %', SQLERRM;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.encrypt_data(TEXT, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.decrypt_data(TEXT, TEXT) TO authenticated, service_role;
+
+-- NOTE: No default organization inserted
+-- Setup wizard (Story 1.6) creates the first organization on initial deployment

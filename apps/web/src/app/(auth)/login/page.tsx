@@ -79,6 +79,9 @@ function LoginForm() {
     }
   };
 
+  // Google OAuth handler - Reserved for ServicePing (paid edition)
+  // Commented out for EasyPing, uncomment for ServicePing:
+  /*
   const handleGoogleSignIn = async () => {
     try {
       setError(null);
@@ -100,6 +103,7 @@ function LoginForm() {
       );
     }
   };
+  */
 
   return (
     <Card className="w-full bg-white dark:bg-slate-800 shadow-xl border-2 border-orange-500">
@@ -163,6 +167,8 @@ function LoginForm() {
             {isSubmitting ? 'Signing in...' : 'Sign in'}
           </Button>
 
+          {/* Google OAuth sign-in - Reserved for ServicePing (paid edition) */}
+          {/*
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
@@ -200,8 +206,9 @@ function LoginForm() {
             </svg>
             Sign in with Google
           </Button>
+          */}
 
-          <p className="text-center text-sm text-gray-600 dark:text-gray-300">
+          <p className="text-center text-sm text-gray-600 dark:text-gray-300 mt-6">
             Don&apos;t have an account?{' '}
             <Link
               href="/signup"

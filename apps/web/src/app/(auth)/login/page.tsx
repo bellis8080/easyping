@@ -27,11 +27,8 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 function LoginForm() {
-  const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
-
-  const _redirectTo = searchParams.get('redirect') || '/dashboard';
 
   const {
     register,

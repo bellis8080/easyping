@@ -73,10 +73,17 @@ jobs:
       - name: Start Supabase
         run: npx supabase start
 
+      - name: Get Supabase anon key
+        id: supabase-keys
+        run: |
+          ANON_KEY=$(npx supabase status --output json | jq -r '.anon_key')
+          echo "anon_key=$ANON_KEY" >> $GITHUB_OUTPUT
+
       - name: Run E2E tests
         run: pnpm --filter @easyping/web test:e2e
         env:
           NEXT_PUBLIC_SUPABASE_URL: http://localhost:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ steps.supabase-keys.outputs.anon_key }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_LOCAL }}
 
       - name: Upload test results

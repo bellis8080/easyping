@@ -7,11 +7,18 @@ export async function seedTestData() {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   // Create test organization
-  const { data: org } = await supabase
+  const { data: org, error: orgError } = await supabase
     .from('organizations')
     .insert({ name: 'Test Organization', domain: 'test.com' })
     .select()
     .single();
+
+  if (orgError || !org) {
+    console.error('Failed to create test organization:', orgError);
+    throw new Error(
+      `Failed to create test organization: ${orgError?.message || 'No data returned'}`
+    );
+  }
 
   // Create test users (end user, agent, manager)
   const users = [
@@ -29,7 +36,12 @@ export async function seedTestData() {
     },
   ];
 
-  await supabase.from('users').insert(users);
+  const { error: usersError } = await supabase.from('users').insert(users);
+
+  if (usersError) {
+    console.error('Failed to create test users:', usersError);
+    throw new Error(`Failed to create test users: ${usersError.message}`);
+  }
 
   return { organization: org };
 }

@@ -31,7 +31,7 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
 
-  const redirectTo = searchParams.get('redirect') || '/dashboard';
+  const _redirectTo = searchParams.get('redirect') || '/dashboard';
 
   const {
     register,

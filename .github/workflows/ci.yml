@@ -73,18 +73,23 @@ jobs:
       - name: Start Supabase
         run: npx supabase start
 
-      - name: Get Supabase anon key
+      - name: Get Supabase keys
         id: supabase-keys
         run: |
-          ANON_KEY=$(npx supabase status --output json | jq -r '.anon_key')
-          echo "anon_key=$ANON_KEY" >> $GITHUB_OUTPUT
+          # Get publishable key (used for client-side operations)
+          PUBLISHABLE_KEY=$(npx supabase status --output json | jq -r '.publishable_key')
+          echo "publishable_key=$PUBLISHABLE_KEY" >> $GITHUB_OUTPUT
+
+          # Get service role key (used for admin operations in tests)
+          SERVICE_ROLE_KEY=$(npx supabase status --output json | jq -r '.service_role_key')
+          echo "service_role_key=$SERVICE_ROLE_KEY" >> $GITHUB_OUTPUT
 
       - name: Run E2E tests
         run: pnpm --filter @easyping/web test:e2e
         env:
           NEXT_PUBLIC_SUPABASE_URL: http://localhost:54321
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ steps.supabase-keys.outputs.anon_key }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_LOCAL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ steps.supabase-keys.outputs.publishable_key }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ steps.supabase-keys.outputs.service_role_key }}
 
       - name: Upload test results
         if: always()

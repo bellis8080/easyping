@@ -28,30 +28,60 @@ describe('showWelcomeToast', () => {
   });
 
   it('should show first-time user welcome message', () => {
-    // TODO: Call showWelcomeToast with isFirstLogin=true
-    // TODO: Expect toast.success to be called with "Welcome to EasyPing, {name}!"
-    // TODO: Expect description to include organization name
-    // TODO: Expect duration to be 5000ms
+    showWelcomeToast('John Doe', 'Test Org', 'end_user', true);
+
+    expect(toast.success).toHaveBeenCalledWith(
+      'Welcome to EasyPing, John Doe!',
+      {
+        description: 'Test Org Service Desk',
+        duration: 5000,
+      }
+    );
   });
 
   it('should show returning user welcome back message', () => {
-    // TODO: Call showWelcomeToast with isFirstLogin=false
-    // TODO: Expect toast.success to be called with "Welcome back, {name}!"
-    // TODO: Expect duration to be 5000ms
+    showWelcomeToast('Jane Smith', 'Test Org', 'end_user', false);
+
+    expect(toast.success).toHaveBeenCalledWith('Welcome back, Jane Smith!', {
+      description: 'Test Org Service Desk',
+      duration: 5000,
+    });
   });
 
   it('should show agent-specific description', () => {
-    // TODO: Call showWelcomeToast with role='agent'
-    // TODO: Expect description to include "Your inbox is ready"
+    showWelcomeToast('Agent Name', 'Test Org', 'agent', false);
+
+    expect(toast.success).toHaveBeenCalledWith('Welcome back, Agent Name!', {
+      description: 'Your inbox is ready.',
+      duration: 5000,
+    });
   });
 
-  it('should show manager/owner-specific description', () => {
-    // TODO: Call showWelcomeToast with role='manager'
-    // TODO: Expect description to include "System overview is ready"
+  it('should show manager-specific description', () => {
+    showWelcomeToast('Manager Name', 'Test Org', 'manager', false);
+
+    expect(toast.success).toHaveBeenCalledWith('Welcome back, Manager Name!', {
+      description: 'System overview is ready.',
+      duration: 5000,
+    });
   });
 
-  it('should use 5 second duration', () => {
-    // TODO: Call showWelcomeToast
-    // TODO: Expect toast.success to be called with { duration: 5000 }
+  it('should show owner-specific description', () => {
+    showWelcomeToast('Owner Name', 'Test Org', 'owner', false);
+
+    expect(toast.success).toHaveBeenCalledWith('Welcome back, Owner Name!', {
+      description: 'System overview is ready.',
+      duration: 5000,
+    });
+  });
+
+  it('should use 5 second duration for all toasts', () => {
+    showWelcomeToast('Test User', 'Test Org', 'end_user', false);
+
+    const callArgs = (toast.success as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(callArgs[1]).toEqual({
+      description: 'Test Org Service Desk',
+      duration: 5000,
+    });
   });
 });

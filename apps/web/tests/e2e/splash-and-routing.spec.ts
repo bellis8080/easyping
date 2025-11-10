@@ -1,83 +1,65 @@
 /**
- * E2E tests for splash page and smart routing
- *
- * NOTE: These tests require Playwright to be configured.
- * TODO: Install and configure Playwright
+ * E2E tests for splash page
  *
  * Test coverage:
  * - Unauthenticated user sees splash page at `/`
- * - Splash page auto-redirects to `/login` after animation
- * - Authenticated end user (no pings) lands on `/pings/new`
- * - Authenticated end user (with pings) lands on `/pings`
- * - Authenticated agent lands on `/inbox`
- * - Authenticated manager lands on `/analytics`
- * - Welcome toast appears after login
- * - Toast does not appear on page refresh
- * - Splash page responsive on mobile (viewport 375x667)
+ * - Splash page auto-redirects to `/login` after 4 seconds
+ * - Splash page displays branding correctly
+ * - Splash page is responsive on mobile
  */
 
 import { test, expect } from '@playwright/test';
 
-test.describe('Splash Page and Smart Routing', () => {
+test.describe('Splash Page', () => {
   test('unauthenticated user sees splash page', async ({ page }) => {
-    // TODO: Navigate to /
-    // TODO: Expect to see animated Radio icon
-    // TODO: Expect to see "EasyPing" heading
-    // TODO: Expect to see "Service Desk" subtitle
+    await page.goto('/');
+
+    // Expect to see "EasyPing" heading
+    await expect(page.getByText('EasyPing')).toBeVisible();
+
+    // Expect to see "AI-native service desk" subtitle
+    await expect(page.getByText('AI-native service desk')).toBeVisible();
+
+    // Check for Radio icon (lucide-react icon)
+    const radioIcon = page.locator('svg.lucide-radio');
+    await expect(radioIcon).toBeVisible();
   });
 
-  test('splash page auto-redirects to /login', async ({ page }) => {
-    // TODO: Navigate to /
-    // TODO: Wait for auto-redirect (max 3 seconds)
-    // TODO: Expect URL to be /login
-  });
-
-  test('authenticated end user with no pings lands on /pings/new', async ({
+  test('splash page auto-redirects to /login after 4 seconds', async ({
     page,
   }) => {
-    // TODO: Login as end_user with 0 pings
-    // TODO: Navigate to /
-    // TODO: Expect redirect to /pings/new
+    await page.goto('/');
+
+    // Wait for auto-redirect (timeout of 5 seconds to account for the 4 second delay + buffer)
+    await expect(page).toHaveURL('/login', { timeout: 5000 });
   });
 
-  test('authenticated end user with pings lands on /pings', async ({
-    page,
-  }) => {
-    // TODO: Login as end_user with existing pings
-    // TODO: Navigate to /
-    // TODO: Expect redirect to /pings
-  });
+  test('splash page displays branding correctly', async ({ page }) => {
+    await page.goto('/');
 
-  test('authenticated agent lands on /inbox', async ({ page }) => {
-    // TODO: Login as agent
-    // TODO: Navigate to /
-    // TODO: Expect redirect to /inbox
-  });
+    // Check that the page has gradient background
+    const mainContainer = page.locator(
+      'div.min-h-screen.bg-gradient-to-br.from-slate-50.to-blue-50'
+    );
+    await expect(mainContainer).toBeVisible();
 
-  test('authenticated manager lands on /analytics', async ({ page }) => {
-    // TODO: Login as manager
-    // TODO: Navigate to /
-    // TODO: Expect redirect to /analytics (dashboard/analytics)
-  });
-
-  test('welcome toast appears after login', async ({ page }) => {
-    // TODO: Navigate to /login
-    // TODO: Login as end_user
-    // TODO: Expect toast with "Welcome" message to appear
-    // TODO: Expect toast to contain user name
-  });
-
-  test('toast does not appear on page refresh', async ({ page }) => {
-    // TODO: Login as end_user
-    // TODO: Wait for initial toast to disappear
-    // TODO: Refresh page
-    // TODO: Expect no new toast to appear
+    // Check for animated pulse rings
+    const pulseRings = page.locator('div.animate-ping');
+    await expect(pulseRings.first()).toBeVisible();
   });
 
   test('splash page is responsive on mobile', async ({ page }) => {
-    // TODO: Set viewport to 375x667 (mobile)
-    // TODO: Navigate to /
-    // TODO: Expect splash page to render correctly
-    // TODO: Expect all elements visible and properly sized
+    // Set viewport to mobile size (iPhone SE)
+    await page.setViewportSize({ width: 375, height: 667 });
+
+    await page.goto('/');
+
+    // Expect splash page content to be visible
+    await expect(page.getByText('EasyPing')).toBeVisible();
+    await expect(page.getByText('AI-native service desk')).toBeVisible();
+
+    // Icon should still be visible on mobile
+    const radioIcon = page.locator('svg.lucide-radio');
+    await expect(radioIcon).toBeVisible();
   });
 });

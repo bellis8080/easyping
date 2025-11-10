@@ -500,6 +500,13 @@ describe('createTicket', () => {
 });
 ```
 
+**Mocking Best Practices:**
+- Use fixtures for test data instead of hardcoding
+- Mock external services (Supabase, AI providers)
+- Co-locate tests with source files: `Component.tsx` → `Component.test.tsx`
+- Use descriptive test names: `it('should redirect unauthenticated users to login')`
+- Mock fixtures available in `tests/fixtures/` (users, organizations)
+
 ### E2E Tests (Playwright)
 
 **When to Write E2E Tests:**
@@ -512,12 +519,46 @@ describe('createTicket', () => {
 # Run e2e tests
 pnpm test:e2e
 
-# Run e2e tests in headed mode (watch browser)
-pnpm test:e2e --headed
+# Run e2e tests with UI
+pnpm test:e2e:ui
 
-# Run specific test file
-pnpm test:e2e tests/e2e/tickets.spec.ts
+# Run e2e tests in headed mode (watch browser)
+pnpm test:e2e:headed
+
+# Debug e2e tests
+pnpm test:e2e:debug
 ```
+
+**Writing E2E Tests:**
+- Focus on user workflows, not implementation details
+- Use semantic selectors (`getByRole`, `getByLabel`) over CSS selectors
+- Clean up test data in global teardown
+- Use Page Object Model for complex pages
+
+**Best Practices:**
+- Test user behavior, not implementation
+- Keep tests isolated - no shared state between tests
+- Use semantic queries - `getByRole` over `querySelector`
+
+### Accessibility Testing
+
+All new UI components must pass automated accessibility checks:
+
+```bash
+pnpm test:e2e tests/e2e/accessibility.spec.ts
+```
+
+**Requirements:**
+- No WCAG 2.1 AA violations
+- ARIA labels on interactive elements
+- Keyboard navigation works
+- Screen reader announcements for dynamic content
+- Color contrast ≥4.5:1 for normal text, ≥3:1 for large text
+
+**Manual Testing:**
+- Test with keyboard only (Tab, Enter, Esc)
+- Test with screen reader (NVDA on Windows, VoiceOver on Mac)
+- Verify focus indicators visible
 
 **E2E Test Example:**
 ```typescript

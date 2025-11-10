@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { UserRole } from '@easyping/types';
@@ -69,12 +70,12 @@ export default async function SLAPage() {
             </p>
           </div>
 
-          <a
-            href="/dashboard"
+          <Link
+            href="/"
             className="inline-flex items-center text-sm text-blue-600 hover:text-blue-500"
           >
-            ← Back to Dashboard
-          </a>
+            ← Back to Home
+          </Link>
         </div>
       </div>
     </div>

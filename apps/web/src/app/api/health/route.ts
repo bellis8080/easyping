@@ -87,9 +87,28 @@ async function checkDatabase(): Promise<'healthy' | 'unhealthy'> {
  */
 async function checkAuth(): Promise<'healthy' | 'unhealthy'> {
   try {
-    // Check if GoTrue is responding via health endpoint
+    // Determine auth URL based on environment
+    // Local dev: use Supabase local instance
+    // Docker: use internal Docker hostname
+    const supabaseUrl =
+      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+    if (!supabaseUrl) {
+      console.error('Health check: Supabase URL not configured');
+      return 'unhealthy';
+    }
+
+    // Build auth health URL from Supabase URL
+    // For local dev: http://localhost:54321/auth/v1/health or http://127.0.0.1:54321/auth/v1/health
+    // For Docker: http://gotrue:9999/health (uses SUPABASE_URL internal endpoint)
+    const isLocalDev =
+      supabaseUrl.includes('localhost') || supabaseUrl.includes('127.0.0.1');
+    const authUrl = isLocalDev
+      ? `${supabaseUrl}/auth/v1/health`
+      : 'http://gotrue:9999/health';
+
     const response = await withTimeout(
-      fetch('http://gotrue:9999/health', {
+      fetch(authUrl, {
         method: 'GET',
         signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT),
       }),

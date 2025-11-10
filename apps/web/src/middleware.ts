@@ -18,7 +18,7 @@ export async function middleware(request: NextRequest) {
 
   // Redirect away from setup if already complete
   if (setupComplete && isSetupRoute) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL('/', request.url));
   }
 
   // Refresh session and set tenant context
@@ -54,15 +54,15 @@ export async function middleware(request: NextRequest) {
   if (userId && userRole && isProtectedPath) {
     if (!canAccessRoute(userRole, pathname)) {
       // User doesn't have permission for this route
-      const dashboardUrl = new URL('/dashboard', request.url);
-      dashboardUrl.searchParams.set('error', 'insufficient_permissions');
-      return NextResponse.redirect(dashboardUrl);
+      const homeUrl = new URL('/', request.url);
+      homeUrl.searchParams.set('error', 'insufficient_permissions');
+      return NextResponse.redirect(homeUrl);
     }
   }
 
-  // Redirect to dashboard if accessing auth pages while authenticated
+  // Redirect to site root if accessing auth pages while authenticated
   if (isAuthPath && userId) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL('/', request.url));
   }
 
   return response;

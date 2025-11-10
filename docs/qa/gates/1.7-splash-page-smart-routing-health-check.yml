@@ -1,0 +1,24 @@
+schema: 1
+story: '1.7'
+gate: CONCERNS
+status_reason: 'Core functionality working but missing test coverage and minor spec deviations.'
+reviewer: 'Quinn'
+updated: '2025-11-10T17:37:00Z'
+top_issues:
+  - id: 'TEST-001'
+    severity: high
+    finding: 'No executable unit or E2E tests - test stubs created but infrastructure not configured'
+    suggested_action: 'Configure Vitest and Playwright test infrastructure and implement test suite before production'
+  - id: 'REQ-001'
+    severity: medium
+    finding: 'Splash page timer is 4 seconds but AC #2 specifies 2 seconds'
+    suggested_action: 'Update splash-page.tsx line 18 timeout to 2000ms or update acceptance criteria to match implementation'
+  - id: 'TEST-002'
+    severity: medium
+    finding: 'Welcome toast always shows "Welcome back" regardless of first-time vs returning user status'
+    suggested_action: 'Implement first-time user detection using user metadata or login history'
+  - id: 'DOC-001'
+    severity: low
+    finding: 'Health endpoint localhost/127.0.0.1 detection fix not documented in completion notes'
+    suggested_action: 'Add fix details to Dev Agent Record completion notes for future reference'
+waiver: { active: false }

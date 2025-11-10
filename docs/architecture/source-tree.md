@@ -46,10 +46,11 @@ easyping/
 │       │   │   │   ├── webhooks/
 │       │   │   │   │   └── plugin/[id]/route.ts  # Plugin webhooks
 │       │   │   │   └── health/route.ts           # Health check endpoint
-│       │   │   ├── layout.tsx         # Root layout
-│       │   │   ├── page.tsx           # Landing page
+│       │   │   ├── layout.tsx         # Root layout (includes Toaster)
+│       │   │   ├── page.tsx           # Site root - Splash page + smart routing
 │       │   │   └── globals.css        # Global styles (Tailwind)
 │       │   ├── components/            # React components
+│       │   │   ├── splash-page.tsx    # Animated splash page component
 │       │   │   ├── tickets/
 │       │   │   │   ├── ticket-list.tsx
 │       │   │   │   ├── ticket-detail.tsx
@@ -79,6 +80,7 @@ easyping/
 │       │   │   │   └── middleware.ts  # Auth middleware
 │       │   │   ├── ai/
 │       │   │   │   └── client.ts      # AI provider client (imports from @easyping/ai)
+│       │   │   ├── auth-toasts.ts     # Welcome toast notifications helper
 │       │   │   └── utils.ts           # Utility functions
 │       │   ├── stores/                # Zustand state management
 │       │   │   ├── auth-store.ts

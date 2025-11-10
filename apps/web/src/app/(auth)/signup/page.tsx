@@ -85,9 +85,9 @@ export default function SignUpPage() {
         return;
       }
 
-      // Redirect to dashboard
+      // Redirect to root with welcome param for toast notification
       // Use window.location to force a full page reload and refresh the session
-      window.location.href = '/dashboard';
+      window.location.href = '/?welcome=true';
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'An unexpected error occurred'

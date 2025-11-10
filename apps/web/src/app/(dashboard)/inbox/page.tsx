@@ -364,6 +364,7 @@ export default function AgentInboxPage() {
                   <p className="text-base leading-relaxed">{message.content}</p>
                   <p
                     className={`text-xs mt-2 ${message.sender_type === 'agent' ? 'text-blue-100' : 'text-slate-500'}`}
+                    suppressHydrationWarning
                   >
                     {new Date(message.created_at).toLocaleTimeString()}
                   </p>

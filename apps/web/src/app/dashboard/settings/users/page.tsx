@@ -86,7 +86,7 @@ export default async function UserManagementPage() {
       <div className="mx-auto w-full max-w-screen-xl px-4 sm:px-6 lg:px-8">
         <div className="mb-6">
           <Link
-            href="/dashboard"
+            href="/"
             className="inline-flex items-center text-sm text-blue-600 hover:text-blue-500"
           >
             <svg

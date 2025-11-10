@@ -104,21 +104,25 @@
 6. Setup wizard only appears once (flag in database tracks completion)
 7. Wizard UI matches EasyPing branding (clean, modern, ping.me theme)
 
-### Story 1.7: Basic Dashboard & Health Check
+### Story 1.7: Splash Page, Smart Routing & Health Check
 
-**As an** end user or agent,
-**I want** to see a basic authenticated dashboard after login,
-**so that** I know the system is working and I can navigate to features.
+**As a** user (end user, agent, manager, or owner),
+**I want** to experience a polished branded entry point and be routed to the most relevant page for my role,
+**so that** I can quickly access what I need without unnecessary navigation.
 
 **Acceptance Criteria:**
 
-1. Dashboard shows welcome message with user's name and organization name
-2. Sidebar navigation includes: My Pings, Create Ping, Knowledge Base, Settings
-3. Empty state message: "You have no pings yet. Send your first ping!"
-4. `/api/health` endpoint returns 200 with service status (database, auth, storage)
-5. Dashboard is responsive (desktop and mobile web)
-6. Loading states shown while fetching user data
-7. Error states handled gracefully (e.g., database connection failure)
+1. Site root (`/`) shows animated splash page for unauthenticated users
+2. Splash page auto-redirects to `/login` after 2-second animation completes
+3. Authenticated users at site root are instantly redirected based on role:
+   - **Agents** → `/inbox` (their work queue)
+   - **Managers/Owners** → `/analytics` (system overview)
+   - **End users with 0 pings** → `/pings/new` (create first ping)
+   - **End users with pings** → `/pings` (view conversations)
+4. Welcome toast notification appears after login showing personalized message
+5. Sidebar navigation does NOT include "Create Ping" button (exists in My Pings header)
+6. `/api/health` endpoint returns 200 with service status (database, auth, storage)
+7. All routing is responsive and works on desktop and mobile
 
 ---
 

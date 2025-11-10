@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -11,6 +11,7 @@ import {
   LogOut,
   Radio,
 } from 'lucide-react';
+import { WelcomeToast } from '@/components/welcome-toast';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -70,7 +71,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <aside className="w-64 bg-gradient-to-b from-slate-800 via-slate-900 to-slate-950 flex flex-col shadow-2xl">
           {/* Logo */}
           <div className="p-6 border-b border-slate-700">
-            <Link href="/dashboard" className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-3">
               <div className="relative">
                 <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center ring-2 ring-orange-500/50">
                   <Radio className="w-6 h-6 text-white" />
@@ -80,7 +81,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-white">EasyPing</h1>
-                <p className="text-xs text-slate-400">Service Desk</p>
+                <p className="text-xs text-slate-400">AI-native service desk</p>
               </div>
             </Link>
           </div>
@@ -155,6 +156,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         {/* Main content */}
         <main className="flex-1 overflow-hidden">{children}</main>
       </div>
+
+      {/* Welcome toast on login */}
+      <Suspense fallback={null}>
+        <WelcomeToast />
+      </Suspense>
     </div>
   );
 }

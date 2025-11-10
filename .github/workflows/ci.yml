@@ -77,11 +77,11 @@ jobs:
         id: supabase-keys
         run: |
           # Get publishable key (used for client-side operations)
-          PUBLISHABLE_KEY=$(npx supabase status --output json | jq -r '.publishable_key')
+          PUBLISHABLE_KEY=$(npx supabase status | grep -oP 'Publishable key: \K\S+')
           echo "publishable_key=$PUBLISHABLE_KEY" >> $GITHUB_OUTPUT
 
           # Get service role key (used for admin operations in tests)
-          SERVICE_ROLE_KEY=$(npx supabase status --output json | jq -r '.service_role_key')
+          SERVICE_ROLE_KEY=$(npx supabase status | grep -oP 'Secret key: \K\S+')
           echo "service_role_key=$SERVICE_ROLE_KEY" >> $GITHUB_OUTPUT
 
       - name: Run E2E tests

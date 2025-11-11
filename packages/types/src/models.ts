@@ -48,6 +48,12 @@ export interface PingMessage {
   message_type: MessageType;
   created_at: string; // ISO timestamp
   edited_at: string | null; // ISO timestamp
+  sender?: User; // Optional joined relation
+}
+
+// Extended Ping type with messages for displaying conversation threads
+export interface PingWithMessages extends Ping {
+  messages: PingMessage[];
 }
 
 // Helper type for database insert operations

@@ -164,12 +164,37 @@ pnpm db:types
 # Create new migration
 supabase migration new <migration_name>
 
-# Apply migrations
-supabase db reset
+# Apply migrations (IMPORTANT: Use push to preserve test data)
+npx supabase db push --local
+
+# Reset database (WARNING: Wipes all data - only use when necessary)
+npx supabase db reset --local
 
 # Seed database
 pnpm db:seed
 ```
+
+**CRITICAL - Database Migration Workflow:**
+
+⚠️ **ALWAYS use `npx supabase db push --local` instead of `npx supabase db reset --local`**
+
+- **`db push`**: Applies new migrations WITHOUT wiping data (non-destructive)
+- **`db reset`**: Wipes entire database and replays all migrations (destructive)
+
+**When to use each:**
+- ✅ **Use `db push`** for normal development (99% of the time)
+- ❌ **Avoid `db reset`** unless you need to completely wipe and rebuild the database
+
+**Workflow:**
+1. Create migration: `npx supabase migration new my_migration_name`
+2. Write migration SQL in `packages/database/supabase/migrations/`
+3. Apply migration: `npx supabase db push --local` (preserves test data)
+4. Generate types: `pnpm db:types`
+
+**Why this matters:**
+- Test data takes time to create (manual form filling, API calls, etc.)
+- Resetting the database requires recreating all test data
+- `db push` allows iterative development without losing progress
 
 **Accessing Local Database:**
 
@@ -217,9 +242,11 @@ pnpm lighthouse
 
 2. **`docs/architecture/`** - Architecture Documentation (sharded by topic)
    - **`tech-stack.md`** - Definitive technology selections
-   - **`unified-project-structure.md`** - Directory structure
-   - **`coding-standards.md`** - TypeScript/React standards (when created)
-   - **`testing-strategy.md`** - Test requirements (when created)
+   - **`source-tree.md`** - Directory structure and file organization
+   - **`ubiquitous-language.md`** - Domain terminology and naming conventions (CRITICAL: read this first!)
+   - **`coding-standards.md`** - TypeScript/React standards
+   - **`database-schema.md`** - PostgreSQL schema with RLS policies
+   - **`api-specification.md`** - REST API patterns and endpoints
 
 3. **`docs/stories/`** - User stories for AI development
    - Format: `{epic}.{story}.{title}.md` (e.g., `1.1.project-setup.md`)
@@ -230,10 +257,52 @@ pnpm lighthouse
 5. **`DEPLOYMENT.md`** - DNS setup, SSL, Docker deployment, troubleshooting
 
 **When Implementing Features:**
-1. Read the story file in `docs/stories/`
-2. Reference architecture docs for technical details
-3. Follow coding standards from `CONTRIBUTING.md`
-4. Update story file with completion notes
+1. **Read `docs/architecture/ubiquitous-language.md` FIRST** - Understand domain terminology
+2. Read the story file in `docs/stories/`
+3. Reference architecture docs for technical details
+4. Follow coding standards from `CONTRIBUTING.md`
+5. Update story file with completion notes
+
+## Ubiquitous Language (CRITICAL)
+
+**ALWAYS use the correct domain terminology defined in `docs/architecture/ubiquitous-language.md`**
+
+EasyPing uses Domain-Driven Design (DDD) principles with a strict ubiquitous language. Using incorrect terminology creates confusion and inconsistency.
+
+**Core Terms (NEVER deviate from these):**
+- ✅ **Ping** (NOT "ticket", "issue", or "request")
+- ✅ **Ping Number** (NOT "ticket number")
+- ✅ **End User** (NOT "customer")
+- ✅ **Agent** (NOT "technician" or "operator")
+- ✅ **Reply / Replying** (NOT "type", "typing", or "send message")
+- ✅ **Ping Messages** (NOT "ticket messages")
+
+**Examples:**
+```typescript
+// ✅ Correct
+function createPing(title: string, userId: string): Ping {
+  return { id: uuid(), title, created_by: userId };
+}
+
+// Component: ReplyingIndicator.tsx
+// Message: "John is replying..."
+// API: POST /api/pings/[pingNumber]/messages
+
+// ❌ Incorrect
+function createTicket(title: string, userId: string): Ticket {
+  return { id: uuid(), title, created_by: userId };
+}
+
+// Component: TypingIndicator.tsx
+// Message: "John is typing..."
+// API: POST /api/tickets/[ticketNumber]/messages
+```
+
+**Before writing ANY code:**
+1. Check `docs/architecture/ubiquitous-language.md` for correct terminology
+2. Use exact terms in variable names, function names, file names, UI text, comments
+3. If you're unsure about a term, reference the ubiquitous language doc
+4. NEVER use synonyms or abbreviations not defined in the ubiquitous language
 
 ## Coding Standards
 

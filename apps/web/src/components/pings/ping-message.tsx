@@ -27,8 +27,25 @@ export function PingMessage({ message, isCurrentUser }: PingMessageProps) {
     );
   }
 
+  // Current user's messages: right-aligned, no avatar
+  if (isCurrentUser) {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-2xl px-5 py-3 rounded-lg shadow-md bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+          <p className="text-base leading-relaxed whitespace-pre-wrap">
+            {message.content}
+          </p>
+          <p className="text-xs mt-2 text-blue-100" suppressHydrationWarning>
+            {new Date(message.created_at).toLocaleTimeString()}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Other person's messages: left-aligned with avatar, name, timestamp
   return (
-    <div className={`flex gap-3 ${isCurrentUser ? 'flex-row' : 'flex-row'}`}>
+    <div className="flex gap-3">
       {/* Avatar */}
       <div className="flex-shrink-0">
         {message.sender.avatar_url ? (

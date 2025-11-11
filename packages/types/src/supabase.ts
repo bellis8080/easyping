@@ -34,6 +34,47 @@ export type Database = {
   };
   public: {
     Tables: {
+      categories: {
+        Row: {
+          color: string;
+          created_at: string;
+          description: string | null;
+          icon: string | null;
+          id: string;
+          name: string;
+          sort_order: number;
+          tenant_id: string;
+        };
+        Insert: {
+          color?: string;
+          created_at?: string;
+          description?: string | null;
+          icon?: string | null;
+          id?: string;
+          name: string;
+          sort_order?: number;
+          tenant_id: string;
+        };
+        Update: {
+          color?: string;
+          created_at?: string;
+          description?: string | null;
+          icon?: string | null;
+          id?: string;
+          name?: string;
+          sort_order?: number;
+          tenant_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'categories_tenant_id_fkey';
+            columns: ['tenant_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       organizations: {
         Row: {
           created_at: string;
@@ -57,6 +98,134 @@ export type Database = {
           settings?: Json | null;
         };
         Relationships: [];
+      };
+      ping_messages: {
+        Row: {
+          content: string;
+          created_at: string;
+          edited_at: string | null;
+          id: string;
+          message_type: string;
+          ping_id: string;
+          sender_id: string;
+        };
+        Insert: {
+          content: string;
+          created_at?: string;
+          edited_at?: string | null;
+          id?: string;
+          message_type?: string;
+          ping_id: string;
+          sender_id: string;
+        };
+        Update: {
+          content?: string;
+          created_at?: string;
+          edited_at?: string | null;
+          id?: string;
+          message_type?: string;
+          ping_id?: string;
+          sender_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'ping_messages_ping_id_fkey';
+            columns: ['ping_id'];
+            isOneToOne: false;
+            referencedRelation: 'pings';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'ping_messages_sender_id_fkey';
+            columns: ['sender_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      pings: {
+        Row: {
+          ai_summary: string | null;
+          assigned_to: string | null;
+          category_id: string | null;
+          closed_at: string | null;
+          created_at: string;
+          created_by: string;
+          id: string;
+          ping_number: number;
+          priority: string;
+          resolved_at: string | null;
+          sla_due_at: string | null;
+          status: string;
+          tenant_id: string;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          ai_summary?: string | null;
+          assigned_to?: string | null;
+          category_id?: string | null;
+          closed_at?: string | null;
+          created_at?: string;
+          created_by: string;
+          id?: string;
+          ping_number: number;
+          priority?: string;
+          resolved_at?: string | null;
+          sla_due_at?: string | null;
+          status?: string;
+          tenant_id: string;
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          ai_summary?: string | null;
+          assigned_to?: string | null;
+          category_id?: string | null;
+          closed_at?: string | null;
+          created_at?: string;
+          created_by?: string;
+          id?: string;
+          ping_number?: number;
+          priority?: string;
+          resolved_at?: string | null;
+          sla_due_at?: string | null;
+          status?: string;
+          tenant_id?: string;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'pings_assigned_to_fkey';
+            columns: ['assigned_to'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'pings_category_id_fkey';
+            columns: ['category_id'];
+            isOneToOne: false;
+            referencedRelation: 'categories';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'pings_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'pings_tenant_id_fkey';
+            columns: ['tenant_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       users: {
         Row: {
@@ -104,6 +273,11 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      decrypt_data: {
+        Args: { encrypted_data: string; key: string };
+        Returns: string;
+      };
+      encrypt_data: { Args: { data: string; key: string }; Returns: string };
       set_tenant_context: { Args: { tenant_uuid: string }; Returns: undefined };
     };
     Enums: {

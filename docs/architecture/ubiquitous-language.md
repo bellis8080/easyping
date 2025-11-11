@@ -140,6 +140,34 @@ This document defines the shared vocabulary used across EasyPing - in code, docu
 
 ---
 
+### Reply / Replying
+
+**Definition:** The act of composing or sending a message in response to a ping. In EasyPing, users and agents **reply to pings**, not "type messages" or "send messages".
+
+**Technical Implementation:**
+- Component: `ReplyingIndicator` (shows "{userName} is replying...")
+- Realtime channel: `ping-replying:${ping.id}` (Supabase Presence API)
+- State variable: `isReplying` (boolean flag for presence tracking)
+- Message input placeholder: "Type your reply..." or "Send a reply..."
+
+**Usage:**
+- ✅ Correct: "Agent replies to the ping", "User is replying...", "Reply to ping #PING-123"
+- ❌ Incorrect: "Agent types a message", "User is typing...", "Type a response"
+
+**Why "Reply" not "Type" or "Message":**
+- Reflects conversational, back-and-forth nature of ping communication
+- Consistent with email/messaging mental model ("reply to thread")
+- Differentiates from generic "typing" (could be typing anything)
+- User action: "Send a **reply**" feels more direct than "Send a message"
+
+**Examples:**
+- UI indicator: "John is replying..." (shows live presence)
+- Button label: "Send Reply" (primary action button)
+- API endpoint: `POST /api/pings/[pingNumber]/messages` (sends reply)
+- Component name: `ReplyingIndicator.tsx` (not `TypingIndicator.tsx`)
+
+---
+
 ### Category
 
 **Definition:** A classification tag for pings (e.g., Hardware, Software, Network) used for routing and reporting.
@@ -241,6 +269,9 @@ This document defines the shared vocabulary used across EasyPing - in code, docu
 | Request | Ping | Too generic |
 | Conversation | Ping thread / Ping messages | More specific |
 | Thread | Ping conversation / Ping messages | Avoids ambiguity |
+| Typing | Replying | Users reply to pings, not type messages |
+| Type a message | Reply to ping / Send a reply | Matches domain language |
+| Send message | Send reply | More specific to ping context |
 
 ---
 
@@ -285,4 +316,4 @@ Update existing terms when:
 
 ---
 
-**Last Updated:** 2025-11-10 by Winston (Architect)
+**Last Updated:** 2025-01-11 by Bob (Scrum Master) - Added "Reply / Replying" terminology

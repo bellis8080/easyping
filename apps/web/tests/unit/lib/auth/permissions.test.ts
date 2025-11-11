@@ -8,7 +8,7 @@ import {
   hasPermission,
   canAccessRoute,
   canAssignRole,
-  canViewAllTickets,
+  canViewAllPings,
   canManageCategories,
   canManageSLA,
   canViewAnalytics,
@@ -197,15 +197,15 @@ describe('canAssignRole', () => {
   });
 });
 
-describe('canViewAllTickets', () => {
-  it('should allow agent, manager, and owner to view all tickets', () => {
-    expect(canViewAllTickets(UserRole.AGENT)).toBe(true);
-    expect(canViewAllTickets(UserRole.MANAGER)).toBe(true);
-    expect(canViewAllTickets(UserRole.OWNER)).toBe(true);
+describe('canViewAllPings', () => {
+  it('should allow agent, manager, and owner to view all pings', () => {
+    expect(canViewAllPings(UserRole.AGENT)).toBe(true);
+    expect(canViewAllPings(UserRole.MANAGER)).toBe(true);
+    expect(canViewAllPings(UserRole.OWNER)).toBe(true);
   });
 
-  it('should deny end_user from viewing all tickets', () => {
-    expect(canViewAllTickets(UserRole.END_USER)).toBe(false);
+  it('should deny end_user from viewing all pings', () => {
+    expect(canViewAllPings(UserRole.END_USER)).toBe(false);
   });
 });
 

@@ -24,7 +24,7 @@ const ROLE_HIERARCHY: Record<UserRole, number> = {
 const PROTECTED_ROUTES: Record<string, UserRole> = {
   // Agent+ routes
   '/dashboard/analytics': UserRole.AGENT,
-  '/dashboard/tickets/all': UserRole.AGENT,
+  '/dashboard/pings/all': UserRole.AGENT,
 
   // Manager+ routes
   '/dashboard/settings/categories': UserRole.MANAGER,
@@ -109,21 +109,21 @@ export function canAssignRole(
 }
 
 /**
- * Check if a user role can view all tickets in the organization
+ * Check if a user role can view all pings in the organization
  *
  * @param userRole - The user's current role
  * @returns true for AGENT, MANAGER, OWNER; false for END_USER
  *
  * @example
- * canViewAllTickets(UserRole.AGENT) // true
- * canViewAllTickets(UserRole.END_USER) // false
+ * canViewAllPings(UserRole.AGENT) // true
+ * canViewAllPings(UserRole.END_USER) // false
  */
-export function canViewAllTickets(userRole: UserRole): boolean {
+export function canViewAllPings(userRole: UserRole): boolean {
   return hasPermission(userRole, UserRole.AGENT);
 }
 
 /**
- * Check if a user can manage ticket categories
+ * Check if a user can manage ping categories
  *
  * @param userRole - The user's current role
  * @returns true for MANAGER and OWNER

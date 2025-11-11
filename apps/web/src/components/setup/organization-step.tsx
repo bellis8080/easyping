@@ -18,7 +18,9 @@ export function OrganizationStep({ form }: OrganizationStepProps) {
   return (
     <div className="space-y-4">
       <div>
-        <Label htmlFor="name">Organization Name *</Label>
+        <Label htmlFor="name" className="text-white">
+          Organization Name *
+        </Label>
         <Input
           id="name"
           {...register('name')}
@@ -31,7 +33,9 @@ export function OrganizationStep({ form }: OrganizationStepProps) {
       </div>
 
       <div>
-        <Label htmlFor="domain">Domain (Optional)</Label>
+        <Label htmlFor="domain" className="text-white">
+          Domain (Optional)
+        </Label>
         <Input
           id="domain"
           {...register('domain')}
@@ -41,7 +45,7 @@ export function OrganizationStep({ form }: OrganizationStepProps) {
         {errors.domain && (
           <p className="text-sm text-red-500 mt-1">{errors.domain.message}</p>
         )}
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-xs text-gray-300 mt-1">
           Used for email matching and branding
         </p>
       </div>

@@ -115,13 +115,13 @@ export function SetupWizard() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <Card className="w-full max-w-2xl p-8">
+    <Card className="w-full bg-white dark:bg-slate-800 shadow-xl border-2 border-orange-500">
+      <div className="p-8">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          <h1 className="text-3xl font-bold text-white mb-2">
             Welcome to EasyPing
           </h1>
-          <p className="text-gray-600">
+          <p className="text-gray-300">
             Let&apos;s set up your service desk in just a few steps
           </p>
         </div>
@@ -149,7 +149,12 @@ export function SetupWizard() {
           >
             Back
           </Button>
-          <Button type="button" onClick={handleNext} disabled={isSubmitting}>
+          <Button
+            type="button"
+            onClick={handleNext}
+            disabled={isSubmitting}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
             {isSubmitting
               ? 'Setting up...'
               : currentStep === 3
@@ -157,7 +162,7 @@ export function SetupWizard() {
                 : 'Next'}
           </Button>
         </div>
-      </Card>
-    </div>
+      </div>
+    </Card>
   );
 }

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ArrowLeft, Paperclip, Send, BookOpen, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 // Mock KB article type
 interface KBArticle {
@@ -91,16 +92,40 @@ export default function CreatePingPage() {
     e.preventDefault();
 
     if (!message.trim()) {
+      toast.error('Please describe your issue');
       return;
     }
 
     setIsSubmitting(true);
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      const response = await fetch('/api/pings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
 
-    // Redirect to ping detail page (mock)
-    router.push('/pings/1');
+      if (!response.ok) {
+        const error = await response.json();
+        toast.error(error.message || 'Failed to create ping');
+        return;
+      }
+
+      const { ping } = await response.json();
+      toast.success(`Ping #${ping.ping_number} created!`);
+
+      // Clear form
+      setMessage('');
+      setAttachments([]);
+
+      // Redirect to ping detail page
+      router.push(`/pings/${ping.ping_number}`);
+    } catch (err) {
+      console.error('Error creating ping:', err);
+      toast.error('Failed to send ping. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -144,7 +169,13 @@ export default function CreatePingPage() {
                   id="message"
                   value={message}
                   onChange={handleMessageChange}
-                  placeholder="What can we help with? Be as detailed as possible..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSubmit(e as unknown as React.FormEvent);
+                    }
+                  }}
+                  placeholder="Send a ping... describe your issue"
                   className="w-full px-4 py-3 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none text-base bg-slate-50"
                   rows={10}
                   autoFocus

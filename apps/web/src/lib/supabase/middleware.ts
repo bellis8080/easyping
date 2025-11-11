@@ -37,7 +37,17 @@ export async function updateSession(request: NextRequest) {
           // Rewrite public URL to internal URL for Docker networking
           const urlStr = url.toString();
           const rewrittenUrl = urlStr.replace(publicUrl, internalUrl);
-          return fetch(rewrittenUrl, options);
+
+          // Ensure Accept header is set for PostgREST
+          const headers = new Headers(options?.headers);
+          if (!headers.has('Accept')) {
+            headers.set('Accept', 'application/json');
+          }
+
+          return fetch(rewrittenUrl, {
+            ...options,
+            headers,
+          });
         },
       },
     }

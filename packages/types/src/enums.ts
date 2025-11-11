@@ -82,3 +82,33 @@ export function isUserRole(value: string): value is UserRole {
 export function getAllUserRoles(): UserRole[] {
   return Object.values(UserRole);
 }
+
+/**
+ * Ping status enumeration
+ */
+export enum PingStatus {
+  NEW = 'new',
+  IN_PROGRESS = 'in_progress',
+  WAITING_ON_USER = 'waiting_on_user',
+  RESOLVED = 'resolved',
+  CLOSED = 'closed',
+}
+
+/**
+ * Ping priority enumeration
+ */
+export enum PingPriority {
+  LOW = 'low',
+  NORMAL = 'normal',
+  HIGH = 'high',
+  URGENT = 'urgent',
+}
+
+/**
+ * Message type enumeration
+ */
+export enum MessageType {
+  USER = 'user',
+  AGENT = 'agent',
+  SYSTEM = 'system',
+}

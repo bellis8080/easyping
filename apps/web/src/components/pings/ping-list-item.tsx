@@ -1,0 +1,84 @@
+'use client';
+
+import Link from 'next/link';
+import { formatDistanceToNow } from 'date-fns';
+import { User } from 'lucide-react';
+
+interface PingListItemProps {
+  ping: any;
+}
+
+export function PingListItem({ ping }: PingListItemProps) {
+  const formatTimestamp = (timestamp: string): string => {
+    return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
+  };
+
+  const getStatusColor = (status: string): string => {
+    const colors: Record<string, string> = {
+      new: 'bg-blue-500',
+      in_progress: 'bg-yellow-500',
+      waiting_on_user: 'bg-purple-500',
+      resolved: 'bg-green-500',
+      closed: 'bg-slate-500',
+    };
+    return colors[status] || 'bg-slate-500';
+  };
+
+  const getStatusLabel = (status: string): string => {
+    const labels: Record<string, string> = {
+      new: 'New',
+      in_progress: 'In Progress',
+      waiting_on_user: 'Waiting on User',
+      resolved: 'Resolved',
+      closed: 'Closed',
+    };
+    return labels[status] || status;
+  };
+
+  // Get last message preview
+  const lastMessage = ping.messages?.[ping.messages.length - 1];
+  const messagePreview = lastMessage?.content.substring(0, 100) || ping.title;
+
+  return (
+    <Link href={`/pings/${ping.ping_number}`}>
+      <div className="p-5 border-b border-slate-200 hover:bg-gradient-to-r hover:from-orange-50 hover:to-transparent transition-all cursor-pointer group hover:border-l-4 hover:border-l-orange-500">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            {/* Ping Number and Status */}
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-sm font-mono font-bold text-slate-900">
+                #PING-{String(ping.ping_number).padStart(3, '0')}
+              </span>
+              <span
+                className={`px-2 py-1 rounded-full text-xs font-semibold text-white ${getStatusColor(ping.status)}`}
+              >
+                {getStatusLabel(ping.status)}
+              </span>
+            </div>
+
+            {/* Title */}
+            <h3 className="text-base font-semibold text-slate-900 mb-1 line-clamp-1">
+              {ping.title}
+            </h3>
+
+            {/* Last message preview */}
+            <p className="text-sm text-slate-600 line-clamp-2 mb-2">
+              {messagePreview}
+            </p>
+
+            {/* Metadata */}
+            <div className="flex items-center gap-4 text-xs text-slate-500">
+              <span>Updated {formatTimestamp(ping.updated_at)}</span>
+              {ping.assigned_to && (
+                <div className="flex items-center gap-1">
+                  <User className="w-3 h-3" />
+                  <span>{ping.assigned_to.full_name}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}

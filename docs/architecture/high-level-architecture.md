@@ -6,7 +6,7 @@ EasyPing is built as a **serverless monolith** using Next.js 14+ (App Router) wi
 
 The system deploys as a **single Docker Compose stack** for self-hosted installations (EasyPing community edition), bundling the Next.js application with self-hosted Supabase services. The database schema is **multi-tenant ready** with `tenant_id` columns and Row Level Security (RLS) policies, but runs in **single-tenant mode** for community deployments. This design enables seamless migration to the future **ServicePing.me SaaS platform** without database refactoring.
 
-AI capabilities are abstracted through a **provider-agnostic interface** supporting OpenAI, Anthropic, and Azure OpenAI, with users bringing their own API keys (BYOK model). The frontend uses **shadcn/ui** components with Tailwind CSS for a modern, accessible chat-first interface. Realtime updates leverage **Supabase Realtime** (WebSocket subscriptions) for live ticket conversation threading. The plugin framework enables extensibility through UI extension points, webhook-based actions, and background jobs.
+AI capabilities are abstracted through a **provider-agnostic interface** supporting OpenAI, Anthropic, and Azure OpenAI, with users bringing their own API keys (BYOK model). The frontend uses **shadcn/ui** components with Tailwind CSS for a modern, accessible chat-first interface. Realtime updates leverage **Supabase Realtime** (WebSocket subscriptions) for live ping conversation threading. The plugin framework enables extensibility through UI extension points, webhook-based actions, and background jobs.
 
 This architecture balances **speed to market** (leveraging Supabase BaaS), **self-hostability** (Docker Compose), **future SaaS scalability** (multi-tenant schema), and **open-core business model** (clear separation between community and proprietary features).
 
@@ -100,7 +100,7 @@ graph TB
 - **Next.js App:** Server-side rendering, API routes, client-side React
 - **Supabase PostgREST:** Auto-generated REST API from database schema
 - **PostgreSQL:** Multi-tenant database with RLS policies, pgvector for embeddings
-- **Supabase Realtime:** WebSocket server for live ticket updates
+- **Supabase Realtime:** WebSocket server for live ping updates
 - **Supabase Storage:** S3-compatible object storage for file attachments
 - **AI Provider Abstraction:** Unified interface for multiple AI providers (OpenAI, Anthropic, Azure)
 
@@ -115,6 +115,6 @@ graph TB
 - **API Gateway Pattern:** Next.js API routes as single entry point - _Rationale:_ Centralized auth, rate limiting, and error handling
 - **Component-Based UI:** Reusable React components with TypeScript - _Rationale:_ Maintainability and type safety across large codebase
 - **Optimistic UI Updates:** Update UI immediately, sync with server - _Rationale:_ Chat-first UX requires instant feedback for messages
-- **Realtime Subscriptions:** WebSocket-based live updates via Supabase - _Rationale:_ Ticket conversations feel like live chat (Slack-style experience)
+- **Realtime Subscriptions:** WebSocket-based live updates via Supabase - _Rationale:_ Ping conversations feel like live chat (Slack-style experience)
 
 ---

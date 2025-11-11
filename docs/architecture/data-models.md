@@ -7,22 +7,22 @@ These are the core data models/entities shared between frontend and backend. All
 ```mermaid
 erDiagram
     Organization ||--o{ User : "has"
-    Organization ||--o{ Ticket : "owns"
+    Organization ||--o{ Ping : "owns"
     Organization ||--o{ Category : "defines"
     Organization ||--o{ KnowledgeBaseArticle : "contains"
     Organization ||--o{ SLAPolicy : "enforces"
     Organization ||--o{ Plugin : "installs"
     Organization ||--o{ KnownIssue : "publishes"
 
-    User ||--o{ Ticket : "creates"
-    User ||--o{ Ticket : "assigned_to"
-    User ||--o{ TicketMessage : "sends"
+    User ||--o{ Ping : "creates"
+    User ||--o{ Ping : "assigned_to"
+    User ||--o{ PingMessage : "sends"
     User ||--o{ KnowledgeBaseArticle : "authors"
     User }o--o{ KnownIssue : "follows"
 
-    Ticket ||--o{ TicketMessage : "contains"
-    Ticket }o--|| Category : "categorized_as"
-    Ticket ||--o| KnowledgeBaseArticle : "generates"
+    Ping ||--o{ PingMessage : "contains"
+    Ping }o--|| Category : "categorized_as"
+    Ping ||--o| KnowledgeBaseArticle : "generates"
 
     Organization {
         uuid id PK
@@ -43,10 +43,10 @@ erDiagram
         timestamp last_seen_at
     }
 
-    Ticket {
+    Ping {
         uuid id PK
         uuid tenant_id FK
-        int ticket_number
+        int ping_number
         uuid created_by FK
         uuid assigned_to FK
         uuid category_id FK
@@ -61,9 +61,9 @@ erDiagram
         text ai_summary
     }
 
-    TicketMessage {
+    PingMessage {
         uuid id PK
-        uuid ticket_id FK
+        uuid ping_id FK
         uuid sender_id FK
         text content
         enum message_type
@@ -89,7 +89,7 @@ erDiagram
         string title
         text content
         string slug
-        uuid source_ticket_id FK
+        uuid source_ping_id FK
         uuid author_id FK
         enum status
         vector embedding
@@ -188,7 +188,7 @@ interface OrganizationSettings {
 ### Relationships
 
 - One-to-many with `User` (one organization has many users)
-- One-to-many with `Ticket` (one organization has many tickets)
+- One-to-many with `Ping` (one organization has many pings)
 - One-to-many with `Category` (one organization has many categories)
 - One-to-many with `KnowledgeBaseArticle` (one organization has many KB articles)
 - One-to-many with `SLAPolicy` (one organization has many SLA policies)
@@ -234,37 +234,37 @@ interface User {
 ### Relationships
 
 - Many-to-one with `Organization` (many users belong to one organization)
-- One-to-many with `Ticket` as creator (user creates many tickets)
-- One-to-many with `Ticket` as assignee (agent assigned to many tickets)
-- One-to-many with `TicketMessage` (user sends many messages)
+- One-to-many with `Ping` as creator (user creates many pings)
+- One-to-many with `Ping` as assignee (agent assigned to many pings)
+- One-to-many with `PingMessage` (user sends many messages)
 
 ---
 
-## Ticket
+## Ping
 
-**Purpose:** Represents a support ticket (ping) with conversational threading, status tracking, and metadata.
+**Purpose:** Represents a support request (ping) with conversational threading, status tracking, and metadata. A ping is the core entity users create when they need help.
 
 **Key Attributes:**
 - `id`: UUID - Unique identifier
 - `tenant_id`: UUID - Foreign key to `Organization`
-- `ticket_number`: number - Auto-incrementing display ID (e.g., #PING-001)
-- `created_by`: UUID - Foreign key to `User` (ticket creator)
+- `ping_number`: number - Auto-incrementing display ID (e.g., #PING-001)
+- `created_by`: UUID - Foreign key to `User` (ping creator)
 - `assigned_to`: UUID | null - Foreign key to `User` (assigned agent)
 - `category_id`: UUID | null - Foreign key to `Category`
-- `status`: TicketStatus - Current ticket state
-- `priority`: TicketPriority - Urgency level
+- `status`: PingStatus - Current ping state
+- `priority`: PingPriority - Urgency level
 - `title`: string - Extracted from first message (AI-generated or user-provided)
-- `created_at`: Date - Ticket creation timestamp
+- `created_at`: Date - Ping creation timestamp
 - `updated_at`: Date - Last update timestamp
 - `resolved_at`: Date | null - Resolution timestamp
 - `closed_at`: Date | null - Closure timestamp
 - `sla_due_at`: Date | null - SLA deadline
-- `ai_summary`: string | null - AI-generated ticket summary
+- `ai_summary`: string | null - AI-generated ping summary
 
 ### TypeScript Interface
 
 ```typescript
-enum TicketStatus {
+enum PingStatus {
   NEW = 'new',
   IN_PROGRESS = 'in_progress',
   WAITING_ON_USER = 'waiting_on_user',
@@ -272,22 +272,22 @@ enum TicketStatus {
   CLOSED = 'closed'
 }
 
-enum TicketPriority {
+enum PingPriority {
   LOW = 'low',
   NORMAL = 'normal',
   HIGH = 'high',
   URGENT = 'urgent'
 }
 
-interface Ticket {
+interface Ping {
   id: string; // UUID
   tenant_id: string; // UUID
-  ticket_number: number;
+  ping_number: number;
   created_by: string; // UUID (User ID)
   assigned_to: string | null; // UUID (User ID)
   category_id: string | null; // UUID (Category ID)
-  status: TicketStatus;
-  priority: TicketPriority;
+  status: PingStatus;
+  priority: PingPriority;
   title: string;
   created_at: Date;
   updated_at: Date;
@@ -300,22 +300,22 @@ interface Ticket {
 
 ### Relationships
 
-- Many-to-one with `Organization` (many tickets belong to one organization)
+- Many-to-one with `Organization` (many pings belong to one organization)
 - Many-to-one with `User` as creator
 - Many-to-one with `User` as assignee (optional)
 - Many-to-one with `Category` (optional)
-- One-to-many with `TicketMessage` (one ticket has many messages)
-- One-to-many with `TicketAttachment` (one ticket has many attachments)
+- One-to-many with `PingMessage` (one ping has many messages)
+- One-to-many with `PingAttachment` (one ping has many attachments)
 
 ---
 
-## TicketMessage
+## PingMessage
 
-**Purpose:** Represents a single message in a ticket conversation thread (from user or agent).
+**Purpose:** Represents a single message in a ping conversation thread (from user or agent).
 
 **Key Attributes:**
 - `id`: UUID - Unique identifier
-- `ticket_id`: UUID - Foreign key to `Ticket`
+- `ping_id`: UUID - Foreign key to `Ping`
 - `sender_id`: UUID - Foreign key to `User`
 - `content`: string - Message text content
 - `message_type`: MessageType - 'user', 'agent', or 'system'
@@ -331,9 +331,9 @@ enum MessageType {
   SYSTEM = 'system' // e.g., "Agent changed status to Resolved"
 }
 
-interface TicketMessage {
+interface PingMessage {
   id: string; // UUID
-  ticket_id: string; // UUID
+  ping_id: string; // UUID
   sender_id: string; // UUID (User ID)
   content: string;
   message_type: MessageType;
@@ -344,7 +344,7 @@ interface TicketMessage {
 
 ### Relationships
 
-- Many-to-one with `Ticket` (many messages belong to one ticket)
+- Many-to-one with `Ping` (many messages belong to one ping)
 - Many-to-one with `User` as sender
 - One-to-many with `MessageAttachment` (one message can have multiple attachments)
 
@@ -352,7 +352,7 @@ interface TicketMessage {
 
 ## Category
 
-**Purpose:** Ticket categories for routing and organization (e.g., Hardware, Software, Access Request, Network).
+**Purpose:** Ping categories for routing and organization (e.g., Hardware, Software, Access Request, Network).
 
 **Key Attributes:**
 - `id`: UUID - Unique identifier
@@ -384,14 +384,14 @@ interface Category {
 ### Relationships
 
 - Many-to-one with `Organization` (many categories belong to one organization)
-- One-to-many with `Ticket` (one category applies to many tickets)
+- One-to-many with `Ping` (one category applies to many pings)
 - One-to-many with `RoutingRule` (one category has many routing rules)
 
 ---
 
 ## KnowledgeBaseArticle
 
-**Purpose:** Represents a knowledge base article for self-service support, generated from resolved tickets or manually created.
+**Purpose:** Represents a knowledge base article for self-service support, generated from resolved pings or manually created.
 
 **Key Attributes:**
 - `id`: UUID - Unique identifier
@@ -399,7 +399,7 @@ interface Category {
 - `title`: string - Article title
 - `content`: string - Markdown content
 - `slug`: string - URL-friendly slug
-- `source_ticket_id`: UUID | null - Foreign key to original `Ticket` (if auto-generated)
+- `source_ping_id`: UUID | null - Foreign key to original `Ping` (if auto-generated)
 - `author_id`: UUID - Foreign key to `User` (agent who published)
 - `status`: ArticleStatus - 'draft', 'published', 'archived'
 - `embedding`: number[] | null - Vector embedding for semantic search (pgvector)
@@ -424,7 +424,7 @@ interface KnowledgeBaseArticle {
   title: string;
   content: string; // Markdown
   slug: string;
-  source_ticket_id: string | null; // UUID
+  source_ping_id: string | null; // UUID
   author_id: string; // UUID (User ID)
   status: ArticleStatus;
   embedding: number[] | null; // pgvector embedding
@@ -440,7 +440,7 @@ interface KnowledgeBaseArticle {
 
 - Many-to-one with `Organization` (many articles belong to one organization)
 - Many-to-one with `User` as author
-- Many-to-one with `Ticket` as source (optional)
+- Many-to-one with `Ping` as source (optional)
 
 ---
 
@@ -452,7 +452,7 @@ interface KnowledgeBaseArticle {
 - `id`: UUID - Unique identifier
 - `tenant_id`: UUID - Foreign key to `Organization`
 - `name`: string - Policy name (e.g., "Standard Support")
-- `priority`: TicketPriority - Applies to tickets with this priority
+- `priority`: PingPriority - Applies to pings with this priority
 - `response_time_hours`: number - Target time for first response (in hours)
 - `resolution_time_hours`: number - Target time for resolution (in hours)
 - `is_active`: boolean - Whether policy is currently active
@@ -464,7 +464,7 @@ interface SLAPolicy {
   id: string; // UUID
   tenant_id: string; // UUID
   name: string;
-  priority: TicketPriority;
+  priority: PingPriority;
   response_time_hours: number;
   resolution_time_hours: number;
   is_active: boolean;
@@ -516,7 +516,7 @@ interface PluginConfig {
 
 ## KnownIssue
 
-**Purpose:** Represents a publicly visible known issue (outage, incident) that users can follow instead of creating duplicate tickets.
+**Purpose:** Represents a publicly visible known issue (outage, incident) that users can follow instead of creating duplicate pings.
 
 **Key Attributes:**
 - `id`: UUID - Unique identifier

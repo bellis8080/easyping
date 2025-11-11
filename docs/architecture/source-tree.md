@@ -19,10 +19,10 @@ easyping/
 │       │   │   │   ├── signup/
 │       │   │   │   └── layout.tsx
 │       │   │   ├── (dashboard)/      # Dashboard route group (protected)
-│       │   │   │   ├── tickets/
-│       │   │   │   │   ├── page.tsx              # Ticket list
-│       │   │   │   │   ├── [id]/page.tsx         # Ticket detail
-│       │   │   │   │   └── new/page.tsx          # Create ticket
+│       │   │   │   ├── pings/
+│       │   │   │   │   ├── page.tsx              # Ping list
+│       │   │   │   │   ├── [id]/page.tsx         # Ping detail
+│       │   │   │   │   └── new/page.tsx          # Create ping
 │       │   │   │   ├── kb/
 │       │   │   │   │   ├── page.tsx              # KB search
 │       │   │   │   │   └── [slug]/page.tsx       # Article detail
@@ -35,8 +35,8 @@ easyping/
 │       │   │   │   │   └── ai/page.tsx
 │       │   │   │   └── layout.tsx                # Dashboard layout with sidebar
 │       │   │   ├── api/               # Next.js API routes
-│       │   │   │   ├── tickets/
-│       │   │   │   │   └── route.ts              # POST /api/tickets
+│       │   │   │   ├── pings/
+│       │   │   │   │   └── route.ts              # POST /api/pings
 │       │   │   │   ├── ai/
 │       │   │   │   │   ├── categorize/route.ts   # AI categorization
 │       │   │   │   │   ├── summarize/route.ts    # AI summarization
@@ -51,25 +51,25 @@ easyping/
 │       │   │   └── globals.css        # Global styles (Tailwind)
 │       │   ├── components/            # React components
 │       │   │   ├── splash-page.tsx    # Animated splash page component
-│       │   │   ├── tickets/
-│       │   │   │   ├── ticket-list.tsx
-│       │   │   │   ├── ticket-detail.tsx
-│       │   │   │   ├── ticket-message.tsx
-│       │   │   │   └── ticket-create-form.tsx
+│       │   │   ├── pings/
+│       │   │   │   ├── ping-list.tsx
+│       │   │   │   ├── ping-detail.tsx
+│       │   │   │   ├── ping-message.tsx
+│       │   │   │   └── ping-create-form.tsx
 │       │   │   ├── kb/
 │       │   │   │   ├── kb-search.tsx
 │       │   │   │   ├── kb-article-card.tsx
 │       │   │   │   └── kb-editor.tsx
 │       │   │   ├── analytics/
 │       │   │   │   ├── dashboard-cards.tsx
-│       │   │   │   └── ticket-chart.tsx
+│       │   │   │   └── ping-chart.tsx
 │       │   │   ├── layout/
 │       │   │   │   ├── sidebar.tsx
 │       │   │   │   ├── header.tsx
 │       │   │   │   └── command-palette.tsx
 │       │   │   └── ui/                # shadcn/ui components (from packages/ui)
 │       │   ├── hooks/                 # Custom React hooks
-│       │   │   ├── use-tickets.ts
+│       │   │   ├── use-pings.ts
 │       │   │   ├── use-realtime-subscription.ts
 │       │   │   ├── use-auth.ts
 │       │   │   └── use-debounce.ts
@@ -84,7 +84,7 @@ easyping/
 │       │   │   └── utils.ts           # Utility functions
 │       │   ├── stores/                # Zustand state management
 │       │   │   ├── auth-store.ts
-│       │   │   ├── ticket-store.ts
+│       │   │   ├── ping-store.ts
 │       │   │   └── settings-store.ts
 │       │   └── middleware.ts          # Next.js middleware (auth)
 │       ├── public/                    # Static assets
@@ -95,7 +95,7 @@ easyping/
 │       │   ├── unit/                  # Vitest unit tests
 │       │   │   └── components/
 │       │   └── e2e/                   # Playwright e2e tests
-│       │       └── tickets.spec.ts
+│       │       └── pings.spec.ts
 │       ├── .env.example               # Environment variables template
 │       ├── .env.local                 # Local environment (gitignored)
 │       ├── next.config.js             # Next.js configuration
@@ -148,9 +148,9 @@ easyping/
 │   └── types/                         # Shared TypeScript types
 │       ├── src/
 │       │   ├── supabase.ts            # Auto-generated from Supabase schema
-│       │   ├── models.ts              # Data model interfaces (Organization, User, Ticket, etc.)
+│       │   ├── models.ts              # Data model interfaces (Organization, User, Ping, etc.)
 │       │   ├── api.ts                 # API request/response types
-│       │   ├── enums.ts               # Enums (UserRole, TicketStatus, etc.)
+│       │   ├── enums.ts               # Enums (UserRole, PingStatus, etc.)
 │       │   └── index.ts
 │       ├── package.json
 │       └── tsconfig.json

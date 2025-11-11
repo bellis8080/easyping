@@ -2,9 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
-// Default organization UUID from Story 1.2
-const DEFAULT_ORG_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
-
 export async function POST(request: NextRequest) {
   try {
     // Use regular client to validate authentication
@@ -50,6 +47,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const { full_name, avatar_url } = body;
 
+    // Get the first organization (for multi-user signup after setup)
+    const { data: org, error: orgError } = await adminClient
+      .from('organizations')
+      .select('id')
+      .limit(1)
+      .single();
+
+    if (orgError || !org) {
+      return NextResponse.json(
+        { error: 'No organization found. Please complete setup first.' },
+        { status: 400 }
+      );
+    }
+
     // Check if this is the first user in the organization (becomes owner)
     const { count, error: countError } = await adminClient
       .from('users')
@@ -69,7 +80,7 @@ export async function POST(request: NextRequest) {
       .from('users')
       .insert({
         id: user.id,
-        tenant_id: DEFAULT_ORG_ID,
+        tenant_id: org.id,
         email: user.email!,
         full_name:
           full_name ||

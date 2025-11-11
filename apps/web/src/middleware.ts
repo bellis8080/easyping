@@ -29,7 +29,7 @@ export async function middleware(request: NextRequest) {
   const userRole = response.headers.get('x-user-role') as UserRole | null;
 
   // Define protected route patterns
-  const protectedPaths = ['/dashboard', '/tickets', '/kb', '/settings'];
+  const protectedPaths = ['/dashboard', '/pings', '/kb', '/settings'];
   const authPaths = [
     '/login',
     '/signup',

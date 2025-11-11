@@ -43,7 +43,7 @@ const mockArticles: KBArticle[] = [
     id: '3',
     title: 'Dashboard access permissions explained',
     content:
-      'Learn about different user roles and what dashboards they can access. Admin users have full access, while regular users can only view their own tickets. Managers can view team analytics...',
+      'Learn about different user roles and what dashboards they can access. Admin users have full access, while regular users can only view their own pings. Managers can view team analytics...',
     category: 'Access',
     views: 542,
     helpful: 45,

@@ -18,7 +18,9 @@ export function AdminAccountStep({ form }: AdminAccountStepProps) {
   return (
     <div className="space-y-4">
       <div>
-        <Label htmlFor="email">Admin Email *</Label>
+        <Label htmlFor="email" className="text-white">
+          Admin Email *
+        </Label>
         <Input
           id="email"
           type="email"
@@ -32,7 +34,9 @@ export function AdminAccountStep({ form }: AdminAccountStepProps) {
       </div>
 
       <div>
-        <Label htmlFor="fullName">Full Name *</Label>
+        <Label htmlFor="fullName" className="text-white">
+          Full Name *
+        </Label>
         <Input
           id="fullName"
           {...register('fullName')}
@@ -45,7 +49,9 @@ export function AdminAccountStep({ form }: AdminAccountStepProps) {
       </div>
 
       <div>
-        <Label htmlFor="password">Password *</Label>
+        <Label htmlFor="password" className="text-white">
+          Password *
+        </Label>
         <Input
           id="password"
           type="password"
@@ -56,13 +62,15 @@ export function AdminAccountStep({ form }: AdminAccountStepProps) {
         {errors.password && (
           <p className="text-sm text-red-500 mt-1">{errors.password.message}</p>
         )}
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-xs text-gray-300 mt-1">
           Minimum 8 characters required
         </p>
       </div>
 
       <div>
-        <Label htmlFor="confirmPassword">Confirm Password *</Label>
+        <Label htmlFor="confirmPassword" className="text-white">
+          Confirm Password *
+        </Label>
         <Input
           id="confirmPassword"
           type="password"

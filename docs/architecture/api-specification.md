@@ -15,16 +15,16 @@ Automatically generated REST API for all database tables. Accessed via Supabase 
 **Example Requests:**
 
 ```typescript
-// Get all tickets for current user
-const { data: tickets } = await supabase
-  .from('tickets')
+// Get all pings for current user
+const { data: pings } = await supabase
+  .from('pings')
   .select('*, created_by(*), assigned_to(*)')
   .eq('tenant_id', tenantId)
   .order('created_at', { ascending: false });
 
-// Create new ticket
-const { data: ticket } = await supabase
-  .from('tickets')
+// Create new ping
+const { data: ping } = await supabase
+  .from('pings')
   .insert({
     tenant_id: tenantId,
     created_by: userId,
@@ -35,11 +35,11 @@ const { data: ticket } = await supabase
   .select()
   .single();
 
-// Update ticket status
+// Update ping status
 const { data: updated } = await supabase
-  .from('tickets')
+  .from('pings')
   .update({ status: 'resolved', resolved_at: new Date().toISOString() })
-  .eq('id', ticketId)
+  .eq('id', pingId)
   .select()
   .single();
 ```
@@ -50,9 +50,9 @@ Custom endpoints for AI operations, webhooks, and complex business logic.
 
 **Base URL:** `https://<domain>/api`
 
-### POST /api/tickets
+### POST /api/pings
 
-Create a new ticket with AI categorization.
+Create a new ping with AI categorization.
 
 **Request:**
 ```json
@@ -65,9 +65,9 @@ Create a new ticket with AI categorization.
 **Response:**
 ```json
 {
-  "ticket": {
+  "ping": {
     "id": "uuid",
-    "ticket_number": 123,
+    "ping_number": 123,
     "title": "WiFi connection issue",
     "status": "new",
     "category_id": "uuid",
@@ -98,12 +98,12 @@ Categorize a message using AI.
 
 ### POST /api/ai/summarize
 
-Generate ticket summary.
+Generate ping summary.
 
 **Request:**
 ```json
 {
-  "ticket_id": "uuid"
+  "ping_id": "uuid"
 }
 ```
 
@@ -121,7 +121,7 @@ Get AI response suggestion for agent.
 **Request:**
 ```json
 {
-  "ticket_id": "uuid"
+  "ping_id": "uuid"
 }
 ```
 
@@ -166,9 +166,9 @@ Plugin webhook handler for event notifications.
 **Request:**
 ```json
 {
-  "event": "ticket.created",
+  "event": "ping.created",
   "data": {
-    "ticket_id": "uuid",
+    "ping_id": "uuid",
     "tenant_id": "uuid"
   }
 }
@@ -242,7 +242,7 @@ interface APIError {
 {
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "Ticket message cannot be empty",
+    "message": "Ping message cannot be empty",
     "details": {
       "field": "message",
       "constraint": "minLength"

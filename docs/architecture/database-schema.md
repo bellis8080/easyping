@@ -97,13 +97,13 @@ CREATE POLICY tenant_isolation ON categories
   USING (tenant_id = current_setting('app.tenant_id', true)::UUID);
 ```
 
-### Tickets Table
+### Pings Table
 
 ```sql
-CREATE TABLE tickets (
+CREATE TABLE pings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   tenant_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  ticket_number SERIAL NOT NULL,
+  ping_number SERIAL NOT NULL,
   created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   assigned_to UUID REFERENCES users(id) ON DELETE SET NULL,
   category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
@@ -117,28 +117,28 @@ CREATE TABLE tickets (
   sla_due_at TIMESTAMPTZ,
   ai_summary TEXT,
 
-  CONSTRAINT tickets_status_valid CHECK (status IN ('new', 'in_progress', 'waiting_on_user', 'resolved', 'closed')),
-  CONSTRAINT tickets_priority_valid CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
-  CONSTRAINT tickets_title_not_empty CHECK (length(trim(title)) > 0)
+  CONSTRAINT pings_status_valid CHECK (status IN ('new', 'in_progress', 'waiting_on_user', 'resolved', 'closed')),
+  CONSTRAINT pings_priority_valid CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+  CONSTRAINT pings_title_not_empty CHECK (length(trim(title)) > 0)
 );
 
 -- Indexes
-CREATE INDEX idx_tickets_tenant_id ON tickets(tenant_id);
-CREATE INDEX idx_tickets_status ON tickets(tenant_id, status);
-CREATE INDEX idx_tickets_created_by ON tickets(tenant_id, created_by);
-CREATE INDEX idx_tickets_assigned_to ON tickets(tenant_id, assigned_to) WHERE assigned_to IS NOT NULL;
-CREATE INDEX idx_tickets_category ON tickets(tenant_id, category_id) WHERE category_id IS NOT NULL;
-CREATE INDEX idx_tickets_created_at ON tickets(tenant_id, created_at DESC);
-CREATE INDEX idx_tickets_sla_due ON tickets(tenant_id, sla_due_at) WHERE sla_due_at IS NOT NULL AND status NOT IN ('resolved', 'closed');
+CREATE INDEX idx_pings_tenant_id ON pings(tenant_id);
+CREATE INDEX idx_pings_status ON pings(tenant_id, status);
+CREATE INDEX idx_pings_created_by ON pings(tenant_id, created_by);
+CREATE INDEX idx_pings_assigned_to ON pings(tenant_id, assigned_to) WHERE assigned_to IS NOT NULL;
+CREATE INDEX idx_pings_category ON pings(tenant_id, category_id) WHERE category_id IS NOT NULL;
+CREATE INDEX idx_pings_created_at ON pings(tenant_id, created_at DESC);
+CREATE INDEX idx_pings_sla_due ON pings(tenant_id, sla_due_at) WHERE sla_due_at IS NOT NULL AND status NOT IN ('resolved', 'closed');
 
 -- RLS Policies
-ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pings ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY tenant_isolation ON tickets
+CREATE POLICY tenant_isolation ON pings
   USING (tenant_id = current_setting('app.tenant_id', true)::UUID);
 
--- End users can only see their own tickets
-CREATE POLICY users_select_own_tickets ON tickets
+-- End users can only see their own pings
+CREATE POLICY users_select_own_pings ON pings
   FOR SELECT
   USING (
     tenant_id = current_setting('app.tenant_id', true)::UUID
@@ -161,42 +161,42 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER update_tickets_updated_at
-  BEFORE UPDATE ON tickets
+CREATE TRIGGER update_pings_updated_at
+  BEFORE UPDATE ON pings
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 ```
 
-### Ticket Messages Table
+### Ping Messages Table
 
 ```sql
-CREATE TABLE ticket_messages (
+CREATE TABLE ping_messages (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  ping_id UUID NOT NULL REFERENCES pings(id) ON DELETE CASCADE,
   sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
   message_type TEXT NOT NULL DEFAULT 'user',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   edited_at TIMESTAMPTZ,
 
-  CONSTRAINT ticket_messages_type_valid CHECK (message_type IN ('user', 'agent', 'system')),
-  CONSTRAINT ticket_messages_content_not_empty CHECK (length(trim(content)) > 0)
+  CONSTRAINT ping_messages_type_valid CHECK (message_type IN ('user', 'agent', 'system')),
+  CONSTRAINT ping_messages_content_not_empty CHECK (length(trim(content)) > 0)
 );
 
 -- Indexes
-CREATE INDEX idx_ticket_messages_ticket_id ON ticket_messages(ticket_id, created_at);
-CREATE INDEX idx_ticket_messages_sender_id ON ticket_messages(sender_id);
+CREATE INDEX idx_ping_messages_ping_id ON ping_messages(ping_id, created_at);
+CREATE INDEX idx_ping_messages_sender_id ON ping_messages(sender_id);
 
 -- RLS Policies
-ALTER TABLE ticket_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ping_messages ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY ticket_messages_select ON ticket_messages
+CREATE POLICY ping_messages_select ON ping_messages
   FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM tickets
-      WHERE tickets.id = ticket_messages.ticket_id
-      AND tickets.tenant_id = current_setting('app.tenant_id', true)::UUID
+      SELECT 1 FROM pings
+      WHERE pings.id = ping_messages.ping_id
+      AND pings.tenant_id = current_setting('app.tenant_id', true)::UUID
     )
   );
 ```
@@ -210,7 +210,7 @@ CREATE TABLE knowledge_base_articles (
   title TEXT NOT NULL,
   content TEXT NOT NULL,
   slug TEXT NOT NULL,
-  source_ticket_id UUID REFERENCES tickets(id) ON DELETE SET NULL,
+  source_ping_id UUID REFERENCES pings(id) ON DELETE SET NULL,
   author_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'draft',
   embedding VECTOR(1536), -- OpenAI text-embedding-3-small dimension
@@ -379,29 +379,29 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 ```
 
-### Generate Ticket Number
+### Generate Ping Number
 
 ```sql
--- Auto-generate sequential ticket numbers per tenant
-CREATE OR REPLACE FUNCTION generate_ticket_number()
+-- Auto-generate sequential ping numbers per tenant
+CREATE OR REPLACE FUNCTION generate_ping_number()
 RETURNS TRIGGER AS $$
 DECLARE
   next_number INTEGER;
 BEGIN
-  SELECT COALESCE(MAX(ticket_number), 0) + 1
+  SELECT COALESCE(MAX(ping_number), 0) + 1
   INTO next_number
-  FROM tickets
+  FROM pings
   WHERE tenant_id = NEW.tenant_id;
 
-  NEW.ticket_number := next_number;
+  NEW.ping_number := next_number;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER set_ticket_number
-  BEFORE INSERT ON tickets
+CREATE TRIGGER set_ping_number
+  BEFORE INSERT ON pings
   FOR EACH ROW
-  EXECUTE FUNCTION generate_ticket_number();
+  EXECUTE FUNCTION generate_ping_number();
 ```
 
 ## Migration Strategy

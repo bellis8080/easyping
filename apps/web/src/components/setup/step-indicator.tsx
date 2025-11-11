@@ -29,9 +29,9 @@ export function StepIndicator({ currentStep, steps }: StepIndicatorProps) {
               <span
                 className={`text-sm ${
                   isCurrent
-                    ? 'font-semibold text-gray-900'
+                    ? 'font-semibold text-white'
                     : isCompleted
-                      ? 'text-green-600'
+                      ? 'text-green-400'
                       : 'text-gray-400'
                 }`}
               >

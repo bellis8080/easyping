@@ -21,13 +21,13 @@ This document outlines the coding standards and best practices for the EasyPing 
 
 ```typescript
 // ❌ Bad
-export function processTicket(ticket: any) {
-  return ticket.id;
+export function processPing(ping: any) {
+  return ping.id;
 }
 
 // ✅ Good
-export function processTicket(ticket: Ticket): string {
-  return ticket.id;
+export function processPing(ping: Ping): string {
+  return ping.id;
 }
 ```
 
@@ -38,14 +38,14 @@ export function processTicket(ticket: Ticket): string {
 
 ```typescript
 // ✅ Good - Interface for extensible objects
-interface Ticket {
+interface Ping {
   id: string;
   title: string;
-  status: TicketStatus;
+  status: PingStatus;
 }
 
 // ✅ Good - Type for unions and complex types
-type TicketStatus = 'open' | 'in_progress' | 'closed';
+type PingStatus = 'new' | 'in_progress' | 'resolved' | 'closed';
 type Result<T> = Success<T> | Error;
 ```
 
@@ -57,7 +57,7 @@ type Result<T> = Success<T> | Error;
 - One component per file
 
 ```
-TicketCard.tsx
+PingCard.tsx
 UserProfile.tsx
 DashboardLayout.tsx
 ```
@@ -68,7 +68,7 @@ DashboardLayout.tsx
 
 ```
 formatDate.ts
-parseTicketId.ts
+parsePingId.ts
 validateUserInput.ts
 ```
 
@@ -89,8 +89,8 @@ export const DEFAULT_PAGE_SIZE = 20;
 
 ```typescript
 type UserRole = 'admin' | 'agent' | 'user';
-interface Ticket { /* ... */ }
-interface TicketCreateInput { /* ... */ }
+interface Ping { /* ... */ }
+interface PingCreateInput { /* ... */ }
 ```
 
 ### Boolean Variables
@@ -111,10 +111,10 @@ const canEdit = user.role === 'admin';
 
 ```
 components/
-  TicketCard/
-    TicketCard.tsx
-    TicketCard.test.tsx
-    TicketCard.module.css (if needed)
+  PingCard/
+    PingCard.tsx
+    PingCard.test.tsx
+    PingCard.module.css (if needed)
   UserProfile/
     UserProfile.tsx
     UserProfile.test.tsx
@@ -131,7 +131,7 @@ components/
 
 ```typescript
 // components/index.ts
-export { TicketCard } from './TicketCard';
+export { PingCard } from './PingCard';
 export { UserProfile } from './UserProfile';
 export { DashboardLayout } from './DashboardLayout';
 ```
@@ -147,16 +147,16 @@ import { useRouter } from 'next/router';
 import { z } from 'zod';
 
 // 2. Internal packages (@easyping/*)
-import { Ticket, UserRole } from '@easyping/types';
+import { Ping, UserRole } from '@easyping/types';
 import { createSupabaseClient } from '@easyping/database';
 
 // 3. Relative imports (components, utils, etc.)
-import { TicketCard } from '@/components/TicketCard';
+import { PingCard } from '@/components/PingCard';
 import { formatDate } from '@/lib/utils';
-import { useTickets } from '@/hooks/useTickets';
+import { usePings } from '@/hooks/usePings';
 
 // 4. Styles
-import styles from './TicketList.module.css';
+import styles from './PingList.module.css';
 ```
 
 ## Code Style
@@ -182,15 +182,15 @@ const doubledPrices = items.map((item) => item.price * 2);
 
 ```typescript
 // ✅ Good
-export async function fetchTicket(id: string): Promise<Ticket> {
+export async function fetchPing(id: string): Promise<Ping> {
   try {
-    const response = await fetch(`/api/tickets/${id}`);
+    const response = await fetch(`/api/pings/${id}`);
     if (!response.ok) {
-      throw new Error(`Failed to fetch ticket: ${response.status}`);
+      throw new Error(`Failed to fetch ping: ${response.status}`);
     }
     return response.json();
   } catch (error) {
-    console.error('Error fetching ticket:', error);
+    console.error('Error fetching ping:', error);
     throw error;
   }
 }
@@ -202,10 +202,10 @@ export async function fetchTicket(id: string): Promise<Ticket> {
 - Provide user-friendly error messages
 
 ```typescript
-class TicketNotFoundError extends Error {
-  constructor(ticketId: string) {
-    super(`Ticket not found: ${ticketId}`);
-    this.name = 'TicketNotFoundError';
+class PingNotFoundError extends Error {
+  constructor(pingId: string) {
+    super(`Ping not found: ${pingId}`);
+    this.name = 'PingNotFoundError';
   }
 }
 ```
@@ -218,15 +218,15 @@ class TicketNotFoundError extends Error {
 
 ```typescript
 /**
- * Calculates the SLA deadline for a ticket based on priority and creation time.
+ * Calculates the SLA deadline for a ping based on priority and creation time.
  *
- * @param ticket - The ticket to calculate the deadline for
+ * @param ping - The ping to calculate the deadline for
  * @returns ISO 8601 timestamp of the SLA deadline
  */
-export function calculateSLADeadline(ticket: Ticket): string {
-  // High priority tickets have 4-hour SLA, normal have 24-hour
-  const hoursToAdd = ticket.priority === 'high' ? 4 : 24;
-  return addHours(ticket.createdAt, hoursToAdd).toISOString();
+export function calculateSLADeadline(ping: Ping): string {
+  // High priority pings have 4-hour SLA, normal have 24-hour
+  const hoursToAdd = ping.priority === 'high' ? 4 : 24;
+  return addHours(ping.createdAt, hoursToAdd).toISOString();
 }
 ```
 
@@ -238,13 +238,13 @@ export function calculateSLADeadline(ticket: Ticket): string {
 import { useState } from 'react';
 
 // 2. Types
-interface TicketCardProps {
-  ticket: Ticket;
-  onUpdate: (ticket: Ticket) => void;
+interface PingCardProps {
+  ping: Ping;
+  onUpdate: (ping: Ping) => void;
 }
 
 // 3. Component
-export function TicketCard({ ticket, onUpdate }: TicketCardProps) {
+export function PingCard({ ping, onUpdate }: PingCardProps) {
   // 3a. Hooks
   const [isEditing, setIsEditing] = useState(false);
 
@@ -269,15 +269,15 @@ export function TicketCard({ ticket, onUpdate }: TicketCardProps) {
 
 ```typescript
 // ✅ Good - Custom hook
-export function useTickets(filters: TicketFilters) {
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+export function usePings(filters: PingFilters) {
+  const [pings, setPings] = useState<Ping[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     // Fetch logic
   }, [filters]);
 
-  return { tickets, isLoading };
+  return { pings, isLoading };
 }
 ```
 

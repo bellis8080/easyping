@@ -11,8 +11,8 @@ import {
   Pause,
 } from 'lucide-react';
 
-// Mock ticket type
-interface Ticket {
+// Mock ping type
+interface Ping {
   id: string;
   ping_number: string;
   user: {
@@ -40,8 +40,8 @@ interface Ticket {
   created_at: string;
 }
 
-// Mock tickets data
-const mockTickets: Ticket[] = [
+// Mock pings data
+const mockPings: Ping[] = [
   {
     id: '1',
     ping_number: 'PING-045',
@@ -140,8 +140,8 @@ const mockTickets: Ticket[] = [
 ];
 
 // SLA Timer Component
-function SLATimer({ ticket }: { ticket: Ticket }) {
-  const { sla } = ticket;
+function SLATimer({ ping }: { ping: Ping }) {
+  const { sla } = ping;
 
   if (sla.time_remaining === 'paused') {
     return (
@@ -193,7 +193,7 @@ function SLATimer({ ticket }: { ticket: Ticket }) {
 }
 
 // Priority Badge
-function PriorityBadge({ priority }: { priority: Ticket['priority'] }) {
+function PriorityBadge({ priority }: { priority: Ping['priority'] }) {
   const config = {
     urgent: { color: 'bg-red-500 text-white', label: 'Urgent' },
     high: { color: 'bg-orange-500 text-white', label: 'High' },
@@ -211,11 +211,11 @@ function PriorityBadge({ priority }: { priority: Ticket['priority'] }) {
 }
 
 export default function AgentInboxPage() {
-  const [selectedTicket, setSelectedTicket] = useState<Ticket>(mockTickets[0]);
+  const [selectedPing, setSelectedPing] = useState<Ping>(mockPings[0]);
   const [replyMessage, setReplyMessage] = useState('');
   const [showEcho, setShowEcho] = useState(true);
   const [suggestedResponse, setSuggestedResponse] = useState(
-    `Hi ${mockTickets[0].user.name.split(' ')[0]}, I understand you're having trouble logging in after your password reset. Let me help you resolve this right away. Can you try clearing your browser cache and cookies, then attempting to log in again?`
+    `Hi ${mockPings[0].user.name.split(' ')[0]}, I understand you're having trouble logging in after your password reset. Let me help you resolve this right away. Can you try clearing your browser cache and cookies, then attempting to log in again?`
   );
 
   const handleSendReply = () => {
@@ -230,14 +230,14 @@ export default function AgentInboxPage() {
 
   return (
     <div className="flex h-screen bg-gradient-to-b from-slate-50 to-blue-50">
-      {/* Ticket List - Left Panel */}
+      {/* Ping List - Left Panel */}
       <div className="w-96 bg-white border-r border-slate-200 flex flex-col shadow-lg">
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-950 border-b border-slate-700 p-4 min-h-[121px]">
           <h2 className="text-xl font-bold text-white mb-2">Agent Inbox</h2>
           <div className="flex items-center gap-2">
             <select className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500">
-              <option>All Tickets</option>
+              <option>All Pings</option>
               <option>Assigned to Me</option>
               <option>Unassigned</option>
               <option>Urgent</option>
@@ -245,14 +245,14 @@ export default function AgentInboxPage() {
           </div>
         </div>
 
-        {/* Ticket List */}
+        {/* Ping List */}
         <div className="flex-1 overflow-y-auto">
-          {mockTickets.map((ticket) => (
+          {mockPings.map((ping) => (
             <button
-              key={ticket.id}
-              onClick={() => setSelectedTicket(ticket)}
+              key={ping.id}
+              onClick={() => setSelectedPing(ping)}
               className={`w-full p-4 border-b border-slate-200 text-left transition-all hover:bg-blue-50 ${
-                selectedTicket.id === ticket.id
+                selectedPing.id === ping.id
                   ? 'bg-gradient-to-r from-orange-50 to-transparent border-l-4 border-l-orange-500'
                   : 'border-l-4 border-l-transparent'
               }`}
@@ -260,19 +260,19 @@ export default function AgentInboxPage() {
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-mono font-bold text-slate-900">
-                    {ticket.ping_number}
+                    {ping.ping_number}
                   </span>
-                  <PriorityBadge priority={ticket.priority} />
+                  <PriorityBadge priority={ping.priority} />
                 </div>
-                <SLATimer ticket={ticket} />
+                <SLATimer ping={ping} />
               </div>
               <p className="text-sm font-medium text-slate-900 mb-1 line-clamp-1">
-                {ticket.subject}
+                {ping.subject}
               </p>
               <div className="flex items-center justify-between text-xs text-slate-500">
-                <span>{ticket.user.name}</span>
+                <span>{ping.user.name}</span>
                 <span className="px-2 py-0.5 bg-slate-100 rounded">
-                  {ticket.category}
+                  {ping.category}
                 </span>
               </div>
             </button>
@@ -280,17 +280,17 @@ export default function AgentInboxPage() {
         </div>
       </div>
 
-      {/* Ticket Detail - Center Panel */}
+      {/* Ping Detail - Center Panel */}
       <div className="flex-1 flex flex-col">
-        {/* Ticket Header */}
+        {/* Ping Header */}
         <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-950 border-b border-slate-700 p-4 shadow-xl min-h-[121px]">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="text-xl font-bold text-white mb-1">
-                {selectedTicket.ping_number}
+                {selectedPing.ping_number}
               </h3>
               <p className="text-sm text-slate-400">
-                {selectedTicket.user.name} • {selectedTicket.user.email}
+                {selectedPing.user.name} • {selectedPing.user.email}
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -305,26 +305,26 @@ export default function AgentInboxPage() {
 
           {/* SLA Info */}
           <div className="flex items-center gap-4 text-sm">
-            {selectedTicket.sla.first_response_met ? (
+            {selectedPing.sla.first_response_met ? (
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                 <span className="text-emerald-400 leading-none">
-                  First response: {selectedTicket.sla.first_response_time}
+                  First response: {selectedPing.sla.first_response_time}
                 </span>
               </div>
             ) : (
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-orange-500 flex-shrink-0" />
                 <span className="text-orange-400 leading-none">
-                  First response due in {selectedTicket.sla.time_remaining}
+                  First response due in {selectedPing.sla.time_remaining}
                 </span>
               </div>
             )}
-            {selectedTicket.sla.time_remaining !== 'paused' && (
+            {selectedPing.sla.time_remaining !== 'paused' && (
               <>
                 <span className="text-slate-600">•</span>
                 <div className="flex items-center gap-2">
-                  <SLATimer ticket={selectedTicket} />
+                  <SLATimer ping={selectedPing} />
                   <span className="text-slate-400 leading-none">
                     resolution due
                   </span>
@@ -339,14 +339,12 @@ export default function AgentInboxPage() {
           <div className="space-y-4 px-6">
             <div className="text-center mb-6">
               <h4 className="text-lg font-bold text-slate-900 mb-1">
-                {selectedTicket.subject}
+                {selectedPing.subject}
               </h4>
-              <p className="text-sm text-slate-500">
-                {selectedTicket.category}
-              </p>
+              <p className="text-sm text-slate-500">{selectedPing.category}</p>
             </div>
 
-            {selectedTicket.messages.map((message) => (
+            {selectedPing.messages.map((message) => (
               <div
                 key={message.id}
                 className={`flex ${message.sender_type === 'agent' ? 'justify-end' : 'justify-start'}`}

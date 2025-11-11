@@ -20,13 +20,13 @@ async function getPostAuthLandingPage(userId: string, role: string) {
   // End users → Context-based
   if (role === 'end_user') {
     const { count, error } = await supabase
-      .from('tickets')
+      .from('pings')
       .select('*', { count: 'exact', head: true })
       .eq('created_by', userId);
 
     // If error or count is null/undefined, default to /pings/new (safer for new users)
     if (error) {
-      console.error('Error checking ticket count:', error);
+      console.error('Error checking ping count:', error);
       return '/pings/new';
     }
 

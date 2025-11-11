@@ -135,7 +135,7 @@ export async function hasPermission(permission: string): Promise<boolean> {
   const rolePermissions: Record<string, string[]> = {
     owner: ['*'], // Owner has all permissions
     manager: [
-      'tickets:*',
+      'pings:*',
       'kb:*',
       'users:read',
       'categories:*',
@@ -144,14 +144,14 @@ export async function hasPermission(permission: string): Promise<boolean> {
       'settings:update',
     ],
     agent: [
-      'tickets:read',
-      'tickets:update',
-      'tickets:create',
+      'pings:read',
+      'pings:update',
+      'pings:create',
       'kb:read',
       'kb:create',
       'analytics:read',
     ],
-    end_user: ['tickets:read', 'tickets:create', 'kb:read'],
+    end_user: ['pings:read', 'pings:create', 'kb:read'],
   };
 
   const permissions = rolePermissions[role] || [];

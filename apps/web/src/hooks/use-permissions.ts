@@ -9,7 +9,7 @@ export interface Permissions {
   canManageUsers: boolean;
   canConfigureAI: boolean;
   canAssignRoles: boolean;
-  canViewAllTickets: boolean;
+  canViewAllPings: boolean;
   role: UserRole | null;
 }
 
@@ -28,7 +28,7 @@ export function usePermissions(): Permissions {
       canManageUsers: false,
       canConfigureAI: false,
       canAssignRoles: false,
-      canViewAllTickets: false,
+      canViewAllPings: false,
       role: null,
     };
   }
@@ -54,8 +54,8 @@ export function usePermissions(): Permissions {
     // Only Owner can assign roles
     canAssignRoles: hasPermission(userRole, UserRole.OWNER),
 
-    // Agent+ can view all tickets in organization
-    canViewAllTickets: hasPermission(userRole, UserRole.AGENT),
+    // Agent+ can view all pings in organization
+    canViewAllPings: hasPermission(userRole, UserRole.AGENT),
 
     // Current user role
     role: userRole,

@@ -38,7 +38,9 @@ export function AIConfigStep({ form }: AIConfigStepProps) {
   return (
     <div className="space-y-4">
       <div>
-        <Label htmlFor="provider">AI Provider</Label>
+        <Label htmlFor="provider" className="text-white">
+          AI Provider
+        </Label>
         <Select
           id="provider"
           {...register('provider')}
@@ -50,7 +52,7 @@ export function AIConfigStep({ form }: AIConfigStepProps) {
           <option value="anthropic">Anthropic</option>
           <option value="azure">Azure OpenAI</option>
         </Select>
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-xs text-gray-300 mt-1">
           AI features enable automatic ticket categorization and response
           suggestions
         </p>
@@ -59,7 +61,9 @@ export function AIConfigStep({ form }: AIConfigStepProps) {
       {showApiKeyInput && (
         <>
           <div>
-            <Label htmlFor="apiKey">API Key *</Label>
+            <Label htmlFor="apiKey" className="text-white">
+              API Key *
+            </Label>
             <Input
               id="apiKey"
               type="password"
@@ -72,20 +76,22 @@ export function AIConfigStep({ form }: AIConfigStepProps) {
                 {errors.apiKey.message}
               </p>
             )}
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-300 mt-1">
               Your API key is encrypted before storage
             </p>
           </div>
 
           <div>
-            <Label htmlFor="model">Model</Label>
+            <Label htmlFor="model" className="text-white">
+              Model
+            </Label>
             <Input
               id="model"
               {...register('model')}
               placeholder={DEFAULT_MODELS[selectedProvider] || ''}
               className="mt-1"
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-300 mt-1">
               Leave empty to use the default model
             </p>
           </div>
@@ -93,7 +99,7 @@ export function AIConfigStep({ form }: AIConfigStepProps) {
       )}
 
       {!showApiKeyInput && (
-        <div className="bg-blue-50 border border-blue-200 rounded-md p-4 text-sm text-blue-800">
+        <div className="bg-blue-900/30 border border-blue-500/30 rounded-md p-4 text-sm text-blue-200">
           You can configure AI features later in Settings → AI Configuration
         </div>
       )}

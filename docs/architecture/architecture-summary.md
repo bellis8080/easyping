@@ -21,7 +21,7 @@
 
 4. **Plugin Framework Foundation**
    - Event-driven webhooks for extensibility
-   - UI extension points in ticket sidebar/thread
+   - UI extension points in ping sidebar/thread
    - Plugin-specific data storage
    - Enables community-driven innovation without forking core
 
@@ -79,16 +79,16 @@
 - Create Docker Compose deployment stack
 - Set up CI/CD pipeline
 
-**Phase 2: Core Ticketing (Weeks 3-5)**
-- Build chat-first ticket creation UI
+**Phase 2: Core Ping System (Weeks 3-5)**
+- Build chat-first ping creation UI
 - Implement threaded conversations with Realtime
 - Add file attachment support (Supabase Storage)
-- Implement ticket status management
+- Implement ping status management
 - Create agent inbox view
 
 **Phase 3: AI Integration (Weeks 6-8)**
 - Implement AI provider abstraction layer
-- Add auto-categorization of tickets
+- Add auto-categorization of pings
 - Build AI-generated summaries
 - Create agent copilot (response suggestions)
 - Implement category management UI
@@ -96,9 +96,9 @@
 **Phase 4: Knowledge Base (Weeks 9-10)**
 - Build KB database schema with pgvector
 - Implement semantic search
-- Create auto-generation from resolved tickets
+- Create auto-generation from resolved pings
 - Build KB article editor for agents
-- Add KB suggestions during ticket creation
+- Add KB suggestions during ping creation
 
 **Phase 5: Analytics & Polish (Weeks 11-12)**
 - Implement SLA tracking and breach alerts

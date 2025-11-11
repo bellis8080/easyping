@@ -9,7 +9,7 @@ The AI provider abstraction layer (`packages/ai`) enables swappable AI providers
 
 export interface AIProvider {
   /**
-   * Categorize a ticket message into predefined categories
+   * Categorize a ping message into predefined categories
    */
   categorize(
     message: string,
@@ -17,14 +17,14 @@ export interface AIProvider {
   ): Promise<CategoryResult>;
 
   /**
-   * Generate a summary of ticket conversation
+   * Generate a summary of ping conversation
    */
-  summarize(messages: TicketMessage[]): Promise<string>;
+  summarize(messages: PingMessage[]): Promise<string>;
 
   /**
    * Suggest a response for an agent
    */
-  suggestResponse(context: TicketContext): Promise<string>;
+  suggestResponse(context: PingContext): Promise<string>;
 
   /**
    * Generate vector embedding for semantic search
@@ -32,12 +32,12 @@ export interface AIProvider {
   generateEmbedding(text: string): Promise<number[]>;
 
   /**
-   * Find duplicate tickets using embedding similarity
+   * Find duplicate pings using embedding similarity
    */
   detectDuplicates(
     embedding: number[],
     threshold: number
-  ): Promise<Ticket[]>;
+  ): Promise<Ping[]>;
 }
 
 export interface CategoryResult {
@@ -46,9 +46,9 @@ export interface CategoryResult {
   reasoning?: string;
 }
 
-export interface TicketContext {
-  ticket: Ticket;
-  messages: TicketMessage[];
+export interface PingContext {
+  ping: Ping;
+  messages: PingMessage[];
   kb_articles?: KnowledgeBaseArticle[];
 }
 ```
@@ -61,7 +61,7 @@ export interface TicketContext {
 // packages/ai/src/providers/openai.ts
 
 import OpenAI from 'openai';
-import type { AIProvider, CategoryResult, TicketContext } from './base';
+import type { AIProvider, CategoryResult, PingContext } from './base';
 
 export class OpenAIProvider implements AIProvider {
   private client: OpenAI;
@@ -86,11 +86,11 @@ export class OpenAIProvider implements AIProvider {
       .map((c) => `- ${c.name}: ${c.description}`)
       .join('\n');
 
-    const prompt = `Categorize the following support ticket message into one of these categories:
+    const prompt = `Categorize the following support ping message into one of these categories:
 
 ${categoryList}
 
-Ticket message: "${message}"
+Ping message: "${message}"
 
 Respond with JSON: { "category_id": "<id>", "confidence": <0-1>, "reasoning": "<why>" }`;
 
@@ -116,12 +116,12 @@ Respond with JSON: { "category_id": "<id>", "confidence": <0-1>, "reasoning": "<
     }
   }
 
-  async summarize(messages: TicketMessage[]): Promise<string> {
+  async summarize(messages: PingMessage[]): Promise<string> {
     const conversation = messages
       .map((m) => `${m.message_type}: ${m.content}`)
       .join('\n');
 
-    const prompt = `Summarize this support ticket conversation in 2-3 sentences:
+    const prompt = `Summarize this support ping conversation in 2-3 sentences:
 
 ${conversation}`;
 
@@ -140,7 +140,7 @@ ${conversation}`;
     }
   }
 
-  async suggestResponse(context: TicketContext): Promise<string> {
+  async suggestResponse(context: PingContext): Promise<string> {
     const conversation = context.messages
       .map((m) => `${m.message_type}: ${m.content}`)
       .join('\n');
@@ -190,7 +190,7 @@ Suggested response:`;
   async detectDuplicates(
     embedding: number[],
     threshold: number
-  ): Promise<Ticket[]> {
+  ): Promise<Ping[]> {
     // This is handled by database query using pgvector
     // Provider just generates embeddings
     throw new Error('Use database query for duplicate detection');
@@ -204,7 +204,7 @@ Suggested response:`;
 // packages/ai/src/providers/anthropic.ts
 
 import Anthropic from '@anthropic-ai/sdk';
-import type { AIProvider, CategoryResult, TicketContext } from './base';
+import type { AIProvider, CategoryResult, PingContext } from './base';
 
 export class AnthropicProvider implements AIProvider {
   private client: Anthropic;
@@ -223,11 +223,11 @@ export class AnthropicProvider implements AIProvider {
       .map((c) => `- ${c.name}: ${c.description}`)
       .join('\n');
 
-    const prompt = `Categorize this support ticket into one of these categories:
+    const prompt = `Categorize this support ping into one of these categories:
 
 ${categoryList}
 
-Ticket: "${message}"
+Ping: "${message}"
 
 Respond with JSON: { "category_id": "<id>", "confidence": <0-1>, "reasoning": "<why>" }`;
 
@@ -401,7 +401,7 @@ export function getFallbackCategory(categories: Category[]): CategoryResult {
   };
 }
 
-export function getFallbackSummary(messages: TicketMessage[]): string {
+export function getFallbackSummary(messages: PingMessage[]): string {
   // Return first message as fallback summary
   const firstMessage = messages[0];
   return firstMessage

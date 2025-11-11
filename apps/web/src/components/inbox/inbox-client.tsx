@@ -672,7 +672,6 @@ export function InboxClient({ pings, currentUser }: InboxClientProps) {
                 {selectedPing.messages
                   .filter((message) => message.sender) // Filter out messages with null sender
                   .map((message) => {
-                    const isAgentMessage = message.message_type === 'agent';
                     const isCurrentUser = message.sender.id === currentUser.id;
 
                     // Current user (agent) messages: right-aligned, no avatar

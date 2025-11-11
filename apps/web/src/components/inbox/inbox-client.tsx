@@ -142,7 +142,11 @@ function PriorityBadge({ priority }: { priority: Ping['priority'] }) {
   );
 }
 
-export function InboxClient({ pings, currentUser }: InboxClientProps) {
+export function InboxClient({
+  pings: initialPings,
+  currentUser,
+}: InboxClientProps) {
+  const [pings, setPings] = useState<PingWithRelations[]>(initialPings);
   const [selectedPing, setSelectedPing] = useState<PingWithRelations | null>(
     pings[0] || null
   );
@@ -358,12 +362,14 @@ export function InboxClient({ pings, currentUser }: InboxClientProps) {
             !transformedPing.assigned_to ||
             transformedPing.assigned_to.id === currentUser.id
           ) {
-            setPings((prev) => {
+            setPings((prev: PingWithRelations[]) => {
               // Check if already exists
-              const exists = prev.some((p) => p.id === transformedPing.id);
+              const exists = prev.some(
+                (p: PingWithRelations) => p.id === transformedPing.id
+              );
               if (exists) return prev;
               // Add to top of list
-              return [transformedPing as any, ...prev];
+              return [transformedPing as PingWithRelations, ...prev];
             });
 
             // Show toast notification

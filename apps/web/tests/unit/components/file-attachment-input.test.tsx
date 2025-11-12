@@ -3,23 +3,18 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FileAttachmentInput } from '@/components/pings/file-attachment-input';
 import { MAX_FILE_SIZE, MAX_FILES_PER_MESSAGE } from '@/lib/file-utils';
+import * as sonner from 'sonner';
 
-// Mock toast - use vi.hoisted to ensure this is available during hoisting
-const { mockToastError } = vi.hoisted(() => ({
-  mockToastError: vi.fn(),
-}));
-
-vi.mock('sonner', () => ({
-  toast: {
-    error: mockToastError,
-  },
-}));
+// Mock toast module
+vi.mock('sonner');
 
 describe('FileAttachmentInput', () => {
   const mockOnFilesSelected = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Setup toast.error spy
+    vi.mocked(sonner.toast.error).mockImplementation(() => 1);
   });
 
   it('should render paperclip icon button', () => {
@@ -59,7 +54,7 @@ describe('FileAttachmentInput', () => {
 
     await user.upload(fileInput, files);
 
-    expect(mockToastError).toHaveBeenCalledWith(
+    expect(vi.mocked(sonner.toast.error)).toHaveBeenCalledWith(
       `Maximum ${MAX_FILES_PER_MESSAGE} files per message`
     );
     expect(mockOnFilesSelected).not.toHaveBeenCalled();
@@ -80,14 +75,13 @@ describe('FileAttachmentInput', () => {
 
     await user.upload(fileInput, [largeFile]);
 
-    expect(mockToastError).toHaveBeenCalledWith(
-      expect.stringContaining('exceeds 10MB limit')
+    expect(vi.mocked(sonner.toast.error)).toHaveBeenCalledWith(
+      expect.stringContaining('exceeds 10 MB limit')
     );
     expect(mockOnFilesSelected).not.toHaveBeenCalled();
   });
 
   it('should validate file type against accepted types', async () => {
-    const user = userEvent.setup();
     render(<FileAttachmentInput onFilesSelected={mockOnFilesSelected} />);
 
     const fileInput = screen.getByTestId('file-input') as HTMLInputElement;
@@ -97,16 +91,20 @@ describe('FileAttachmentInput', () => {
       type: 'application/x-msdownload',
     });
 
-    await user.upload(fileInput, [unsupportedFile]);
+    // Manually set files property and dispatch change event to bypass accept filter
+    Object.defineProperty(fileInput, 'files', {
+      value: [unsupportedFile],
+      writable: false,
+    });
+    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
 
-    expect(mockToastError).toHaveBeenCalledWith(
+    expect(vi.mocked(sonner.toast.error)).toHaveBeenCalledWith(
       expect.stringContaining('not supported')
     );
     expect(mockOnFilesSelected).not.toHaveBeenCalled();
   });
 
   it('should show validation errors for invalid files', async () => {
-    const user = userEvent.setup();
     render(<FileAttachmentInput onFilesSelected={mockOnFilesSelected} />);
 
     const fileInput = screen.getByTestId('file-input') as HTMLInputElement;
@@ -115,9 +113,14 @@ describe('FileAttachmentInput', () => {
       type: 'application/octet-stream',
     });
 
-    await user.upload(fileInput, [invalidFile]);
+    // Manually set files property and dispatch change event to bypass accept filter
+    Object.defineProperty(fileInput, 'files', {
+      value: [invalidFile],
+      writable: false,
+    });
+    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
 
-    expect(mockToastError).toHaveBeenCalled();
+    expect(vi.mocked(sonner.toast.error)).toHaveBeenCalled();
   });
 
   it('should call onFilesSelected with valid files', async () => {
@@ -139,7 +142,7 @@ describe('FileAttachmentInput', () => {
         expect.objectContaining({ name: 'document.pdf' }),
       ])
     );
-    expect(mockToastError).not.toHaveBeenCalled();
+    expect(vi.mocked(sonner.toast.error)).not.toHaveBeenCalled();
   });
 
   it('should display selected files with previews', async () => {
@@ -196,7 +199,9 @@ describe('FileAttachmentInput', () => {
 
     await user.upload(fileInput, files);
 
-    expect(mockToastError).toHaveBeenCalledWith('Maximum 2 files per message');
+    expect(vi.mocked(sonner.toast.error)).toHaveBeenCalledWith(
+      'Maximum 2 files per message'
+    );
   });
 
   it('should accept custom maxFileSize prop', async () => {
@@ -220,6 +225,6 @@ describe('FileAttachmentInput', () => {
 
     await user.upload(fileInput, [largeFile]);
 
-    expect(mockToastError).toHaveBeenCalled();
+    expect(vi.mocked(sonner.toast.error)).toHaveBeenCalled();
   });
 });

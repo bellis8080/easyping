@@ -1,11 +1,14 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FileAttachmentInput } from '@/components/pings/file-attachment-input';
 import { MAX_FILE_SIZE, MAX_FILES_PER_MESSAGE } from '@/lib/file-utils';
 
-// Mock toast
-const mockToastError = vi.fn();
+// Mock toast - use vi.hoisted to ensure this is available during hoisting
+const { mockToastError } = vi.hoisted(() => ({
+  mockToastError: vi.fn(),
+}));
+
 vi.mock('sonner', () => ({
   toast: {
     error: mockToastError,

@@ -68,7 +68,7 @@ describe('AttachmentDisplay', () => {
       render(<AttachmentDisplay attachment={mockImageAttachment} />);
 
       await waitFor(() => {
-        const img = screen.getByAlt('screenshot.png');
+        const img = screen.getByAltText('screenshot.png');
         expect(img).toBeInTheDocument();
         expect(img).toHaveAttribute('src', 'https://example.com/signed-url');
       });
@@ -100,10 +100,10 @@ describe('AttachmentDisplay', () => {
       render(<AttachmentDisplay attachment={mockImageAttachment} />);
 
       await waitFor(() => {
-        expect(screen.getByAlt('screenshot.png')).toBeInTheDocument();
+        expect(screen.getByAltText('screenshot.png')).toBeInTheDocument();
       });
 
-      const thumbnail = screen.getByAlt('screenshot.png');
+      const thumbnail = screen.getByAltText('screenshot.png');
       await user.click(thumbnail);
 
       // Lightbox should open (check for dialog or modal)

@@ -92,10 +92,21 @@ describe('POST /api/pings/[pingNumber]/messages with attachments', () => {
       error: null,
     });
 
-    // Mock ping fetch
+    // Mock user profile fetch
     mockSupabaseClient.from.mockReturnValueOnce({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: mockSender,
+        error: null,
+      }),
+    });
+
+    // Mock ping fetch
+    const mockEq = vi.fn().mockReturnThis();
+    mockSupabaseClient.from.mockReturnValueOnce({
+      select: vi.fn().mockReturnThis(),
+      eq: mockEq,
       single: vi.fn().mockResolvedValue({
         data: mockPing,
         error: null,
@@ -117,16 +128,6 @@ describe('POST /api/pings/[pingNumber]/messages with attachments', () => {
       insert: vi.fn().mockReturnThis(),
       select: vi.fn().mockResolvedValue({
         data: mockAttachments,
-        error: null,
-      }),
-    });
-
-    // Mock sender fetch
-    mockSupabaseClient.from.mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: mockSender,
         error: null,
       }),
     });
@@ -169,10 +170,27 @@ describe('POST /api/pings/[pingNumber]/messages with attachments', () => {
 
   it('should return 400 when file size exceeds 10MB', async () => {
     const mockUser = { id: 'user-123' };
+    const mockSender = {
+      id: 'user-123',
+      full_name: 'Test User',
+      avatar_url: null,
+      role: 'end_user',
+      tenant_id: 'tenant-123',
+    };
 
     mockSupabaseClient.auth.getUser.mockResolvedValue({
       data: { user: mockUser },
       error: null,
+    });
+
+    // Mock user profile fetch
+    mockSupabaseClient.from.mockReturnValueOnce({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: mockSender,
+        error: null,
+      }),
     });
 
     const request = new NextRequest(
@@ -199,17 +217,32 @@ describe('POST /api/pings/[pingNumber]/messages with attachments', () => {
 
     expect(response.status).toBe(400);
     const data = await response.json();
-    expect(data.error).toContain(
-      'Number must be less than or equal to 10485760'
-    );
+    expect(data.error).toContain('Too big');
   });
 
   it('should return 400 when more than 5 attachments provided', async () => {
     const mockUser = { id: 'user-123' };
+    const mockSender = {
+      id: 'user-123',
+      full_name: 'Test User',
+      avatar_url: null,
+      role: 'end_user',
+      tenant_id: 'tenant-123',
+    };
 
     mockSupabaseClient.auth.getUser.mockResolvedValue({
       data: { user: mockUser },
       error: null,
+    });
+
+    // Mock user profile fetch
+    mockSupabaseClient.from.mockReturnValueOnce({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: mockSender,
+        error: null,
+      }),
     });
 
     const attachments = Array.from({ length: 6 }, (_, i) => ({
@@ -291,9 +324,21 @@ describe('POST /api/pings/[pingNumber]/messages with attachments', () => {
       error: null,
     });
 
+    // Mock user profile fetch
     mockSupabaseClient.from.mockReturnValueOnce({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: mockSender,
+        error: null,
+      }),
+    });
+
+    // Mock ping fetch
+    const mockEq = vi.fn().mockReturnThis();
+    mockSupabaseClient.from.mockReturnValueOnce({
+      select: vi.fn().mockReturnThis(),
+      eq: mockEq,
       single: vi.fn().mockResolvedValue({
         data: mockPing,
         error: null,
@@ -314,15 +359,6 @@ describe('POST /api/pings/[pingNumber]/messages with attachments', () => {
       insert: mockInsertAttachments,
       select: vi.fn().mockResolvedValue({
         data: [],
-        error: null,
-      }),
-    });
-
-    mockSupabaseClient.from.mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: mockSender,
         error: null,
       }),
     });
@@ -373,10 +409,27 @@ describe('POST /api/pings/[pingNumber]/messages with attachments', () => {
 
   it('should validate attachment metadata', async () => {
     const mockUser = { id: 'user-123' };
+    const mockSender = {
+      id: 'user-123',
+      full_name: 'Test User',
+      avatar_url: null,
+      role: 'end_user',
+      tenant_id: 'tenant-123',
+    };
 
     mockSupabaseClient.auth.getUser.mockResolvedValue({
       data: { user: mockUser },
       error: null,
+    });
+
+    // Mock user profile fetch
+    mockSupabaseClient.from.mockReturnValueOnce({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: mockSender,
+        error: null,
+      }),
     });
 
     // Missing file_name

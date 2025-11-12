@@ -9,6 +9,8 @@ export type {
   User,
   Ping,
   PingMessage,
+  PingAttachment,
+  PingMessageWithAttachments,
   PingWithMessages,
   InsertOrganization,
   InsertUser,

@@ -99,6 +99,57 @@ export type Database = {
         };
         Relationships: [];
       };
+      ping_attachments: {
+        Row: {
+          created_at: string;
+          file_name: string;
+          file_path: string;
+          file_size: number;
+          id: string;
+          mime_type: string;
+          ping_message_id: string;
+          storage_bucket: string;
+          uploaded_by: string;
+        };
+        Insert: {
+          created_at?: string;
+          file_name: string;
+          file_path: string;
+          file_size: number;
+          id?: string;
+          mime_type: string;
+          ping_message_id: string;
+          storage_bucket?: string;
+          uploaded_by: string;
+        };
+        Update: {
+          created_at?: string;
+          file_name?: string;
+          file_path?: string;
+          file_size?: number;
+          id?: string;
+          mime_type?: string;
+          ping_message_id?: string;
+          storage_bucket?: string;
+          uploaded_by?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'ping_attachments_ping_message_id_fkey';
+            columns: ['ping_message_id'];
+            isOneToOne: false;
+            referencedRelation: 'ping_messages';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'ping_attachments_uploaded_by_fkey';
+            columns: ['uploaded_by'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       ping_messages: {
         Row: {
           content: string;

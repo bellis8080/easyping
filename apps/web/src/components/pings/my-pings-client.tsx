@@ -222,7 +222,7 @@ function PingListItem({ ping }: { ping: PingWithMessages }) {
             <span
               className={`text-sm font-mono font-bold ${isUnread ? 'text-slate-900' : 'text-slate-600'}`}
             >
-              #PING-{ping.ping_number}
+              #PING-{String(ping.ping_number).padStart(3, '0')}
             </span>
             <StatusIndicator status={ping.status} />
           </div>

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import { PingDetail } from '@/components/pings/ping-detail';
+import { PingAttachment } from '@easyping/types';
 
 export default async function PingDetailPage(props: {
   params: Promise<{ pingNumber: string }>;
@@ -50,5 +51,38 @@ export default async function PingDetailPage(props: {
 
   if (error || !ping) notFound();
 
-  return <PingDetail ping={ping} currentUser={userProfile} />;
+  // Fetch attachments for all messages (split-query pattern to avoid RLS issues)
+  const messageIds = ping.messages?.map((msg: any) => msg.id) || [];
+  let attachmentsByMessageId: Record<string, PingAttachment[]> = {};
+
+  if (messageIds.length > 0) {
+    const { data: attachments } = await supabase
+      .from('ping_attachments')
+      .select('*')
+      .in('ping_message_id', messageIds);
+
+    if (attachments) {
+      attachmentsByMessageId = attachments.reduce(
+        (acc, att) => {
+          if (!acc[att.ping_message_id]) {
+            acc[att.ping_message_id] = [];
+          }
+          acc[att.ping_message_id].push(att as PingAttachment);
+          return acc;
+        },
+        {} as Record<string, PingAttachment[]>
+      );
+    }
+  }
+
+  // Add attachments to messages
+  const pingWithAttachments = {
+    ...ping,
+    messages: ping.messages?.map((msg: any) => ({
+      ...msg,
+      attachments: attachmentsByMessageId[msg.id] || [],
+    })),
+  };
+
+  return <PingDetail ping={pingWithAttachments} currentUser={userProfile} />;
 }

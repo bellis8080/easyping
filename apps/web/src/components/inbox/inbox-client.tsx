@@ -10,10 +10,13 @@ import {
   CheckCircle2,
   Pause,
 } from 'lucide-react';
-import { Ping, PingMessage, User } from '@easyping/types';
+import { Ping, PingMessage, User, PingAttachment } from '@easyping/types';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { ReplyingIndicator } from '@/components/pings/replying-indicator';
+import { FileAttachmentInput } from '@/components/pings/file-attachment-input';
+import { FilePreviewList } from '@/components/pings/file-preview-list';
+import { PingMessage as PingMessageComponent } from '@/components/pings/ping-message';
 
 // Extended Ping type with related data
 interface PingWithRelations {
@@ -34,6 +37,7 @@ interface PingWithRelations {
     message_type: PingMessage['message_type'];
     created_at: string;
     sender: Pick<User, 'id' | 'full_name' | 'avatar_url'>;
+    attachments?: PingAttachment[];
   }>;
 }
 
@@ -157,6 +161,11 @@ export function InboxClient({
   >('all');
   const [suggestedResponse, setSuggestedResponse] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>(
+    {}
+  );
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [isReplying, setIsReplying] = useState<{
     userId: string;
     userName: string;
@@ -174,7 +183,8 @@ export function InboxClient({
 
   // Scroll to bottom when selectedPing changes
   useEffect(() => {
-    scrollToBottom();
+    // Use longer timeout to ensure images and attachments are rendered
+    setTimeout(scrollToBottom, 300);
   }, [selectedPing]);
 
   // Auto-scroll when replying indicator appears/disappears
@@ -186,11 +196,21 @@ export function InboxClient({
 
   // Subscribe to realtime message updates
   useEffect(() => {
-    if (!selectedPing) return;
+    if (!selectedPing) {
+      console.log('⚠️ [INBOX] No selected ping, skipping subscription');
+      return;
+    }
+
+    console.log(
+      '📡 [INBOX] Setting up subscription for ping:',
+      selectedPing.id,
+      'ping_number:',
+      selectedPing.ping_number
+    );
 
     const supabase = createClient();
     const channel = supabase
-      .channel(`ping-messages:${selectedPing.id}`)
+      .channel(`inbox-ping-messages:${selectedPing.id}`)
       .on(
         'postgres_changes',
         {
@@ -200,7 +220,7 @@ export function InboxClient({
           filter: `ping_id=eq.${selectedPing.id}`,
         },
         async (payload) => {
-          console.log('New message received:', payload);
+          console.log('📨 [INBOX] New message received!!! Payload:', payload);
 
           // Fetch message without join to avoid RLS issues
           const { data: newMessage, error: messageError } = await supabase
@@ -227,22 +247,81 @@ export function InboxClient({
               return;
             }
 
+            // Fetch attachments separately via API (to ensure proper tenant context)
+            // Note: There's a race condition where the message is created before attachments
+            // So we retry once after a short delay if no attachments are found
+            let attachments: PingAttachment[] = [];
+            try {
+              const fetchAttachments = async () => {
+                const attachmentsResponse = await fetch(
+                  `/api/pings/messages/${newMessage.id}/attachments`
+                );
+                if (attachmentsResponse.ok) {
+                  const { attachments: fetchedAttachments } =
+                    await attachmentsResponse.json();
+                  return fetchedAttachments || [];
+                }
+                return [];
+              };
+
+              // First attempt
+              attachments = await fetchAttachments();
+
+              // If no attachments found, wait 500ms and retry once
+              // (handles race condition where attachments are created after message)
+              if (attachments.length === 0) {
+                await new Promise((resolve) => setTimeout(resolve, 500));
+                attachments = await fetchAttachments();
+              }
+
+              console.log(
+                '📎 [INBOX] Fetched attachments:',
+                attachments?.length || 0,
+                attachments
+              );
+            } catch (attachmentsError) {
+              console.error(
+                '❌ [INBOX] Error fetching attachments:',
+                attachmentsError
+              );
+            }
+
             const transformedMessage = {
               id: newMessage.id,
               content: newMessage.content,
               message_type: newMessage.message_type,
               created_at: newMessage.created_at,
               sender: sender as Pick<User, 'id' | 'full_name' | 'avatar_url'>,
+              attachments: (attachments || []) as PingAttachment[],
             };
+
+            console.log('🔄 [INBOX] Transformed message:', {
+              id: transformedMessage.id,
+              content: transformedMessage.content,
+              attachmentsCount: transformedMessage.attachments.length,
+            });
 
             // Only add if not already in state (avoid duplicate from optimistic update)
             setSelectedPing((prev) => {
-              if (!prev) return prev;
+              if (!prev) {
+                console.log('❌ No selected ping, cannot add message');
+                return prev;
+              }
               const exists = prev.messages.some(
                 (m) => m.id === transformedMessage.id
               );
-              if (exists) return prev;
+              if (exists) {
+                console.log(
+                  '⚠️  [INBOX] Message already exists, skipping:',
+                  transformedMessage.id
+                );
+                return prev;
+              }
 
+              console.log(
+                '✅ [INBOX] Adding message to selectedPing:',
+                transformedMessage.id
+              );
               return {
                 ...prev,
                 messages: [...prev.messages, transformedMessage],
@@ -251,20 +330,21 @@ export function InboxClient({
 
             // Scroll to bottom
             setTimeout(scrollToBottom, 100);
-
-            // Show notification if message is from other user
-            if (transformedMessage.sender.id !== currentUser.id) {
-              toast.info(
-                `New message from ${transformedMessage.sender.full_name}`
-              );
-            }
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(
+          '📡 [INBOX] Subscription status:',
+          status,
+          'for ping:',
+          selectedPing?.id
+        );
+      });
 
     // Cleanup subscription on unmount
     return () => {
+      console.log('🔌 [INBOX] Unsubscribing from ping:', selectedPing?.id);
       supabase.removeChannel(channel);
     };
   }, [selectedPing?.id, currentUser.id]);
@@ -456,17 +536,83 @@ export function InboxClient({
     return true; // 'all'
   });
 
+  const uploadFiles = async (
+    files: File[],
+    userId: string
+  ): Promise<
+    Array<{ name: string; path: string; size: number; type: string }>
+  > => {
+    const uploadedFiles = [];
+    const supabase = createClient();
+
+    for (const file of files) {
+      const filePath = `${userId}/${Date.now()}-${file.name}`;
+
+      // Upload to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('ping-attachments')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (error) {
+        throw new Error(`Failed to upload ${file.name}: ${error.message}`);
+      }
+
+      // Track upload progress (simplified - mark as complete)
+      setUploadProgress((prev) => ({ ...prev, [file.name]: 100 }));
+
+      uploadedFiles.push({
+        name: file.name,
+        path: data.path,
+        size: file.size,
+        type: file.type,
+      });
+    }
+
+    return uploadedFiles;
+  };
+
   const handleSendReply = async () => {
-    if (!replyMessage.trim() || !selectedPing) return;
+    if (!replyMessage.trim() && selectedFiles.length === 0) {
+      toast.error('Message or attachments required');
+      return;
+    }
+
+    if (!selectedPing) return;
 
     setIsSending(true);
+    setIsUploadingFiles(true);
+
     try {
+      // 1. Upload files to Supabase Storage
+      let uploadedFiles: Array<{
+        name: string;
+        path: string;
+        size: number;
+        type: string;
+      }> = [];
+
+      if (selectedFiles.length > 0) {
+        uploadedFiles = await uploadFiles(selectedFiles, currentUser.id);
+      }
+
+      // 2. Create message with content and attachments
       const response = await fetch(
         `/api/pings/${selectedPing.ping_number}/messages`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: replyMessage }),
+          body: JSON.stringify({
+            content: replyMessage.trim() || '(attachment)',
+            attachments: uploadedFiles.map((f) => ({
+              file_name: f.name,
+              file_path: f.path,
+              file_size: f.size,
+              mime_type: f.type,
+            })),
+          }),
         }
       );
 
@@ -487,9 +633,10 @@ export function InboxClient({
         };
       });
 
-      // Clear input
+      // Clear inputs
       setReplyMessage('');
-      toast.success('Message sent!');
+      setSelectedFiles([]);
+      setUploadProgress({});
 
       // Scroll to bottom of thread
       setTimeout(scrollToBottom, 100);
@@ -498,6 +645,7 @@ export function InboxClient({
       toast.error('Failed to send message. Please try again.');
     } finally {
       setIsSending(false);
+      setIsUploadingFiles(false);
     }
   };
 
@@ -591,7 +739,7 @@ export function InboxClient({
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono font-bold text-slate-900">
-                      PING-{String(ping.ping_number).padStart(3, '0')}
+                      #PING-{String(ping.ping_number).padStart(3, '0')}
                     </span>
                     <PriorityBadge priority={ping.priority} />
                   </div>
@@ -627,7 +775,7 @@ export function InboxClient({
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <h3 className="text-xl font-bold text-white mb-1">
-                    PING-{String(selectedPing.ping_number).padStart(3, '0')}
+                    #PING-{String(selectedPing.ping_number).padStart(3, '0')}
                   </h3>
                   <p className="text-sm text-slate-400">
                     {selectedPing.created_by.full_name} •{' '}
@@ -679,72 +827,13 @@ export function InboxClient({
                   .filter((message) => message.sender) // Filter out messages with null sender
                   .map((message) => {
                     const isCurrentUser = message.sender.id === currentUser.id;
-
-                    // Current user (agent) messages: right-aligned, no avatar
-                    if (isCurrentUser) {
-                      return (
-                        <div key={message.id} className="flex justify-end">
-                          <div className="max-w-2xl px-5 py-3 rounded-lg shadow-md bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-                            <p className="text-base leading-relaxed whitespace-pre-wrap">
-                              {message.content}
-                            </p>
-                            <p
-                              className="text-xs mt-2 text-blue-100"
-                              suppressHydrationWarning
-                            >
-                              {new Date(
-                                message.created_at
-                              ).toLocaleTimeString()}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    // Other user's messages: left-aligned with avatar, name, timestamp
                     return (
-                      <div key={message.id} className="flex gap-3">
-                        {/* Avatar */}
-                        <div className="flex-shrink-0">
-                          {message.sender.avatar_url ? (
-                            <img
-                              src={message.sender.avatar_url}
-                              alt={message.sender.full_name}
-                              className="w-10 h-10 rounded-full"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-slate-500">
-                              <span className="text-white text-sm font-semibold">
-                                {message.sender.full_name
-                                  .charAt(0)
-                                  .toUpperCase()}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Message content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-semibold text-slate-900">
-                              {message.sender.full_name}
-                            </span>
-                            <span
-                              className="text-xs text-slate-500"
-                              suppressHydrationWarning
-                            >
-                              {new Date(
-                                message.created_at
-                              ).toLocaleTimeString()}
-                            </span>
-                          </div>
-                          <div className="px-4 py-3 rounded-lg bg-blue-50 border border-blue-200">
-                            <p className="text-sm text-slate-900 whitespace-pre-wrap">
-                              {message.content}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
+                      <PingMessageComponent
+                        key={message.id}
+                        message={message}
+                        isCurrentUser={isCurrentUser}
+                        attachments={message.attachments}
+                      />
                     );
                   })}
 
@@ -762,6 +851,11 @@ export function InboxClient({
             <div className="border-t border-slate-200 p-6 bg-white shadow-xl">
               <div className="px-6">
                 <div className="flex gap-3">
+                  <FileAttachmentInput
+                    onFilesSelected={setSelectedFiles}
+                    isUploading={isUploadingFiles}
+                    disabled={isSending}
+                  />
                   <textarea
                     value={replyMessage}
                     onChange={handleMessageChange}
@@ -773,12 +867,26 @@ export function InboxClient({
                   />
                   <button
                     onClick={handleSendReply}
-                    disabled={!replyMessage.trim() || isSending}
+                    disabled={
+                      (!replyMessage.trim() && selectedFiles.length === 0) ||
+                      isSending
+                    }
                     className="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-orange-700 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed transition-all shadow-lg shadow-orange-500/30 hover:shadow-xl hover:shadow-orange-500/40 disabled:shadow-none transform hover:scale-105 disabled:transform-none"
                   >
                     <Send className="w-5 h-5" />
                   </button>
                 </div>
+                {selectedFiles.length > 0 && (
+                  <FilePreviewList
+                    files={selectedFiles}
+                    onRemove={(index) =>
+                      setSelectedFiles((prev) =>
+                        prev.filter((_, i) => i !== index)
+                      )
+                    }
+                    uploadProgress={uploadProgress}
+                  />
+                )}
               </div>
             </div>
           </>

@@ -7,6 +7,8 @@ import { ChevronRight, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { PingMessage } from './ping-message';
 import { ReplyingIndicator } from './replying-indicator';
+import { FileAttachmentInput } from './file-attachment-input';
+import { FilePreviewList } from './file-preview-list';
 import { createClient } from '@/lib/supabase/client';
 import type {
   Ping,
@@ -48,6 +50,11 @@ export function PingDetail({ ping, currentUser }: PingDetailProps) {
     userId: string;
     userName: string;
   } | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>(
+    {}
+  );
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const presenceChannelRef = useRef<ReturnType<
@@ -83,6 +90,128 @@ export function PingDetail({ ping, currentUser }: PingDetailProps) {
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  // Upload files to Supabase Storage
+  const uploadFiles = async (files: File[], userId: string) => {
+    const supabase = createClient();
+    const uploadedFiles = [];
+
+    for (const file of files) {
+      const filePath = `${userId}/${Date.now()}-${file.name}`;
+
+      console.log(`📤 [USER] Uploading file:`, {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        path: filePath,
+        lastModified: file.lastModified,
+      });
+      setUploadProgress((prev) => ({ ...prev, [file.name]: 0 }));
+
+      try {
+        console.log(
+          `📤 [USER] Using FileReader API instead of arrayBuffer()...`
+        );
+
+        // Use FileReader API instead of file.arrayBuffer()
+        // (arrayBuffer() hangs on PDFs for unknown reason)
+        const arrayBuffer = await new Promise<ArrayBuffer>(
+          (resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = () => {
+              console.log(`📤 [USER] FileReader SUCCESS`);
+              resolve(reader.result as ArrayBuffer);
+            };
+
+            reader.onerror = () => {
+              console.error(`❌ [USER] FileReader ERROR:`, reader.error);
+              reject(reader.error);
+            };
+
+            reader.onabort = () => {
+              console.error(`❌ [USER] FileReader ABORTED`);
+              reject(new Error('File read aborted'));
+            };
+
+            console.log(`📤 [USER] Starting FileReader.readAsArrayBuffer()...`);
+            reader.readAsArrayBuffer(file);
+          }
+        );
+
+        console.log(`📤 [USER] Read ArrayBuffer:`, {
+          size: arrayBuffer.byteLength,
+        });
+
+        const fileBlob = new Blob([arrayBuffer], { type: file.type });
+        console.log(`📤 [USER] Converted to Blob:`, {
+          size: fileBlob.size,
+          type: fileBlob.type,
+        });
+
+        // Add timeout to prevent hanging
+        const uploadPromise = supabase.storage
+          .from('ping-attachments')
+          .upload(filePath, fileBlob, {
+            cacheControl: '3600',
+            upsert: false,
+          });
+
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error('Upload timeout after 30 seconds')),
+            30000
+          )
+        );
+
+        const { data, error } = await Promise.race([
+          uploadPromise,
+          timeoutPromise,
+        ]);
+
+        if (error) {
+          console.error(`❌ [USER] Upload failed for ${file.name}:`, {
+            error,
+            message: error.message,
+          });
+          throw new Error(`Failed to upload ${file.name}: ${error.message}`);
+        }
+
+        console.log(`✅ [USER] Upload successful for ${file.name}:`, data);
+        setUploadProgress((prev) => ({ ...prev, [file.name]: 100 }));
+
+        uploadedFiles.push({
+          name: file.name,
+          path: data.path,
+          size: file.size,
+          type: file.type,
+        });
+      } catch (uploadError) {
+        console.error(
+          `❌ [USER] Upload exception for ${file.name}:`,
+          uploadError
+        );
+        setUploadProgress((prev) => {
+          const newProgress = { ...prev };
+          delete newProgress[file.name];
+          return newProgress;
+        });
+        throw uploadError;
+      }
+    }
+
+    console.log(
+      `✅ [USER] All files uploaded successfully:`,
+      uploadedFiles.length
+    );
+    return uploadedFiles;
+  };
+
+  // Scroll to bottom when component first loads or messages change
+  useEffect(() => {
+    // Use longer timeout to ensure images and attachments are rendered
+    setTimeout(scrollToBottom, 300);
+  }, [messages]);
 
   // Auto-scroll when replying indicator appears/disappears
   useEffect(() => {
@@ -132,6 +261,12 @@ export function PingDetail({ ping, currentUser }: PingDetailProps) {
               return;
             }
 
+            // Fetch attachments separately
+            const { data: attachments } = await supabase
+              .from('ping_attachments')
+              .select('*')
+              .eq('ping_message_id', newMessage.id);
+
             const transformedMessage = {
               id: newMessage.id,
               ping_id: newMessage.ping_id,
@@ -143,30 +278,42 @@ export function PingDetail({ ping, currentUser }: PingDetailProps) {
                 User,
                 'id' | 'full_name' | 'avatar_url' | 'role'
               >,
+              attachments: attachments || [],
             };
 
             // Only add if not already in state (avoid duplicate from optimistic update)
             setMessages((prev) => {
               const exists = prev.some((m) => m.id === transformedMessage.id);
-              if (exists) return prev;
+              if (exists) {
+                console.log(
+                  'Message already exists, skipping:',
+                  transformedMessage.id
+                );
+                return prev;
+              }
+              console.log(
+                'Adding message from realtime:',
+                transformedMessage.id
+              );
               return [...prev, transformedMessage as any];
             });
 
             // Scroll to bottom
             setTimeout(scrollToBottom, 100);
-
-            // Show notification if message is from other user
-            if (transformedMessage.sender.id !== currentUser.id) {
-              toast.info(
-                `New message from ${transformedMessage.sender.full_name}`
-              );
-            }
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(
+          '📡 [USER] Subscription status:',
+          status,
+          'for ping:',
+          ping.id
+        );
+      });
 
     return () => {
+      console.log('🔌 [USER] Unsubscribing from ping:', ping.id);
       supabase.removeChannel(channel);
     };
   }, [ping.id, currentUser.id]);
@@ -220,14 +367,51 @@ export function PingDetail({ ping, currentUser }: PingDetailProps) {
   }, [ping.id, currentUser.id, currentUser.full_name]);
 
   const handleSendReply = async () => {
-    if (!replyMessage.trim()) return;
+    if (!replyMessage.trim() && selectedFiles.length === 0) return;
 
     setIsSending(true);
     try {
+      let attachments: Array<{
+        file_name: string;
+        file_path: string;
+        file_size: number;
+        mime_type: string;
+      }> = [];
+
+      // Upload files if any are selected
+      if (selectedFiles.length > 0) {
+        setIsUploadingFiles(true);
+        try {
+          const uploadedFiles = await uploadFiles(
+            selectedFiles,
+            currentUser.id
+          );
+          attachments = uploadedFiles.map((file) => ({
+            file_name: file.name,
+            file_path: file.path,
+            file_size: file.size,
+            mime_type: file.type,
+          }));
+        } catch (uploadError) {
+          console.error('Upload error:', uploadError);
+          toast.error(
+            uploadError instanceof Error
+              ? uploadError.message
+              : 'Failed to upload files'
+          );
+          return;
+        } finally {
+          setIsUploadingFiles(false);
+        }
+      }
+
       const response = await fetch(`/api/pings/${ping.ping_number}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: replyMessage }),
+        body: JSON.stringify({
+          content: replyMessage,
+          attachments,
+        }),
       });
 
       if (!response.ok) {
@@ -239,9 +423,13 @@ export function PingDetail({ ping, currentUser }: PingDetailProps) {
       const { message } = await response.json();
 
       // Optimistic UI update
-      setMessages((prev) => [...prev, message]);
+      setMessages((prev) => {
+        console.log('Adding message optimistically:', message.id);
+        return [...prev, message];
+      });
       setReplyMessage('');
-      toast.success('Message sent!');
+      setSelectedFiles([]);
+      setUploadProgress({});
       setTimeout(scrollToBottom, 100);
     } catch (error) {
       console.error('Error sending message:', error);
@@ -302,7 +490,7 @@ export function PingDetail({ ping, currentUser }: PingDetailProps) {
             </Link>
             <ChevronRight className="w-4 h-4" />
             <span className="text-white font-medium">
-              #PING-{ping.ping_number}
+              #PING-{String(ping.ping_number).padStart(3, '0')}
             </span>
           </div>
         </div>
@@ -313,7 +501,7 @@ export function PingDetail({ ping, currentUser }: PingDetailProps) {
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-2xl font-bold text-white">
-                  #PING-{ping.ping_number}
+                  #PING-{String(ping.ping_number).padStart(3, '0')}
                 </h1>
                 <span
                   className={`px-3 py-1 rounded-full text-xs font-semibold text-white ${getStatusColor(ping.status)}`}
@@ -340,6 +528,7 @@ export function PingDetail({ ping, currentUser }: PingDetailProps) {
                   key={message.id}
                   message={message}
                   isCurrentUser={message.sender.id === currentUser.id}
+                  attachments={message.attachments}
                 />
               ))
           ) : (
@@ -362,20 +551,42 @@ export function PingDetail({ ping, currentUser }: PingDetailProps) {
 
       {/* Reply Box */}
       <div className="flex-shrink-0 border-t border-slate-200 p-6 bg-white shadow-xl">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex gap-3">
-            <textarea
-              value={replyMessage}
-              onChange={handleMessageChange}
-              onKeyDown={handleKeyDown}
-              placeholder="Type your reply..."
-              className="flex-1 px-4 py-3 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-slate-50"
-              rows={3}
-              disabled={isSending}
+        <div className="max-w-4xl mx-auto space-y-3">
+          {/* File Preview */}
+          {selectedFiles.length > 0 && (
+            <FilePreviewList
+              files={selectedFiles}
+              onRemove={(index) => {
+                setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+                setUploadProgress({});
+              }}
+              uploadProgress={uploadProgress}
             />
+          )}
+
+          <div className="flex gap-3">
+            <div className="flex-1 space-y-2">
+              <textarea
+                value={replyMessage}
+                onChange={handleMessageChange}
+                onKeyDown={handleKeyDown}
+                placeholder="Type your reply..."
+                className="w-full px-4 py-3 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-slate-50"
+                rows={3}
+                disabled={isSending || isUploadingFiles}
+              />
+              <FileAttachmentInput
+                onFilesSelected={setSelectedFiles}
+                disabled={isSending || isUploadingFiles}
+              />
+            </div>
             <button
               onClick={handleSendReply}
-              disabled={!replyMessage.trim() || isSending}
+              disabled={
+                (!replyMessage.trim() && selectedFiles.length === 0) ||
+                isSending ||
+                isUploadingFiles
+              }
               className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 disabled:shadow-none transform hover:scale-105 disabled:transform-none"
             >
               <Send className="w-5 h-5" />

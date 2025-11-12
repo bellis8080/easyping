@@ -51,6 +51,22 @@ export interface PingMessage {
   sender?: User; // Optional joined relation
 }
 
+export interface PingAttachment {
+  id: string; // UUID
+  ping_message_id: string; // UUID
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  mime_type: string;
+  storage_bucket: string;
+  uploaded_by: string; // UUID (User ID)
+  created_at: string; // ISO timestamp
+}
+
+export interface PingMessageWithAttachments extends PingMessage {
+  attachments?: PingAttachment[];
+}
+
 // Extended Ping type with messages for displaying conversation threads
 export interface PingWithMessages extends Ping {
   messages: PingMessage[];

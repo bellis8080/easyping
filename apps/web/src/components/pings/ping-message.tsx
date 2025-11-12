@@ -2,13 +2,20 @@
 
 import { formatDistanceToNow } from 'date-fns';
 import { User } from 'lucide-react';
+import { PingAttachment } from '@easyping/types';
+import { AttachmentDisplay } from './attachment-display';
 
 interface PingMessageProps {
   message: any;
   isCurrentUser: boolean;
+  attachments?: PingAttachment[];
 }
 
-export function PingMessage({ message, isCurrentUser }: PingMessageProps) {
+export function PingMessage({
+  message,
+  isCurrentUser,
+  attachments = [],
+}: PingMessageProps) {
   const formatTimestamp = (timestamp: string): string => {
     return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
   };
@@ -35,6 +42,17 @@ export function PingMessage({ message, isCurrentUser }: PingMessageProps) {
           <p className="text-base leading-relaxed whitespace-pre-wrap">
             {message.content}
           </p>
+          {attachments && attachments.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {attachments.map((attachment) => (
+                <AttachmentDisplay
+                  key={attachment.id}
+                  attachment={attachment}
+                  variant="inline"
+                />
+              ))}
+            </div>
+          )}
           <p className="text-xs mt-2 text-blue-100" suppressHydrationWarning>
             {new Date(message.created_at).toLocaleTimeString()}
           </p>
@@ -85,6 +103,17 @@ export function PingMessage({ message, isCurrentUser }: PingMessageProps) {
           <p className="text-sm text-slate-900 whitespace-pre-wrap">
             {message.content}
           </p>
+          {attachments && attachments.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {attachments.map((attachment) => (
+                <AttachmentDisplay
+                  key={attachment.id}
+                  attachment={attachment}
+                  variant="inline"
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

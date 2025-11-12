@@ -1,0 +1,28 @@
+schema: 1
+story: '2.3'
+gate: CONCERNS
+status_reason: 'Core functionality working but RLS disabled on critical tables and zero test coverage presents security and maintainability risks.'
+reviewer: 'Quinn'
+updated: '2025-01-12T19:30:00Z'
+top_issues:
+  - id: 'SEC-001'
+    severity: high
+    finding: 'RLS disabled on pings and ping_messages tables due to Supabase Realtime incompatibility'
+    suggested_action: 'Re-enable RLS and implement authorization checks in API middleware before production. Document security trade-off and mitigation strategy.'
+  - id: 'TEST-001'
+    severity: high
+    finding: 'Zero test coverage - no unit tests or E2E tests implemented for file upload functionality'
+    suggested_action: 'Implement tests per Task 11 and Task 12 before production deployment. Minimum 70% coverage required.'
+  - id: 'REL-001'
+    severity: medium
+    finding: 'Race condition in attachment delivery requires 500ms retry logic as workaround'
+    suggested_action: 'Consider implementing transactional message+attachment creation or database-level triggers to ensure atomic delivery.'
+  - id: 'PERF-001'
+    severity: medium
+    finding: 'FileReader API used instead of arrayBuffer() due to PDF hang issues'
+    suggested_action: 'Investigate root cause of arrayBuffer() hanging and consider reverting to modern API if browser compatibility improves.'
+  - id: 'MNT-001'
+    severity: low
+    finding: 'Admin client pattern bypasses RLS for attachment creation'
+    suggested_action: 'Document the security model clearly - API-level validation occurs before RLS bypass. Consider future refactoring when RLS+Realtime compatible.'
+waiver: { active: false }

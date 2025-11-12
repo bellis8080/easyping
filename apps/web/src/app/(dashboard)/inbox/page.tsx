@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { InboxClient } from '@/components/inbox/inbox-client';
+import { PingAttachment } from '@easyping/types';
 
 export default async function AgentInboxPage() {
   const supabase = await createClient();
@@ -78,6 +79,31 @@ export default async function AgentInboxPage() {
     );
   }
 
+  // Fetch all message IDs to get attachments (split-query pattern to avoid RLS issues)
+  const allMessageIds =
+    pings?.flatMap((ping) => ping.messages?.map((msg) => msg.id) || []) || [];
+
+  let attachmentsByMessageId: Record<string, PingAttachment[]> = {};
+  if (allMessageIds.length > 0) {
+    const { data: attachments } = await supabase
+      .from('ping_attachments')
+      .select('*')
+      .in('ping_message_id', allMessageIds);
+
+    if (attachments) {
+      attachmentsByMessageId = attachments.reduce(
+        (acc, att) => {
+          if (!acc[att.ping_message_id]) {
+            acc[att.ping_message_id] = [];
+          }
+          acc[att.ping_message_id].push(att as PingAttachment);
+          return acc;
+        },
+        {} as Record<string, PingAttachment[]>
+      );
+    }
+  }
+
   // Transform data to match expected types
   const transformedPings =
     pings?.map((ping) => ({
@@ -106,6 +132,7 @@ export default async function AgentInboxPage() {
         message_type: msg.message_type,
         created_at: msg.created_at,
         sender: Array.isArray(msg.sender) ? msg.sender[0] : msg.sender,
+        attachments: attachmentsByMessageId[msg.id] || [],
       })),
     })) || [];
 

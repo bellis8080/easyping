@@ -69,25 +69,25 @@ describe('ping-status-utils', () => {
 
   describe('getStatusColor', () => {
     it('should return correct color for new status', () => {
-      expect(getStatusColor('new' as PingStatus)).toBe('bg-blue-500');
+      expect(getStatusColor('new' as PingStatus)).toBe('bg-purple-500');
     });
 
     it('should return correct color for in_progress status', () => {
-      expect(getStatusColor('in_progress' as PingStatus)).toBe('bg-yellow-500');
+      expect(getStatusColor('in_progress' as PingStatus)).toBe('bg-blue-500');
     });
 
     it('should return correct color for waiting_on_user status', () => {
       expect(getStatusColor('waiting_on_user' as PingStatus)).toBe(
-        'bg-purple-500'
+        'bg-orange-500'
       );
     });
 
     it('should return correct color for resolved status', () => {
-      expect(getStatusColor('resolved' as PingStatus)).toBe('bg-green-500');
+      expect(getStatusColor('resolved' as PingStatus)).toBe('bg-emerald-500');
     });
 
     it('should return correct color for closed status', () => {
-      expect(getStatusColor('closed' as PingStatus)).toBe('bg-slate-500');
+      expect(getStatusColor('closed' as PingStatus)).toBe('bg-slate-400');
     });
   });
 

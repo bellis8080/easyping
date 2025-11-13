@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { MessageType } from '@easyping/types';
+import { calculateStatusTransition } from '@/lib/ping-status-transitions';
 
 const sendMessageSchema = z
   .object({
@@ -76,10 +78,13 @@ export async function POST(
     );
   }
 
-  // Fetch ping by ping_number
-  const { data: ping } = await supabase
+  // Fetch ping by ping_number - using admin client to get creator info
+  const supabaseAdmin = createAdminClient();
+  const { data: ping } = await supabaseAdmin
     .from('pings')
-    .select('id, tenant_id')
+    .select(
+      'id, tenant_id, status, created_by, assigned_to, first_response_at, created_by_user:users!pings_created_by_fkey(full_name)'
+    )
     .eq('ping_number', parseInt(pingNumber))
     .eq('tenant_id', userProfile.tenant_id)
     .single();
@@ -89,7 +94,8 @@ export async function POST(
   }
 
   // Determine message_type based on user role
-  const messageType = userProfile.role === 'end_user' ? 'user' : 'agent';
+  const messageType =
+    userProfile.role === 'end_user' ? MessageType.USER : MessageType.AGENT;
 
   // Create message
   const { data: message, error } = await supabase
@@ -176,11 +182,65 @@ export async function POST(
     attachments: createdAttachments,
   };
 
-  // Update ping updated_at timestamp
-  await supabase
-    .from('pings')
-    .update({ updated_at: new Date().toISOString() })
-    .eq('id', ping.id);
+  // Check for automatic status transition
+  const creatorName = Array.isArray(ping.created_by_user)
+    ? (ping.created_by_user[0] as { full_name: string } | undefined)
+        ?.full_name || 'User'
+    : (ping.created_by_user as { full_name: string } | undefined)?.full_name ||
+      'User';
+
+  const transition = calculateStatusTransition(
+    ping.status,
+    messageType,
+    user.id,
+    ping.created_by,
+    ping.assigned_to,
+    userProfile.full_name || 'Agent',
+    creatorName,
+    ping.first_response_at
+  );
+
+  if (transition) {
+    // Update ping status and timestamps
+    const updatePayload: any = {
+      status: transition.newStatus,
+      updated_at: new Date().toISOString(),
+      ...transition.timestampUpdates,
+    };
+
+    // Auto-assign to agent on first response (if unassigned)
+    if (transition.shouldAutoAssign) {
+      updatePayload.assigned_to = user.id;
+    }
+
+    const { error: updateError } = await supabaseAdmin
+      .from('pings')
+      .update(updatePayload)
+      .eq('id', ping.id);
+
+    if (updateError) {
+      console.error('Error updating ping status:', updateError);
+    }
+
+    // Create system message if needed
+    if (
+      transition.shouldCreateSystemMessage &&
+      transition.systemMessageContent
+    ) {
+      await supabaseAdmin.from('ping_messages').insert({
+        ping_id: ping.id,
+        sender_id: user.id,
+        content: transition.systemMessageContent,
+        message_type: 'system',
+      });
+    }
+  } else {
+    // Update ping updated_at timestamp only
+    await supabaseAdmin
+      .from('pings')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', ping.id);
+  }
 
   return NextResponse.json({ message: messageWithSender }, { status: 201 });
 }

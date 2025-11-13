@@ -1,15 +1,9 @@
 'use client';
 
-import {
-  MessageSquarePlus,
-  Search,
-  Radio,
-  Activity,
-  Pause,
-  CheckCircle2,
-} from 'lucide-react';
+import { MessageSquarePlus, Search, Radio } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { getStatusConfig } from '@/lib/ping-status-utils';
 import type {
   Ping as BasePing,
   PingMessage,
@@ -31,60 +25,6 @@ export interface PingWithMessages
     }
   >;
 }
-
-interface StatusConfig {
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
-  label: string;
-  color: string;
-  bgColor: string;
-  borderColor: string;
-  pulse?: boolean;
-  ripple?: boolean;
-}
-
-// Status configuration with ping theme
-const getStatusConfig = (status: PingStatus): StatusConfig => {
-  const configs: Record<PingStatus, StatusConfig> = {
-    resolved: {
-      icon: CheckCircle2,
-      label: 'Resolved',
-      color: 'text-emerald-500',
-      bgColor: 'bg-emerald-500/10',
-      borderColor: 'border-emerald-500/30',
-    },
-    in_progress: {
-      icon: Activity,
-      label: 'Active',
-      color: 'text-blue-500',
-      bgColor: 'bg-blue-500/10',
-      borderColor: 'border-blue-500/30',
-      pulse: true,
-    },
-    waiting_on_user: {
-      icon: Pause,
-      label: 'Waiting',
-      color: 'text-orange-500',
-      bgColor: 'bg-orange-500/10',
-      borderColor: 'border-orange-500/30',
-    },
-    new: {
-      icon: Radio,
-      label: 'New',
-      color: 'text-purple-500',
-      bgColor: 'bg-purple-500/10',
-      borderColor: 'border-purple-500/30',
-      ripple: true,
-    },
-    closed: {
-      icon: CheckCircle2,
-      label: 'Closed',
-      color: 'text-slate-400',
-      bgColor: 'bg-slate-100',
-      borderColor: 'border-slate-300',
-    },
-  };
-  return configs[status];
-};
 
 // Format relative time
 const formatRelativeTime = (timestamp: string): string => {

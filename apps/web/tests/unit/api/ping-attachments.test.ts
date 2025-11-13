@@ -57,6 +57,10 @@ describe('POST /api/pings/[pingNumber]/messages with attachments', () => {
       ping_number: 42,
       tenant_id: 'tenant-123',
       created_by: 'user-123',
+      status: 'in_progress',
+      assigned_to: 'agent-123',
+      first_response_at: '2025-01-12T09:00:00Z',
+      created_by_user: { full_name: 'Test User' },
     };
     const mockMessage = {
       id: 'message-123',
@@ -71,6 +75,7 @@ describe('POST /api/pings/[pingNumber]/messages with attachments', () => {
       full_name: 'Test User',
       avatar_url: null,
       role: 'end_user',
+      tenant_id: 'tenant-123',
     };
     const mockAttachments = [
       {
@@ -102,9 +107,9 @@ describe('POST /api/pings/[pingNumber]/messages with attachments', () => {
       }),
     });
 
-    // Mock ping fetch
+    // Mock ping fetch (using admin client now)
     const mockEq = vi.fn().mockReturnThis();
-    mockSupabaseClient.from.mockReturnValueOnce({
+    mockAdminClient.from.mockReturnValueOnce({
       select: vi.fn().mockReturnThis(),
       eq: mockEq,
       single: vi.fn().mockResolvedValue({
@@ -132,8 +137,8 @@ describe('POST /api/pings/[pingNumber]/messages with attachments', () => {
       }),
     });
 
-    // Mock ping update
-    mockSupabaseClient.from.mockReturnValueOnce({
+    // Mock ping update (using admin client now)
+    mockAdminClient.from.mockReturnValueOnce({
       update: vi.fn().mockReturnThis(),
       eq: vi.fn().mockResolvedValue({
         error: null,
@@ -303,6 +308,10 @@ describe('POST /api/pings/[pingNumber]/messages with attachments', () => {
       ping_number: 42,
       tenant_id: 'tenant-123',
       created_by: 'user-123',
+      status: 'in_progress',
+      assigned_to: 'agent-123',
+      first_response_at: '2025-01-12T09:00:00Z',
+      created_by_user: { full_name: 'Test User' },
     };
     const mockMessage = {
       id: 'message-123',
@@ -317,6 +326,7 @@ describe('POST /api/pings/[pingNumber]/messages with attachments', () => {
       full_name: 'Test User',
       avatar_url: null,
       role: 'end_user',
+      tenant_id: 'tenant-123',
     };
 
     mockSupabaseClient.auth.getUser.mockResolvedValue({
@@ -334,9 +344,9 @@ describe('POST /api/pings/[pingNumber]/messages with attachments', () => {
       }),
     });
 
-    // Mock ping fetch
+    // Mock ping fetch (using admin client now)
     const mockEq = vi.fn().mockReturnThis();
-    mockSupabaseClient.from.mockReturnValueOnce({
+    mockAdminClient.from.mockReturnValueOnce({
       select: vi.fn().mockReturnThis(),
       eq: mockEq,
       single: vi.fn().mockResolvedValue({
@@ -363,7 +373,8 @@ describe('POST /api/pings/[pingNumber]/messages with attachments', () => {
       }),
     });
 
-    mockSupabaseClient.from.mockReturnValueOnce({
+    // Mock ping update (using admin client now)
+    mockAdminClient.from.mockReturnValueOnce({
       update: vi.fn().mockReturnThis(),
       eq: vi.fn().mockResolvedValue({
         error: null,

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { User } from 'lucide-react';
+import { getStatusColor, getStatusLabel } from '@/lib/ping-status-utils';
 
 interface PingListItemProps {
   ping: any;
@@ -11,28 +12,6 @@ interface PingListItemProps {
 export function PingListItem({ ping }: PingListItemProps) {
   const formatTimestamp = (timestamp: string): string => {
     return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
-  };
-
-  const getStatusColor = (status: string): string => {
-    const colors: Record<string, string> = {
-      new: 'bg-blue-500',
-      in_progress: 'bg-yellow-500',
-      waiting_on_user: 'bg-purple-500',
-      resolved: 'bg-green-500',
-      closed: 'bg-slate-500',
-    };
-    return colors[status] || 'bg-slate-500';
-  };
-
-  const getStatusLabel = (status: string): string => {
-    const labels: Record<string, string> = {
-      new: 'New',
-      in_progress: 'In Progress',
-      waiting_on_user: 'Waiting on User',
-      resolved: 'Resolved',
-      closed: 'Closed',
-    };
-    return labels[status] || status;
   };
 
   // Get last message preview

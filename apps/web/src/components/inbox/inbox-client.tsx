@@ -10,9 +10,16 @@ import {
   CheckCircle2,
   Pause,
 } from 'lucide-react';
-import { Ping, PingMessage, User, PingAttachment } from '@easyping/types';
+import {
+  Ping,
+  PingMessage,
+  User,
+  PingAttachment,
+  PingStatus,
+} from '@easyping/types';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
+import { getStatusLabel, getStatusColor } from '@/lib/ping-status-utils';
 import { ReplyingIndicator } from '@/components/pings/replying-indicator';
 import { FileAttachmentInput } from '@/components/pings/file-attachment-input';
 import { FilePreviewList } from '@/components/pings/file-preview-list';
@@ -146,6 +153,33 @@ function PriorityBadge({ priority }: { priority: Ping['priority'] }) {
   );
 }
 
+// Status Badge
+function StatusBadge({ status }: { status: PingStatus }) {
+  return (
+    <span
+      className={`px-2 py-0.5 rounded text-xs font-semibold text-white ${getStatusColor(status)}`}
+    >
+      {getStatusLabel(status)}
+    </span>
+  );
+}
+
+// Ping Age Helper
+function formatPingAge(createdAt: string): string {
+  const now = new Date();
+  const created = new Date(createdAt);
+  const diffMs = now.getTime() - created.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return '1 day ago';
+  return `${diffDays} days ago`;
+}
+
 export function InboxClient({
   pings: initialPings,
   currentUser,
@@ -157,7 +191,7 @@ export function InboxClient({
   const [replyMessage, setReplyMessage] = useState('');
   const [showEcho, setShowEcho] = useState(true);
   const [filter, setFilter] = useState<
-    'all' | 'assigned' | 'unassigned' | 'urgent'
+    'all' | 'assigned' | 'unassigned' | 'urgent' | 'my_closed'
   >('all');
   const [suggestedResponse, setSuggestedResponse] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -170,6 +204,7 @@ export function InboxClient({
     userId: string;
     userName: string;
   } | null>(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const presenceChannelRef = useRef<ReturnType<
@@ -179,6 +214,51 @@ export function InboxClient({
   // Scroll to bottom of message thread
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // Handle status change
+  const handleStatusChange = async (newStatus: PingStatus) => {
+    if (!selectedPing || newStatus === selectedPing.status) return;
+
+    setIsUpdatingStatus(true);
+    try {
+      const response = await fetch(
+        `/api/pings/${selectedPing.ping_number}/status`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update status');
+      }
+
+      const { ping } = await response.json();
+
+      // Update local ping state
+      setSelectedPing((prev) =>
+        prev ? { ...prev, status: ping.status } : null
+      );
+
+      // Update ping in the list
+      setPings((prevPings) =>
+        prevPings.map((p) =>
+          p.id === selectedPing.id ? { ...p, status: ping.status } : p
+        )
+      );
+
+      toast.success(`Status changed to ${getStatusLabel(newStatus)}`);
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to update status'
+      );
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   };
 
   // Scroll to bottom when selectedPing changes
@@ -330,6 +410,59 @@ export function InboxClient({
 
             // Scroll to bottom
             setTimeout(scrollToBottom, 100);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'pings',
+          filter: `id=eq.${selectedPing.id}`,
+        },
+        async (payload) => {
+          console.log('🔄 Ping updated:', payload);
+
+          // Fetch updated ping with assigned_to relation
+          const { data: updatedPing } = await supabase
+            .from('pings')
+            .select(
+              '*, assigned_to:users!pings_assigned_to_fkey(id, full_name, avatar_url)'
+            )
+            .eq('id', selectedPing.id)
+            .single();
+
+          if (updatedPing) {
+            const assignedTo = updatedPing.assigned_to
+              ? Array.isArray(updatedPing.assigned_to)
+                ? updatedPing.assigned_to[0]
+                : updatedPing.assigned_to
+              : null;
+
+            // Update selected ping
+            setSelectedPing((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    status: updatedPing.status,
+                    assigned_to: assignedTo,
+                  }
+                : null
+            );
+
+            // Update ping in list
+            setPings((prevPings) =>
+              prevPings.map((p) =>
+                p.id === selectedPing.id
+                  ? {
+                      ...p,
+                      status: updatedPing.status,
+                      assigned_to: assignedTo,
+                    }
+                  : p
+              )
+            );
           }
         }
       )
@@ -525,13 +658,25 @@ export function InboxClient({
   // Filter pings based on selected filter
   const filteredPings = pings.filter((ping) => {
     if (filter === 'assigned') {
-      return ping.assigned_to?.id === currentUser.id;
+      // Show only active pings assigned to me (exclude resolved/closed)
+      return (
+        ping.assigned_to?.id === currentUser.id &&
+        ping.status !== 'resolved' &&
+        ping.status !== 'closed'
+      );
     }
     if (filter === 'unassigned') {
       return ping.assigned_to === null;
     }
     if (filter === 'urgent') {
       return ping.priority === 'urgent';
+    }
+    if (filter === 'my_closed') {
+      // Show only resolved/closed pings assigned to me
+      return (
+        ping.assigned_to?.id === currentUser.id &&
+        (ping.status === 'resolved' || ping.status === 'closed')
+      );
     }
     return true; // 'all'
   });
@@ -706,7 +851,12 @@ export function InboxClient({
               value={filter}
               onChange={(e) =>
                 setFilter(
-                  e.target.value as 'all' | 'assigned' | 'unassigned' | 'urgent'
+                  e.target.value as
+                    | 'all'
+                    | 'assigned'
+                    | 'unassigned'
+                    | 'urgent'
+                    | 'my_closed'
                 )
               }
               className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -715,6 +865,7 @@ export function InboxClient({
               <option value="assigned">Assigned to Me</option>
               <option value="unassigned">Unassigned</option>
               <option value="urgent">Urgent</option>
+              <option value="my_closed">My Resolved/Closed Pings</option>
             </select>
           </div>
         </div>
@@ -745,13 +896,21 @@ export function InboxClient({
                   </div>
                   <SLATimer ping={ping} />
                 </div>
-                <p className="text-sm font-medium text-slate-900 mb-1 line-clamp-1">
+                <p className="text-sm font-medium text-slate-900 mb-2 line-clamp-1">
                   {ping.title}
                 </p>
-                <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span>{ping.created_by.full_name}</span>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="text-xs text-slate-500">
+                    {ping.created_by.full_name}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {formatPingAge(ping.created_at)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <StatusBadge status={ping.status} />
                   {ping.category && (
-                    <span className="px-2 py-0.5 bg-slate-100 rounded">
+                    <span className="px-2 py-0.5 bg-slate-100 rounded text-xs text-slate-600">
                       {ping.category.name}
                     </span>
                   )}
@@ -783,11 +942,19 @@ export function InboxClient({
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <select className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500">
+                  <select
+                    value={selectedPing.status}
+                    onChange={(e) =>
+                      handleStatusChange(e.target.value as PingStatus)
+                    }
+                    disabled={isUpdatingStatus}
+                    className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
                     <option value="new">New</option>
                     <option value="in_progress">In Progress</option>
                     <option value="waiting_on_user">Waiting on User</option>
                     <option value="resolved">Resolved</option>
+                    <option value="closed">Closed</option>
                   </select>
                 </div>
               </div>

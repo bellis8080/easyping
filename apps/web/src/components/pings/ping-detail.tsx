@@ -10,6 +10,7 @@ import { ReplyingIndicator } from './replying-indicator';
 import { FileAttachmentInput } from './file-attachment-input';
 import { FilePreviewList } from './file-preview-list';
 import { createClient } from '@/lib/supabase/client';
+import { getStatusColor, getStatusLabel } from '@/lib/ping-status-utils';
 import type {
   Ping,
   PingMessage as PingMessageType,
@@ -42,8 +43,12 @@ interface PingDetailProps {
   currentUser: Pick<User, 'id' | 'email' | 'full_name'>;
 }
 
-export function PingDetail({ ping, currentUser }: PingDetailProps) {
-  const [messages, setMessages] = useState(ping.messages);
+export function PingDetail({
+  ping: initialPing,
+  currentUser,
+}: PingDetailProps) {
+  const [ping, setPing] = useState(initialPing);
+  const [messages, setMessages] = useState(initialPing.messages);
   const [replyMessage, setReplyMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isReplying, setIsReplying] = useState<{
@@ -63,28 +68,6 @@ export function PingDetail({ ping, currentUser }: PingDetailProps) {
 
   const formatTimestamp = (timestamp: string): string => {
     return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
-  };
-
-  const getStatusColor = (status: string): string => {
-    const colors: Record<string, string> = {
-      new: 'bg-blue-500',
-      in_progress: 'bg-yellow-500',
-      waiting_on_user: 'bg-purple-500',
-      resolved: 'bg-green-500',
-      closed: 'bg-slate-500',
-    };
-    return colors[status] || 'bg-slate-500';
-  };
-
-  const getStatusLabel = (status: string): string => {
-    const labels: Record<string, string> = {
-      new: 'New',
-      in_progress: 'In Progress',
-      waiting_on_user: 'Waiting on User',
-      resolved: 'Resolved',
-      closed: 'Closed',
-    };
-    return labels[status] || status;
   };
 
   const scrollToBottom = () => {
@@ -223,15 +206,16 @@ export function PingDetail({ ping, currentUser }: PingDetailProps) {
   // Subscribe to realtime message updates
   useEffect(() => {
     const supabase = createClient();
+    const pingId = initialPing.id; // Use stable initialPing.id to avoid re-subscription
     const channel = supabase
-      .channel(`ping-messages:${ping.id}`)
+      .channel(`ping-messages:${pingId}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'ping_messages',
-          filter: `ping_id=eq.${ping.id}`,
+          filter: `ping_id=eq.${pingId}`,
         },
         async (payload) => {
           console.log('New message received:', payload);
@@ -308,20 +292,73 @@ export function PingDetail({ ping, currentUser }: PingDetailProps) {
           '📡 [USER] Subscription status:',
           status,
           'for ping:',
-          ping.id
+          pingId
         );
       });
 
     return () => {
-      console.log('🔌 [USER] Unsubscribing from ping:', ping.id);
+      console.log('🔌 [USER] Unsubscribing from ping:', pingId);
       supabase.removeChannel(channel);
     };
-  }, [ping.id, currentUser.id]);
+  }, [initialPing.id, currentUser.id]);
+
+  // Subscribe to realtime ping updates (status, assigned_to, etc.)
+  useEffect(() => {
+    const supabase = createClient();
+    const pingId = initialPing.id; // Use stable initialPing.id to avoid re-subscription
+    const channel = supabase
+      .channel(`ping-updates:${pingId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'pings',
+          filter: `id=eq.${pingId}`,
+        },
+        async (payload) => {
+          console.log('Ping updated:', payload);
+
+          // Fetch full ping data with relations
+          const { data: updatedPing } = await supabase
+            .from('pings')
+            .select(
+              '*, assigned_to:users!pings_assigned_to_fkey(id, full_name, avatar_url, role)'
+            )
+            .eq('id', pingId)
+            .single();
+
+          if (updatedPing) {
+            setPing((prev) => ({
+              ...prev,
+              status: updatedPing.status,
+              assigned_to: Array.isArray(updatedPing.assigned_to)
+                ? updatedPing.assigned_to[0]
+                : updatedPing.assigned_to,
+              updated_at: updatedPing.updated_at,
+              first_response_at: updatedPing.first_response_at,
+              last_user_reply_at: updatedPing.last_user_reply_at,
+              last_agent_reply_at: updatedPing.last_agent_reply_at,
+              status_changed_at: updatedPing.status_changed_at,
+            }));
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 Ping updates subscription status:', status);
+      });
+
+    return () => {
+      console.log('🔌 Unsubscribing from ping updates:', pingId);
+      supabase.removeChannel(channel);
+    };
+  }, [initialPing.id]);
 
   // Subscribe to presence for replying indicators
   useEffect(() => {
     const supabase = createClient();
-    const channel = supabase.channel(`ping-replying:${ping.id}`, {
+    const pingId = initialPing.id; // Use stable initialPing.id to avoid re-subscription
+    const channel = supabase.channel(`ping-replying:${pingId}`, {
       config: {
         presence: {
           key: currentUser.id,
@@ -364,7 +401,7 @@ export function PingDetail({ ping, currentUser }: PingDetailProps) {
       presenceChannelRef.current = null;
       supabase.removeChannel(channel);
     };
-  }, [ping.id, currentUser.id, currentUser.full_name]);
+  }, [initialPing.id, currentUser.id, currentUser.full_name]);
 
   const handleSendReply = async () => {
     if (!replyMessage.trim() && selectedFiles.length === 0) return;
@@ -509,9 +546,19 @@ export function PingDetail({ ping, currentUser }: PingDetailProps) {
                   {getStatusLabel(ping.status)}
                 </span>
               </div>
-              <p className="text-sm text-slate-400">
-                Created {formatTimestamp(ping.created_at)}
-              </p>
+              <div className="space-y-1">
+                <p className="text-sm text-slate-400">
+                  Created {formatTimestamp(ping.created_at)}
+                </p>
+                {ping.assigned_to && (
+                  <p className="text-sm text-slate-400">
+                    Assigned to{' '}
+                    <span className="text-white font-medium">
+                      {ping.assigned_to.full_name}
+                    </span>
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>

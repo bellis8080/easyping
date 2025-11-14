@@ -103,7 +103,7 @@ export function DashboardLayoutClient({
                   </div>
                   {item.badge && (
                     <span className="flex-shrink-0 w-5 h-5 rounded-full bg-orange-500 text-white text-xs font-semibold flex items-center justify-center">
-                      {item.badge}
+                      {item.badge > 99 ? '99+' : item.badge}
                     </span>
                   )}
                 </Link>

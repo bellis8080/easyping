@@ -32,7 +32,7 @@ export default async function AgentInboxPage() {
     redirect('/pings');
   }
 
-  // Fetch pings assigned to agent or unassigned
+  // Fetch all pings in tenant (no assignment filter)
   const { data: pings, error: pingsError } = await supabase
     .from('pings')
     .select(
@@ -57,7 +57,6 @@ export default async function AgentInboxPage() {
       )
     `
     )
-    .or(`assigned_to.eq.${userProfile.id},assigned_to.is.null`)
     .eq('tenant_id', userProfile.tenant_id)
     .order('updated_at', { ascending: false })
     .order('created_at', { foreignTable: 'ping_messages', ascending: true });

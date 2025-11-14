@@ -192,7 +192,7 @@ export function InboxClient({
   const [showEcho, setShowEcho] = useState(true);
   const [filter, setFilter] = useState<
     'all' | 'assigned' | 'unassigned' | 'urgent' | 'my_closed'
-  >('all');
+  >('assigned');
   const [suggestedResponse, setSuggestedResponse] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -205,6 +205,16 @@ export function InboxClient({
     userName: string;
   } | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [agents, setAgents] = useState<
+    Array<{
+      id: string;
+      full_name: string;
+      avatar_url: string | null;
+      role: string;
+    }>
+  >([]);
+  const [isLoadingAgents, setIsLoadingAgents] = useState(false);
+  const [isUpdatingAssignment, setIsUpdatingAssignment] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const presenceChannelRef = useRef<ReturnType<
@@ -261,6 +271,72 @@ export function InboxClient({
     }
   };
 
+  // Handle assignment change
+  const handleAssignmentChange = async (newAssignedTo: string | null) => {
+    if (!selectedPing) return;
+
+    // Check if already assigned to this agent
+    if (newAssignedTo === selectedPing.assigned_to?.id) return;
+
+    setIsUpdatingAssignment(true);
+    try {
+      const response = await fetch(
+        `/api/pings/${selectedPing.ping_number}/assign`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            assignedTo: newAssignedTo === '' ? null : newAssignedTo,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update assignment');
+      }
+
+      const { ping } = await response.json();
+
+      // Fetch assignee details for local state update
+      let assignedToData = null;
+      if (ping.assigned_to) {
+        const agent = agents.find((a) => a.id === ping.assigned_to);
+        if (agent) {
+          assignedToData = {
+            id: agent.id,
+            full_name: agent.full_name,
+            avatar_url: agent.avatar_url,
+          };
+        }
+      }
+
+      // Update local ping state
+      setSelectedPing((prev) =>
+        prev ? { ...prev, assigned_to: assignedToData } : null
+      );
+
+      // Update ping in the list
+      setPings((prevPings) =>
+        prevPings.map((p) =>
+          p.id === selectedPing.id ? { ...p, assigned_to: assignedToData } : p
+        )
+      );
+
+      const assigneeName = assignedToData
+        ? assignedToData.full_name
+        : 'Unassigned';
+      toast.success(`Ping assigned to ${assigneeName}`);
+    } catch (error) {
+      console.error('Error updating assignment:', error);
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to update assignment'
+      );
+    } finally {
+      setIsUpdatingAssignment(false);
+    }
+  };
+
   // Scroll to bottom when selectedPing changes
   useEffect(() => {
     // Use longer timeout to ensure images and attachments are rendered
@@ -273,6 +349,26 @@ export function InboxClient({
       setTimeout(scrollToBottom, 100);
     }
   }, [isReplying]);
+
+  // Fetch agents for assignment dropdown
+  useEffect(() => {
+    const fetchAgents = async () => {
+      setIsLoadingAgents(true);
+      try {
+        const response = await fetch('/api/agents');
+        if (response.ok) {
+          const { agents } = await response.json();
+          setAgents(agents);
+        }
+      } catch (error) {
+        console.error('Error fetching agents:', error);
+      } finally {
+        setIsLoadingAgents(false);
+      }
+    };
+
+    fetchAgents();
+  }, []);
 
   // Subscribe to realtime message updates
   useEffect(() => {
@@ -915,6 +1011,30 @@ export function InboxClient({
                     </span>
                   )}
                 </div>
+                <div className="flex items-center gap-2 mt-2">
+                  {ping.assigned_to ? (
+                    <>
+                      {ping.assigned_to.avatar_url ? (
+                        <img
+                          src={ping.assigned_to.avatar_url}
+                          alt={ping.assigned_to.full_name}
+                          className="w-5 h-5 rounded-full"
+                        />
+                      ) : (
+                        <div className="w-5 h-5 rounded-full bg-slate-600 flex items-center justify-center text-xs text-white">
+                          {ping.assigned_to.full_name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <span className="text-xs text-slate-400">
+                        {ping.assigned_to.full_name}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-xs text-slate-500 italic">
+                      Unassigned
+                    </span>
+                  )}
+                </div>
               </button>
             ))
           )}
@@ -955,6 +1075,27 @@ export function InboxClient({
                     <option value="waiting_on_user">Waiting on User</option>
                     <option value="resolved">Resolved</option>
                     <option value="closed">Closed</option>
+                  </select>
+                  <select
+                    value={selectedPing.assigned_to?.id || ''}
+                    onChange={(e) =>
+                      handleAssignmentChange(e.target.value || null)
+                    }
+                    disabled={isUpdatingAssignment || isLoadingAgents}
+                    className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed min-w-[180px]"
+                  >
+                    <option value="">Unassigned</option>
+                    {agents.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.full_name} (
+                        {agent.role === 'owner'
+                          ? 'Owner'
+                          : agent.role === 'manager'
+                            ? 'Manager'
+                            : 'Agent'}
+                        )
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

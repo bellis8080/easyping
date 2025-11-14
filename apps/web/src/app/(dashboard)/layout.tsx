@@ -2,6 +2,19 @@ import { ReactNode } from 'react';
 import { getUserProfile } from '@/lib/auth/helpers';
 import { UserRole } from '@easyping/types';
 import { DashboardLayoutClient } from '@/components/layout/dashboard-layout-client';
+import { createClient } from '@/lib/supabase/server';
+
+async function getActiveAssignedCount(userId: string): Promise<number> {
+  const supabase = await createClient();
+
+  const { count } = await supabase
+    .from('pings')
+    .select('*', { count: 'exact', head: true })
+    .eq('assigned_to', userId)
+    .not('status', 'in', '(resolved,closed)');
+
+  return count || 0;
+}
 
 export default async function DashboardLayout({
   children,
@@ -10,6 +23,17 @@ export default async function DashboardLayout({
 }) {
   const profile = await getUserProfile();
   const userRole = profile?.role as UserRole;
+
+  // Get active assigned ping count for agents
+  let activeAssignedCount = 0;
+  if (
+    profile &&
+    (userRole === UserRole.AGENT ||
+      userRole === UserRole.MANAGER ||
+      userRole === UserRole.OWNER)
+  ) {
+    activeAssignedCount = await getActiveAssignedCount(profile.id);
+  }
 
   // Define all navigation items with role requirements
   const allNavigationItems = [
@@ -30,7 +54,7 @@ export default async function DashboardLayout({
       href: '/inbox',
       icon: 'Inbox' as const,
       description: 'Agent queue',
-      badge: 8,
+      badge: activeAssignedCount > 0 ? activeAssignedCount : undefined,
       roles: [UserRole.AGENT, UserRole.MANAGER, UserRole.OWNER],
     },
     {

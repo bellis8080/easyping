@@ -138,17 +138,34 @@ function SLATimer({ ping }: { ping: PingWithRelations }) {
 // Priority Badge
 function PriorityBadge({ priority }: { priority: Ping['priority'] }) {
   const config = {
-    urgent: { color: 'bg-red-500 text-white', label: 'Urgent' },
-    high: { color: 'bg-orange-500 text-white', label: 'High' },
-    normal: { color: 'bg-blue-500 text-white', label: 'Normal' },
-    low: { color: 'bg-slate-400 text-white', label: 'Low' },
+    urgent: {
+      color: 'bg-red-100 text-red-800',
+      icon: '🔴',
+      label: 'Urgent',
+    },
+    high: {
+      color: 'bg-orange-100 text-orange-800',
+      icon: '⬆️',
+      label: 'High',
+    },
+    normal: {
+      color: 'bg-blue-100 text-blue-800',
+      icon: '➡️',
+      label: 'Normal',
+    },
+    low: {
+      color: 'bg-gray-100 text-gray-800',
+      icon: '⬇️',
+      label: 'Low',
+    },
   }[priority];
 
   return (
     <span
-      className={`px-2 py-0.5 rounded text-xs font-semibold ${config.color}`}
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${config.color}`}
     >
-      {config.label}
+      <span>{config.icon}</span>
+      <span>{config.label}</span>
     </span>
   );
 }
@@ -193,6 +210,7 @@ export function InboxClient({
   const [filter, setFilter] = useState<
     'all' | 'assigned' | 'unassigned' | 'urgent' | 'my_closed'
   >('assigned');
+  const [sortBy, setSortBy] = useState<'recent' | 'priority'>('recent');
   const [suggestedResponse, setSuggestedResponse] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -215,6 +233,7 @@ export function InboxClient({
   >([]);
   const [isLoadingAgents, setIsLoadingAgents] = useState(false);
   const [isUpdatingAssignment, setIsUpdatingAssignment] = useState(false);
+  const [isUpdatingPriority, setIsUpdatingPriority] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const presenceChannelRef = useRef<ReturnType<
@@ -334,6 +353,56 @@ export function InboxClient({
       );
     } finally {
       setIsUpdatingAssignment(false);
+    }
+  };
+
+  // Handle priority change
+  const handlePriorityChange = async (
+    newPriority: 'low' | 'normal' | 'high' | 'urgent'
+  ) => {
+    if (!selectedPing || newPriority === selectedPing.priority) return;
+
+    setIsUpdatingPriority(true);
+    try {
+      const response = await fetch(
+        `/api/pings/${selectedPing.ping_number}/priority`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ priority: newPriority }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update priority');
+      }
+
+      const { ping } = await response.json();
+
+      // Update local ping state
+      setSelectedPing((prev) =>
+        prev ? { ...prev, priority: ping.priority } : null
+      );
+
+      // Update ping in the list
+      setPings((prevPings) =>
+        prevPings.map((p) =>
+          p.id === selectedPing.id ? { ...p, priority: ping.priority } : p
+        )
+      );
+
+      // Capitalize first letter for display
+      const priorityLabel =
+        newPriority.charAt(0).toUpperCase() + newPriority.slice(1);
+      toast.success(`Priority updated to ${priorityLabel}`);
+    } catch (error) {
+      console.error('Error updating priority:', error);
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to update priority'
+      );
+    } finally {
+      setIsUpdatingPriority(false);
     }
   };
 
@@ -501,8 +570,31 @@ export function InboxClient({
               return {
                 ...prev,
                 messages: [...prev.messages, transformedMessage],
+                updated_at: new Date().toISOString(), // Update timestamp for sort order
               };
             });
+
+            // Also update the message in the pings array so it persists when switching pings
+            setPings((prevPings) =>
+              prevPings.map((p) => {
+                if (p.id === selectedPing.id) {
+                  // Check if message already exists in this ping
+                  const exists = p.messages.some(
+                    (m) => m.id === transformedMessage.id
+                  );
+                  if (exists) {
+                    return p;
+                  }
+                  // Add new message to this ping's messages and update timestamp
+                  return {
+                    ...p,
+                    messages: [...p.messages, transformedMessage],
+                    updated_at: new Date().toISOString(), // Update timestamp for sort order
+                  };
+                }
+                return p;
+              })
+            );
 
             // Scroll to bottom
             setTimeout(scrollToBottom, 100);
@@ -542,6 +634,7 @@ export function InboxClient({
                 ? {
                     ...prev,
                     status: updatedPing.status,
+                    priority: updatedPing.priority,
                     assigned_to: assignedTo,
                   }
                 : null
@@ -554,6 +647,7 @@ export function InboxClient({
                   ? {
                       ...p,
                       status: updatedPing.status,
+                      priority: updatedPing.priority,
                       assigned_to: assignedTo,
                     }
                   : p
@@ -752,30 +846,42 @@ export function InboxClient({
   }, [selectedPing?.id, currentUser.id, currentUser.full_name]);
 
   // Filter pings based on selected filter
-  const filteredPings = pings.filter((ping) => {
-    if (filter === 'assigned') {
-      // Show only active pings assigned to me (exclude resolved/closed)
+  const filteredPings = pings
+    .filter((ping) => {
+      if (filter === 'assigned') {
+        // Show only active pings assigned to me (exclude resolved/closed)
+        return (
+          ping.assigned_to?.id === currentUser.id &&
+          ping.status !== 'resolved' &&
+          ping.status !== 'closed'
+        );
+      }
+      if (filter === 'unassigned') {
+        return ping.assigned_to === null;
+      }
+      if (filter === 'urgent') {
+        return ping.priority === 'urgent';
+      }
+      if (filter === 'my_closed') {
+        // Show only resolved/closed pings assigned to me
+        return (
+          ping.assigned_to?.id === currentUser.id &&
+          (ping.status === 'resolved' || ping.status === 'closed')
+        );
+      }
+      return true; // 'all'
+    })
+    .sort((a, b) => {
+      if (sortBy === 'priority') {
+        // Priority sorting: urgent > high > normal > low
+        const priorityOrder = { urgent: 1, high: 2, normal: 3, low: 4 };
+        return priorityOrder[a.priority] - priorityOrder[b.priority];
+      }
+      // Default: recent activity (sort by updated_at descending - most recent first)
       return (
-        ping.assigned_to?.id === currentUser.id &&
-        ping.status !== 'resolved' &&
-        ping.status !== 'closed'
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
-    }
-    if (filter === 'unassigned') {
-      return ping.assigned_to === null;
-    }
-    if (filter === 'urgent') {
-      return ping.priority === 'urgent';
-    }
-    if (filter === 'my_closed') {
-      // Show only resolved/closed pings assigned to me
-      return (
-        ping.assigned_to?.id === currentUser.id &&
-        (ping.status === 'resolved' || ping.status === 'closed')
-      );
-    }
-    return true; // 'all'
-  });
+    });
 
   const uploadFiles = async (
     files: File[],
@@ -942,7 +1048,7 @@ export function InboxClient({
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-950 border-b border-slate-700 p-4 min-h-[121px]">
           <h2 className="text-xl font-bold text-white mb-2">Agent Inbox</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mb-2">
             <select
               value={filter}
               onChange={(e) =>
@@ -964,6 +1070,19 @@ export function InboxClient({
               <option value="my_closed">My Resolved/Closed Pings</option>
             </select>
           </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-400">Sort by:</label>
+            <select
+              value={sortBy}
+              onChange={(e) =>
+                setSortBy(e.target.value as 'recent' | 'priority')
+              }
+              className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+            >
+              <option value="recent">Recent Activity</option>
+              <option value="priority">Priority</option>
+            </select>
+          </div>
         </div>
 
         {/* Ping List */}
@@ -980,7 +1099,9 @@ export function InboxClient({
                 className={`w-full p-4 border-b border-slate-200 text-left transition-all hover:bg-blue-50 ${
                   selectedPing?.id === ping.id
                     ? 'bg-gradient-to-r from-orange-50 to-transparent border-l-4 border-l-orange-500'
-                    : 'border-l-4 border-l-transparent'
+                    : ping.priority === 'urgent'
+                      ? 'border-l-4 border-l-red-500 bg-red-50'
+                      : 'border-l-4 border-l-transparent'
                 }`}
               >
                 <div className="flex items-start justify-between mb-2">
@@ -988,7 +1109,6 @@ export function InboxClient({
                     <span className="text-sm font-mono font-bold text-slate-900">
                       #PING-{String(ping.ping_number).padStart(3, '0')}
                     </span>
-                    <PriorityBadge priority={ping.priority} />
                   </div>
                   <SLATimer ping={ping} />
                 </div>
@@ -1004,7 +1124,10 @@ export function InboxClient({
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <StatusBadge status={ping.status} />
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={ping.status} />
+                    <PriorityBadge priority={ping.priority} />
+                  </div>
                   {ping.category && (
                     <span className="px-2 py-0.5 bg-slate-100 rounded text-xs text-slate-600">
                       {ping.category.name}
@@ -1053,9 +1176,12 @@ export function InboxClient({
             <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-950 border-b border-slate-700 p-4 shadow-xl min-h-[121px]">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
-                    #PING-{String(selectedPing.ping_number).padStart(3, '0')}
-                  </h3>
+                  <div className="flex items-center gap-3 mb-1">
+                    <h3 className="text-xl font-bold text-white">
+                      #PING-{String(selectedPing.ping_number).padStart(3, '0')}
+                    </h3>
+                    <PriorityBadge priority={selectedPing.priority} />
+                  </div>
                   <p className="text-sm text-slate-400">
                     {selectedPing.created_by.full_name} •{' '}
                     {selectedPing.created_by.email}
@@ -1075,6 +1201,24 @@ export function InboxClient({
                     <option value="waiting_on_user">Waiting on User</option>
                     <option value="resolved">Resolved</option>
                     <option value="closed">Closed</option>
+                  </select>
+                  <select
+                    value={selectedPing.priority}
+                    onChange={(e) =>
+                      handlePriorityChange(
+                        e.target.value as 'low' | 'normal' | 'high' | 'urgent'
+                      )
+                    }
+                    disabled={
+                      isUpdatingPriority || currentUser.role === 'end_user'
+                    }
+                    className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    aria-label="Select priority"
+                  >
+                    <option value="low">⬇️ Low</option>
+                    <option value="normal">➡️ Normal</option>
+                    <option value="high">⬆️ High</option>
+                    <option value="urgent">🔴 Urgent</option>
                   </select>
                   <select
                     value={selectedPing.assigned_to?.id || ''}

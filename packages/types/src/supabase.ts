@@ -195,6 +195,58 @@ export type Database = {
           },
         ];
       };
+      ping_reads: {
+        Row: {
+          created_at: string;
+          id: string;
+          last_read_at: string;
+          last_read_message_id: string | null;
+          ping_id: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          last_read_at?: string;
+          last_read_message_id?: string | null;
+          ping_id: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          last_read_at?: string;
+          last_read_message_id?: string | null;
+          ping_id?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'ping_reads_last_read_message_id_fkey';
+            columns: ['last_read_message_id'];
+            isOneToOne: false;
+            referencedRelation: 'ping_messages';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'ping_reads_ping_id_fkey';
+            columns: ['ping_id'];
+            isOneToOne: false;
+            referencedRelation: 'pings';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'ping_reads_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       pings: {
         Row: {
           ai_summary: string | null;
@@ -299,6 +351,7 @@ export type Database = {
           id: string;
           last_seen_at: string | null;
           role: string;
+          settings: Json | null;
           tenant_id: string;
         };
         Insert: {
@@ -309,6 +362,7 @@ export type Database = {
           id: string;
           last_seen_at?: string | null;
           role?: string;
+          settings?: Json | null;
           tenant_id: string;
         };
         Update: {
@@ -319,6 +373,7 @@ export type Database = {
           id?: string;
           last_seen_at?: string | null;
           role?: string;
+          settings?: Json | null;
           tenant_id?: string;
         };
         Relationships: [

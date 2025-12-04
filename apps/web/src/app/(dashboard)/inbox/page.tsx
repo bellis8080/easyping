@@ -103,6 +103,16 @@ export default async function AgentInboxPage() {
     }
   }
 
+  // Fetch ping_reads to calculate unread counts
+  const { data: pingReads } = await supabase
+    .from('ping_reads')
+    .select('ping_id, last_read_at')
+    .eq('user_id', userProfile.id);
+
+  const pingReadsMap = new Map(
+    pingReads?.map((pr) => [pr.ping_id, pr.last_read_at]) || []
+  );
+
   // Transform data to match expected types
   const transformedPings =
     pings?.map((ping) => ({
@@ -133,6 +143,26 @@ export default async function AgentInboxPage() {
         sender: Array.isArray(msg.sender) ? msg.sender[0] : msg.sender,
         attachments: attachmentsByMessageId[msg.id] || [],
       })),
+      unread_count: (() => {
+        const lastReadAt = pingReadsMap.get(ping.id);
+        if (!lastReadAt) {
+          // Never read - all messages are unread (excluding current user's own messages)
+          return (ping.messages || []).filter((msg) => {
+            const sender = Array.isArray(msg.sender)
+              ? msg.sender[0]
+              : msg.sender;
+            return sender?.id !== userProfile.id;
+          }).length;
+        }
+        // Count messages created after last read time (excluding current user's own messages)
+        return (ping.messages || []).filter((msg) => {
+          const sender = Array.isArray(msg.sender) ? msg.sender[0] : msg.sender;
+          return (
+            sender?.id !== userProfile.id &&
+            new Date(msg.created_at) > new Date(lastReadAt)
+          );
+        }).length;
+      })(),
     })) || [];
 
   return (

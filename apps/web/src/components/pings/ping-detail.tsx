@@ -82,20 +82,9 @@ export function PingDetail({
     for (const file of files) {
       const filePath = `${userId}/${Date.now()}-${file.name}`;
 
-      console.log(`📤 [USER] Uploading file:`, {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        path: filePath,
-        lastModified: file.lastModified,
-      });
       setUploadProgress((prev) => ({ ...prev, [file.name]: 0 }));
 
       try {
-        console.log(
-          `📤 [USER] Using FileReader API instead of arrayBuffer()...`
-        );
-
         // Use FileReader API instead of file.arrayBuffer()
         // (arrayBuffer() hangs on PDFs for unknown reason)
         const arrayBuffer = await new Promise<ArrayBuffer>(
@@ -103,34 +92,22 @@ export function PingDetail({
             const reader = new FileReader();
 
             reader.onload = () => {
-              console.log(`📤 [USER] FileReader SUCCESS`);
               resolve(reader.result as ArrayBuffer);
             };
 
             reader.onerror = () => {
-              console.error(`❌ [USER] FileReader ERROR:`, reader.error);
               reject(reader.error);
             };
 
             reader.onabort = () => {
-              console.error(`❌ [USER] FileReader ABORTED`);
               reject(new Error('File read aborted'));
             };
 
-            console.log(`📤 [USER] Starting FileReader.readAsArrayBuffer()...`);
             reader.readAsArrayBuffer(file);
           }
         );
 
-        console.log(`📤 [USER] Read ArrayBuffer:`, {
-          size: arrayBuffer.byteLength,
-        });
-
         const fileBlob = new Blob([arrayBuffer], { type: file.type });
-        console.log(`📤 [USER] Converted to Blob:`, {
-          size: fileBlob.size,
-          type: fileBlob.type,
-        });
 
         // Add timeout to prevent hanging
         const uploadPromise = supabase.storage
@@ -153,14 +130,9 @@ export function PingDetail({
         ]);
 
         if (error) {
-          console.error(`❌ [USER] Upload failed for ${file.name}:`, {
-            error,
-            message: error.message,
-          });
           throw new Error(`Failed to upload ${file.name}: ${error.message}`);
         }
 
-        console.log(`✅ [USER] Upload successful for ${file.name}:`, data);
         setUploadProgress((prev) => ({ ...prev, [file.name]: 100 }));
 
         uploadedFiles.push({
@@ -170,10 +142,6 @@ export function PingDetail({
           type: file.type,
         });
       } catch (uploadError) {
-        console.error(
-          `❌ [USER] Upload exception for ${file.name}:`,
-          uploadError
-        );
         setUploadProgress((prev) => {
           const newProgress = { ...prev };
           delete newProgress[file.name];
@@ -183,10 +151,6 @@ export function PingDetail({
       }
     }
 
-    console.log(
-      `✅ [USER] All files uploaded successfully:`,
-      uploadedFiles.length
-    );
     return uploadedFiles;
   };
 
@@ -203,6 +167,28 @@ export function PingDetail({
     }
   }, [isReplying]);
 
+  // Mark ping as read when component mounts
+  useEffect(() => {
+    const markAsRead = async () => {
+      if (!messages || messages.length === 0) return;
+
+      try {
+        const lastMessage = messages[messages.length - 1];
+        await fetch(`/api/pings/${ping.ping_number}/read`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lastReadMessageId: lastMessage.id,
+          }),
+        });
+      } catch (_error) {
+        // Silently fail - mark as read is non-critical
+      }
+    };
+
+    markAsRead();
+  }, [ping.ping_number, messages.length]);
+
   // Subscribe to realtime message updates
   useEffect(() => {
     const supabase = createClient();
@@ -218,8 +204,6 @@ export function PingDetail({
           filter: `ping_id=eq.${pingId}`,
         },
         async (payload) => {
-          console.log('New message received:', payload);
-
           // Fetch message without join to avoid RLS issues
           const { data: newMessage, error: messageError } = await supabase
             .from('ping_messages')
@@ -227,77 +211,68 @@ export function PingDetail({
             .eq('id', payload.new.id)
             .single();
 
-          if (messageError) {
-            console.error('Error fetching new message:', messageError);
+          if (messageError || !newMessage) {
             return;
           }
 
-          if (newMessage) {
-            // Fetch sender separately using their ID
-            const { data: sender, error: senderError } = await supabase
-              .from('users')
-              .select('id, full_name, avatar_url, role')
-              .eq('id', newMessage.sender_id)
-              .single();
+          // Fetch sender separately using their ID
+          const { data: sender, error: senderError } = await supabase
+            .from('users')
+            .select('id, full_name, avatar_url, role')
+            .eq('id', newMessage.sender_id)
+            .single();
 
-            if (senderError) {
-              console.error('Error fetching sender:', senderError);
-              return;
-            }
-
-            // Fetch attachments separately
-            const { data: attachments } = await supabase
-              .from('ping_attachments')
-              .select('*')
-              .eq('ping_message_id', newMessage.id);
-
-            const transformedMessage = {
-              id: newMessage.id,
-              ping_id: newMessage.ping_id,
-              content: newMessage.content,
-              message_type: newMessage.message_type,
-              created_at: newMessage.created_at,
-              edited_at: newMessage.edited_at,
-              sender: sender as Pick<
-                User,
-                'id' | 'full_name' | 'avatar_url' | 'role'
-              >,
-              attachments: attachments || [],
-            };
-
-            // Only add if not already in state (avoid duplicate from optimistic update)
-            setMessages((prev) => {
-              const exists = prev.some((m) => m.id === transformedMessage.id);
-              if (exists) {
-                console.log(
-                  'Message already exists, skipping:',
-                  transformedMessage.id
-                );
-                return prev;
-              }
-              console.log(
-                'Adding message from realtime:',
-                transformedMessage.id
-              );
-              return [...prev, transformedMessage as any];
-            });
-
-            // Scroll to bottom
-            setTimeout(scrollToBottom, 100);
+          if (senderError || !sender) {
+            return;
           }
+
+          // Fetch attachments separately
+          const { data: attachments } = await supabase
+            .from('ping_attachments')
+            .select('*')
+            .eq('ping_message_id', newMessage.id);
+
+          const transformedMessage = {
+            id: newMessage.id,
+            ping_id: newMessage.ping_id,
+            content: newMessage.content,
+            message_type: newMessage.message_type,
+            created_at: newMessage.created_at,
+            edited_at: newMessage.edited_at,
+            sender: sender as Pick<
+              User,
+              'id' | 'full_name' | 'avatar_url' | 'role'
+            >,
+            attachments: attachments || [],
+          };
+
+          // Only add if not already in state (avoid duplicate from optimistic update)
+          setMessages((prev) => {
+            const exists = prev.some((m) => m.id === transformedMessage.id);
+            if (exists) {
+              return prev;
+            }
+            return [...prev, transformedMessage as any];
+          });
+
+          // Auto-mark as read if message is from another user (user is viewing the ping)
+          if (newMessage.sender_id !== currentUser.id) {
+            await fetch(`/api/pings/${ping.ping_number}/read`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                lastReadMessageId: newMessage.id,
+              }),
+            });
+          }
+
+          // Scroll to bottom
+          setTimeout(scrollToBottom, 100);
         }
       )
-      .subscribe((status) => {
-        console.log(
-          '📡 [USER] Subscription status:',
-          status,
-          'for ping:',
-          pingId
-        );
-      });
+      .subscribe();
 
     return () => {
-      console.log('🔌 [USER] Unsubscribing from ping:', pingId);
       supabase.removeChannel(channel);
     };
   }, [initialPing.id, currentUser.id]);
@@ -316,9 +291,7 @@ export function PingDetail({
           table: 'pings',
           filter: `id=eq.${pingId}`,
         },
-        async (payload) => {
-          console.log('Ping updated:', payload);
-
+        async () => {
           // Fetch full ping data with relations
           const { data: updatedPing } = await supabase
             .from('pings')
@@ -344,12 +317,9 @@ export function PingDetail({
           }
         }
       )
-      .subscribe((status) => {
-        console.log('📡 Ping updates subscription status:', status);
-      });
+      .subscribe();
 
     return () => {
-      console.log('🔌 Unsubscribing from ping updates:', pingId);
       supabase.removeChannel(channel);
     };
   }, [initialPing.id]);
@@ -372,7 +342,6 @@ export function PingDetail({
     channel
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState();
-        console.log('Presence state updated:', state);
         const replyingUsers = Object.values(state)
           .flat()
           .filter((user: any) => user.id !== currentUser.id && user.isReplying)
@@ -381,23 +350,19 @@ export function PingDetail({
             userName: user.userName,
           }));
 
-        console.log('Replying users:', replyingUsers);
         setIsReplying(replyingUsers[0] || null);
       })
       .subscribe(async (status) => {
-        console.log('Presence channel status:', status);
         if (status === 'SUBSCRIBED') {
-          const trackResult = await channel.track({
+          await channel.track({
             id: currentUser.id,
             userName: currentUser.full_name,
             isReplying: false,
           });
-          console.log('Initial presence track result:', trackResult);
         }
       });
 
     return () => {
-      console.log('Cleaning up presence channel');
       presenceChannelRef.current = null;
       supabase.removeChannel(channel);
     };
@@ -460,10 +425,7 @@ export function PingDetail({
       const { message } = await response.json();
 
       // Optimistic UI update
-      setMessages((prev) => {
-        console.log('Adding message optimistically:', message.id);
-        return [...prev, message];
-      });
+      setMessages((prev) => [...prev, message]);
       setReplyMessage('');
       setSelectedFiles([]);
       setUploadProgress({});
@@ -487,7 +449,6 @@ export function PingDetail({
     setReplyMessage(e.target.value);
 
     if (!presenceChannelRef.current) {
-      console.log('Cannot track presence - missing channel');
       return;
     }
 
@@ -498,7 +459,6 @@ export function PingDetail({
 
     const channel = presenceChannelRef.current;
 
-    console.log('Tracking replying status: true');
     channel.track({
       id: currentUser.id,
       userName: currentUser.full_name,
@@ -506,7 +466,6 @@ export function PingDetail({
     });
 
     replyingTimeoutRef.current = setTimeout(() => {
-      console.log('Tracking replying status: false');
       channel.track({
         id: currentUser.id,
         userName: currentUser.full_name,

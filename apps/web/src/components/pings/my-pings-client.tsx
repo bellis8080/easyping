@@ -2,8 +2,11 @@
 
 import { MessageSquarePlus, Search, Radio } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getStatusConfig } from '@/lib/ping-status-utils';
+import { createClient } from '@/lib/supabase/client';
+import { playNotificationSound } from '@/lib/notification-sound';
+import { useTabTitle } from '@/hooks/use-tab-title';
 import type {
   Ping as BasePing,
   PingMessage,
@@ -24,6 +27,7 @@ export interface PingWithMessages
       sender: Pick<User, 'id' | 'full_name' | 'avatar_url'>;
     }
   >;
+  unread_count?: number;
 }
 
 // Format relative time
@@ -136,8 +140,8 @@ function PingListItem({ ping }: { ping: PingWithMessages }) {
       ? ping.messages[ping.messages.length - 1]
       : null;
 
-  // For now, we don't track unread count in the database
-  const isUnread = false;
+  // Check if there are unread messages
+  const isUnread = (ping.unread_count || 0) > 0;
 
   // Get the agent/sender from the last message
   const agent = lastMessage?.sender || {
@@ -187,11 +191,11 @@ function PingListItem({ ping }: { ping: PingWithMessages }) {
         </div>
 
         {/* Unread badge */}
-        {isUnread && (
+        {isUnread && ping.unread_count && (
           <div className="flex-shrink-0">
             <div className="relative">
               <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-white text-xs font-bold shadow-lg ring-2 ring-orange-500/30">
-                1
+                {ping.unread_count > 99 ? '99+' : ping.unread_count}
               </span>
               <span className="absolute inset-0 animate-ping rounded-full bg-orange-400 opacity-40"></span>
             </div>
@@ -238,13 +242,145 @@ function EmptyState() {
 
 interface MyPingsClientProps {
   pings: PingWithMessages[];
+  currentUserId: string;
 }
 
-export function MyPingsClient({ pings }: MyPingsClientProps) {
+export function MyPingsClient({
+  pings: initialPings,
+  currentUserId,
+}: MyPingsClientProps) {
+  const [pings, setPings] = useState<PingWithMessages[]>(initialPings);
   const [activeTab, setActiveTab] = useState<
     'all' | 'active' | 'resolved' | 'closed'
   >('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Calculate total unread count for tab title
+  const totalUnread = pings.reduce(
+    (sum, ping) => sum + (ping.unread_count || 0),
+    0
+  );
+
+  // Update tab title with unread count
+  useTabTitle(totalUnread);
+
+  // Subscribe to new messages for all pings created by this user
+  useEffect(() => {
+    const supabase = createClient();
+    const pingIds = pings.map((p) => p.id);
+
+    if (pingIds.length === 0) {
+      return;
+    }
+
+    const channel = supabase
+      .channel('my-pings-messages')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'ping_messages',
+        },
+        async (payload) => {
+          const newMessage = payload.new as any;
+
+          // Only process if this message is for one of our pings
+          if (!pingIds.includes(newMessage.ping_id)) {
+            return;
+          }
+
+          // Fetch sender info
+          const { data: sender } = await supabase
+            .from('users')
+            .select('id, full_name, avatar_url')
+            .eq('id', newMessage.sender_id)
+            .single();
+
+          if (!sender) return;
+
+          // Update the ping in the list
+          setPings((prevPings) =>
+            prevPings.map((p) => {
+              if (p.id === newMessage.ping_id) {
+                const updatedMessages = [
+                  ...p.messages,
+                  {
+                    id: newMessage.id,
+                    content: newMessage.content,
+                    message_type: newMessage.message_type,
+                    created_at: newMessage.created_at,
+                    sender,
+                  },
+                ];
+
+                // Increment unread count if message is not from current user
+                const shouldIncrementUnread = sender.id !== currentUserId;
+                const updatedUnreadCount = shouldIncrementUnread
+                  ? (p.unread_count || 0) + 1
+                  : p.unread_count || 0;
+
+                return {
+                  ...p,
+                  messages: updatedMessages,
+                  unread_count: updatedUnreadCount,
+                  updated_at: newMessage.created_at,
+                };
+              }
+              return p;
+            })
+          );
+
+          // Play notification sound if message is from another user
+          if (sender.id !== currentUserId) {
+            playNotificationSound();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [pings.length, currentUserId]);
+
+  // Subscribe to ping_reads to clear unread count when user views a ping
+  useEffect(() => {
+    const supabase = createClient();
+
+    const channel = supabase
+      .channel('my-pings-reads')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'ping_reads',
+          filter: `user_id=eq.${currentUserId}`,
+        },
+        async (payload) => {
+          const pingRead = payload.new as any;
+
+          // Clear unread count for this ping
+          setPings((prevPings) =>
+            prevPings.map((p) => {
+              if (p.id === pingRead.ping_id) {
+                return {
+                  ...p,
+                  unread_count: 0,
+                };
+              }
+              return p;
+            })
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId]);
 
   // Filter pings based on active tab
   const filteredPings = pings.filter((ping) => {

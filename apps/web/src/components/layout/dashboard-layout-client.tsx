@@ -12,6 +12,8 @@ import {
   LogOut,
 } from 'lucide-react';
 import { WelcomeToast } from '@/components/welcome-toast';
+import { useInboxBadgeCount } from '@/hooks/use-inbox-badge-count';
+import { useMyPingsBadgeCount } from '@/hooks/use-my-pings-badge-count';
 
 type IconName =
   | 'Radio'
@@ -33,6 +35,8 @@ interface DashboardLayoutClientProps {
   navigation: NavigationItem[];
   secondaryNav: NavigationItem[];
   children: ReactNode;
+  userId: string | null;
+  isAgent: boolean;
 }
 
 const iconMap = {
@@ -48,8 +52,16 @@ export function DashboardLayoutClient({
   navigation,
   secondaryNav,
   children,
+  userId,
+  isAgent,
 }: DashboardLayoutClientProps) {
   const pathname = usePathname();
+
+  // Get real-time inbox badge count for agents
+  const inboxBadgeCount = useInboxBadgeCount(isAgent ? userId : null);
+
+  // Get real-time My Pings badge count for end users
+  const myPingsBadgeCount = useMyPingsBadgeCount(!isAgent ? userId : null);
 
   const isActive = (href: string) => {
     if (href === '/pings') {
@@ -82,6 +94,14 @@ export function DashboardLayoutClient({
               const Icon = iconMap[item.icon];
               const active = isActive(item.href);
 
+              // Use real-time badge counts based on the route
+              let badgeCount = item.badge;
+              if (item.href === '/inbox') {
+                badgeCount = inboxBadgeCount;
+              } else if (item.href === '/pings') {
+                badgeCount = myPingsBadgeCount;
+              }
+
               return (
                 <Link
                   key={item.name}
@@ -101,9 +121,9 @@ export function DashboardLayoutClient({
                       </div>
                     )}
                   </div>
-                  {item.badge && (
+                  {badgeCount !== undefined && badgeCount > 0 && (
                     <span className="flex-shrink-0 w-5 h-5 rounded-full bg-orange-500 text-white text-xs font-semibold flex items-center justify-center">
-                      {item.badge > 99 ? '99+' : item.badge}
+                      {badgeCount > 99 ? '99+' : badgeCount}
                     </span>
                   )}
                 </Link>

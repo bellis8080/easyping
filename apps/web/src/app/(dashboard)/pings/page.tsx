@@ -55,7 +55,51 @@ export default async function MyPingsPage() {
     notFound();
   }
 
+  // Calculate unread counts for each ping
+  const pingsWithUnread = await Promise.all(
+    (pings || []).map(async (ping) => {
+      // Get the last read timestamp for this ping
+      const { data: pingRead } = await supabase
+        .from('ping_reads')
+        .select('last_read_at')
+        .eq('ping_id', ping.id)
+        .eq('user_id', user.id)
+        .single();
+
+      let unreadCount = 0;
+
+      if (!pingRead) {
+        // Never read - count all messages not from this user
+        const { count } = await supabase
+          .from('ping_messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('ping_id', ping.id)
+          .neq('sender_id', user.id);
+
+        unreadCount = count || 0;
+      } else {
+        // Count messages after last read that aren't from this user
+        const { count } = await supabase
+          .from('ping_messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('ping_id', ping.id)
+          .neq('sender_id', user.id)
+          .gt('created_at', pingRead.last_read_at);
+
+        unreadCount = count || 0;
+      }
+
+      return {
+        ...ping,
+        unread_count: unreadCount,
+      };
+    })
+  );
+
   return (
-    <MyPingsClient pings={(pings || []) as unknown as PingWithMessages[]} />
+    <MyPingsClient
+      pings={pingsWithUnread as unknown as PingWithMessages[]}
+      currentUserId={user.id}
+    />
   );
 }

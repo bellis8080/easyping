@@ -1,0 +1,16 @@
+schema: 1
+story: '2.7'
+gate: CONCERNS
+status_reason: 'All acceptance criteria met with comprehensive test coverage, but inbox badge count race condition requires tracking for future optimization.'
+reviewer: 'Quinn'
+updated: '2025-12-04T23:05:00Z'
+top_issues:
+  - id: 'REL-001'
+    severity: low
+    finding: 'Inbox badge count increments incorrectly when viewing ping and receiving message in same ping (race condition between mark-as-read and badge recalculation)'
+    suggested_action: 'Address race condition in future performance optimization story - consider optimistic badge updates or transaction-based read tracking'
+  - id: 'TEST-001'
+    severity: low
+    finding: 'Missing E2E tests for real-time scenarios (marked optional in story)'
+    suggested_action: 'Consider adding Playwright E2E tests for multi-tab realtime scenarios in future testing sprint'
+waiver: { active: false }

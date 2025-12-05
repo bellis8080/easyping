@@ -238,7 +238,7 @@ export function InboxClient({
   const [isLoadingAgents, setIsLoadingAgents] = useState(false);
   const [isUpdatingAssignment, setIsUpdatingAssignment] = useState(false);
   const [isUpdatingPriority, setIsUpdatingPriority] = useState(false);
-  const [isConnected, setIsConnected] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [soundEnabled, _setSoundEnabled] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1149,10 +1149,12 @@ export function InboxClient({
 
   return (
     <>
-      <ConnectionStatusIndicator
-        isConnected={isConnected}
-        isReconnecting={isReconnecting}
-      />
+      {selectedPing && (
+        <ConnectionStatusIndicator
+          isConnected={isConnected}
+          isReconnecting={isReconnecting}
+        />
+      )}
       <div className="flex h-screen bg-gradient-to-b from-slate-50 to-blue-50">
         {/* Ping List - Left Panel */}
         <div className="w-96 bg-white border-r border-slate-200 flex flex-col shadow-lg">

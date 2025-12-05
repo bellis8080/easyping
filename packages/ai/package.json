@@ -14,5 +14,10 @@
   },
   "devDependencies": {
     "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.1",
+    "@easyping/types": "workspace:^",
+    "openai": "^6.10.0"
   }
 }

@@ -3,12 +3,24 @@
 
 import { UserRole, PingStatus, PingPriority, MessageType } from './enums';
 
+export interface AIConfig {
+  provider?: 'openai' | 'anthropic' | 'azure';
+  encrypted_api_key?: string;
+  model?: string;
+  enabled?: boolean;
+  // Azure-specific fields
+  endpoint?: string;
+  deployment?: string;
+  api_version?: string;
+}
+
 export interface Organization {
   id: string; // UUID
   name: string;
   domain: string | null;
   created_at: string; // ISO timestamp
   settings: Record<string, any>; // JSONB
+  ai_config?: AIConfig; // JSONB - AI provider configuration
 }
 
 export interface User {

@@ -80,16 +80,16 @@ export async function POST(
 
   // Fetch ping by ping_number - using admin client to get creator info
   const supabaseAdmin = createAdminClient();
-  const { data: ping } = await supabaseAdmin
+  const { data: ping, error: pingError } = await supabaseAdmin
     .from('pings')
     .select(
-      'id, tenant_id, status, created_by, assigned_to, first_response_at, created_by_user:users!pings_created_by_fkey(full_name)'
+      'id, tenant_id, status, created_by, assigned_to, created_by_user:users!pings_created_by_fkey(full_name)'
     )
     .eq('ping_number', parseInt(pingNumber))
     .eq('tenant_id', userProfile.tenant_id)
     .single();
 
-  if (!ping) {
+  if (!ping || pingError) {
     return NextResponse.json({ error: 'Ping not found' }, { status: 404 });
   }
 
@@ -197,7 +197,7 @@ export async function POST(
     ping.assigned_to,
     userProfile.full_name || 'Agent',
     creatorName,
-    ping.first_response_at
+    null // first_response_at - column doesn't exist yet
   );
 
   if (transition) {

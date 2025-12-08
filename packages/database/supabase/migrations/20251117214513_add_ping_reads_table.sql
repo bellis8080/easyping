@@ -25,20 +25,8 @@ BEGIN
   END IF;
 END $$;
 
--- Enable RLS for Realtime compatibility (following same pattern as pings/ping_messages)
--- Application-level tenant isolation enforced via API endpoints
-ALTER TABLE ping_reads ENABLE ROW LEVEL SECURITY;
-
--- Create permissive policy for authenticated users
--- (Application-level tenant filtering remains in place)
-CREATE POLICY "Allow authenticated users to read ping_reads"
-  ON ping_reads
-  FOR SELECT
-  TO authenticated
-  USING (true);
-
 -- Add comment for documentation
-COMMENT ON TABLE ping_reads IS 'Tracks when each user last read each ping for unread count calculation. RLS enabled with permissive SELECT policy for Realtime compatibility - security enforced at API layer.';
+COMMENT ON TABLE ping_reads IS 'Tracks when each user last read each ping for unread count calculation';
 COMMENT ON COLUMN ping_reads.last_read_at IS 'Timestamp when user last viewed the ping';
 COMMENT ON COLUMN ping_reads.last_read_message_id IS 'ID of the last message the user read';
 COMMENT ON COLUMN users.settings IS 'User preferences including notification settings';

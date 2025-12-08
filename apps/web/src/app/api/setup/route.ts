@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { encrypt } from '@/lib/crypto';
+
 import { setupSchema } from '@/lib/schemas/setup';
 import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limit';
 
 function getDefaultModel(provider: string): string {
   switch (provider) {
     case 'openai':
-      return 'gpt-3.5-turbo';
+      return 'gpt-4o-mini'; // Updated to cost-optimized model
     case 'anthropic':
       return 'claude-3-haiku-20240307';
     case 'azure':
-      return 'gpt-35-turbo';
+      return ''; // Azure uses custom deployment names
     default:
       return '';
   }
@@ -87,31 +87,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Encrypt AI API key if provided
-    let encryptedKey: string | null = null;
-    if (data.aiConfig.provider !== 'skip' && data.aiConfig.apiKey) {
-      encryptedKey = await encrypt(data.aiConfig.apiKey);
-    }
-
-    // Create organization
-    const orgSettings =
-      data.aiConfig.provider !== 'skip'
-        ? {
-            ai_provider: {
-              provider: data.aiConfig.provider,
-              api_key_encrypted: encryptedKey,
-              model:
-                data.aiConfig.model || getDefaultModel(data.aiConfig.provider),
-            },
-          }
-        : {};
-
+    // Create organization first (we need the org ID for encryption)
     const { data: org, error: orgError } = await supabase
       .from('organizations')
       .insert({
         name: data.organization.name,
         domain: data.organization.domain || null,
-        settings: orgSettings,
       })
       .select()
       .single();
@@ -119,6 +100,45 @@ export async function POST(request: NextRequest) {
     if (orgError) {
       console.error('Organization creation error:', orgError);
       throw new Error(`Failed to create organization: ${orgError.message}`);
+    }
+
+    // Encrypt and save AI config if provided
+    if (data.aiConfig.provider !== 'skip' && data.aiConfig.apiKey) {
+      // Encrypt API key using database function
+      const { data: encryptedKey, error: encryptError } = await supabase.rpc(
+        'encrypt_api_key',
+        {
+          api_key: data.aiConfig.apiKey,
+          org_id: org.id,
+        }
+      );
+
+      if (encryptError || !encryptedKey) {
+        console.error('API key encryption error:', encryptError);
+        // Rollback: delete organization
+        await supabase.from('organizations').delete().eq('id', org.id);
+        throw new Error('Failed to encrypt API key');
+      }
+
+      // Update organization with AI config
+      const aiConfig = {
+        provider: data.aiConfig.provider,
+        encrypted_api_key: encryptedKey,
+        model: data.aiConfig.model || getDefaultModel(data.aiConfig.provider),
+        enabled: true,
+      };
+
+      const { error: updateError } = await supabase
+        .from('organizations')
+        .update({ ai_config: aiConfig })
+        .eq('id', org.id);
+
+      if (updateError) {
+        console.error('AI config update error:', updateError);
+        // Rollback: delete organization
+        await supabase.from('organizations').delete().eq('id', org.id);
+        throw new Error('Failed to save AI configuration');
+      }
     }
 
     // Create admin user with Supabase Auth

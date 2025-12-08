@@ -1,9 +1,25 @@
 'use client';
 
-import { useState } from 'react';
-import { User, Bell, Sparkles, FolderTree, Shield, Save } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import {
+  User,
+  Bell,
+  Sparkles,
+  FolderTree,
+  Shield,
+  Save,
+  Loader2,
+  Users,
+} from 'lucide-react';
+import UserManagementTable from './users/UserManagementTable';
 
-type TabType = 'profile' | 'notifications' | 'ai' | 'categories' | 'security';
+type TabType =
+  | 'profile'
+  | 'notifications'
+  | 'ai'
+  | 'users'
+  | 'categories'
+  | 'security';
 
 interface TabConfig {
   id: TabType;
@@ -15,12 +31,51 @@ const tabs: TabConfig[] = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'ai', label: 'AI Configuration', icon: Sparkles },
+  { id: 'users', label: 'Users', icon: Users },
   { id: 'categories', label: 'Categories', icon: FolderTree },
   { id: 'security', label: 'Security', icon: Shield },
 ];
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('profile');
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch user role on mount
+  useEffect(() => {
+    async function fetchUserRole() {
+      try {
+        const response = await fetch('/api/user');
+        if (response.ok) {
+          const data = await response.json();
+          setUserRole(data.role);
+        }
+      } catch (error) {
+        console.error('Failed to fetch user role:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchUserRole();
+  }, []);
+
+  // Filter tabs based on user role
+  const visibleTabs = tabs.filter((tab) => {
+    // Only show AI Configuration and Users tabs to owners
+    if (tab.id === 'ai' || tab.id === 'users') {
+      return userRole === 'owner';
+    }
+    return true;
+  });
+
+  // Don't render tabs until we know the user's role
+  if (loading) {
+    return (
+      <div className="flex h-screen bg-gradient-to-b from-slate-50 to-blue-50 overflow-hidden items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-gradient-to-b from-slate-50 to-blue-50 overflow-hidden">
@@ -40,7 +95,7 @@ export default function SettingsPage() {
           {/* Sidebar Tabs */}
           <div className="w-64 bg-white border-r border-slate-200 p-4">
             <nav className="space-y-1">
-              {tabs.map((tab) => {
+              {visibleTabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
 
@@ -67,7 +122,8 @@ export default function SettingsPage() {
             <div className="max-w-3xl">
               {activeTab === 'profile' && <ProfileTab />}
               {activeTab === 'notifications' && <NotificationsTab />}
-              {activeTab === 'ai' && <AIConfigTab />}
+              {activeTab === 'ai' && userRole === 'owner' && <AIConfigTab />}
+              {activeTab === 'users' && userRole === 'owner' && <UsersTab />}
               {activeTab === 'categories' && <CategoriesTab />}
               {activeTab === 'security' && <SecurityTab />}
             </div>
@@ -273,6 +329,96 @@ function NotificationsTab() {
 }
 
 function AIConfigTab() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [provider, setProvider] = useState('openai');
+  const [apiKey, setApiKey] = useState('');
+  const [model, setModel] = useState('gpt-4o-mini');
+
+  // Load current configuration
+  useEffect(() => {
+    async function loadConfig() {
+      try {
+        const response = await fetch('/api/ai-config');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.provider) setProvider(data.provider);
+          if (data.apiKey) setApiKey(data.apiKey);
+          if (data.model) setModel(data.model);
+        }
+      } catch (error) {
+        console.error('Failed to load AI config:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadConfig();
+  }, []);
+
+  const handleTest = async () => {
+    if (!apiKey) {
+      alert('Please enter an API key');
+      return;
+    }
+
+    setTesting(true);
+    try {
+      const response = await fetch('/api/ai-config/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, apiKey, model }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        alert('Connection successful!');
+      } else {
+        alert(`Connection failed: ${data.error}`);
+      }
+    } catch (_error) {
+      alert('Connection test failed');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!apiKey) {
+      alert('Please enter an API key');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetch('/api/ai-config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, apiKey, model, enabled: true }),
+      });
+
+      if (response.ok) {
+        alert('AI configuration saved successfully');
+        setTimeout(() => window.location.reload(), 1000);
+      } else {
+        const data = await response.json();
+        alert(`Failed to save: ${data.error}`);
+      }
+    } catch (_error) {
+      alert('Failed to save configuration');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -290,10 +436,14 @@ function AIConfigTab() {
             <label className="block text-sm font-semibold text-slate-700 mb-2">
               AI Provider
             </label>
-            <select className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent">
-              <option>OpenAI (GPT-4)</option>
-              <option>Anthropic (Claude 3.5 Sonnet)</option>
-              <option>Azure OpenAI</option>
+            <select
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+              className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            >
+              <option value="openai">OpenAI (GPT-4)</option>
+              <option value="anthropic">Anthropic (Claude 3.5 Sonnet)</option>
+              <option value="azure">Azure OpenAI</option>
             </select>
           </div>
 
@@ -303,6 +453,8 @@ function AIConfigTab() {
             </label>
             <input
               type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
               placeholder="sk-..."
               className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             />
@@ -315,10 +467,32 @@ function AIConfigTab() {
             <label className="block text-sm font-semibold text-slate-700 mb-2">
               Model
             </label>
-            <select className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent">
-              <option>GPT-4 Turbo</option>
-              <option>GPT-3.5 Turbo</option>
-              <option>GPT-4o</option>
+            <select
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            >
+              {provider === 'openai' && (
+                <>
+                  <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                  <option value="gpt-4o-mini">GPT-4o mini</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                </>
+              )}
+              {provider === 'anthropic' && (
+                <>
+                  <option value="claude-3-haiku-20240307">
+                    Claude 3 Haiku
+                  </option>
+                  <option value="claude-3-5-sonnet-20241022">
+                    Claude 3.5 Sonnet
+                  </option>
+                  <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                </>
+              )}
+              {provider === 'azure' && (
+                <option value="">Enter deployment name above</option>
+              )}
             </select>
           </div>
 
@@ -332,16 +506,40 @@ function AIConfigTab() {
                 Verify your API key is working correctly
               </p>
             </div>
-            <button className="ml-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
-              Test
+            <button
+              onClick={handleTest}
+              disabled={testing || !apiKey}
+              className="ml-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {testing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Testing...
+                </>
+              ) : (
+                'Test'
+              )}
             </button>
           </div>
         </div>
 
         <div className="flex justify-end pt-4 border-t border-slate-200">
-          <button className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg shadow-orange-500/30 hover:shadow-xl hover:shadow-orange-500/40 transform hover:scale-105">
-            <Save className="w-4 h-4" />
-            Save Configuration
+          <button
+            onClick={handleSave}
+            disabled={saving || !apiKey}
+            className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg shadow-orange-500/30 hover:shadow-xl hover:shadow-orange-500/40 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                Save Configuration
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -471,6 +669,80 @@ function SecurityTab() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function UsersTab() {
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentUserRole, setCurrentUserRole] = useState<string>('');
+  const [firstUserId, setFirstUserId] = useState<string>('');
+
+  useEffect(() => {
+    async function loadUsers() {
+      try {
+        // Fetch current user
+        const userResponse = await fetch('/api/user');
+        const userData = await userResponse.json();
+        setCurrentUserRole(userData.role);
+
+        // Fetch all users
+        const usersResponse = await fetch('/api/users');
+        if (usersResponse.ok) {
+          const usersData = await usersResponse.json();
+          setUsers(usersData);
+          // First user by creation date is the owner who can't have role changed
+          if (usersData.length > 0) {
+            const sortedUsers = [...usersData].sort(
+              (a: any, b: any) =>
+                new Date(a.created_at).getTime() -
+                new Date(b.created_at).getTime()
+            );
+            setFirstUserId(sortedUsers[0].id);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load users:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadUsers();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-slate-900 mb-2">
+          User Management
+        </h2>
+        <p className="text-sm text-slate-600">
+          Manage users and assign roles within your organization
+        </p>
+      </div>
+
+      {users.length === 0 ? (
+        <div className="bg-white rounded-lg border-2 border-slate-200 p-12 text-center shadow-lg">
+          <p className="text-slate-500">No users found in your organization.</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-lg border-2 border-slate-200 shadow-lg overflow-hidden">
+          <UserManagementTable
+            users={users}
+            currentUserRole={currentUserRole as any}
+            firstUserId={firstUserId}
+          />
+        </div>
+      )}
     </div>
   );
 }

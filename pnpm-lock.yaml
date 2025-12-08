@@ -53,6 +53,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@easyping/ai':
+        specifier: workspace:^
+        version: link:../../packages/ai
       '@easyping/types':
         specifier: workspace:^
         version: link:../../packages/types

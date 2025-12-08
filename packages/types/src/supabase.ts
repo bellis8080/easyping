@@ -77,6 +77,7 @@ export type Database = {
       };
       organizations: {
         Row: {
+          ai_config: Json | null;
           created_at: string;
           domain: string | null;
           id: string;
@@ -84,6 +85,7 @@ export type Database = {
           settings: Json | null;
         };
         Insert: {
+          ai_config?: Json | null;
           created_at?: string;
           domain?: string | null;
           id?: string;
@@ -91,6 +93,7 @@ export type Database = {
           settings?: Json | null;
         };
         Update: {
+          ai_config?: Json | null;
           created_at?: string;
           domain?: string | null;
           id?: string;
@@ -98,57 +101,6 @@ export type Database = {
           settings?: Json | null;
         };
         Relationships: [];
-      };
-      ping_attachments: {
-        Row: {
-          created_at: string;
-          file_name: string;
-          file_path: string;
-          file_size: number;
-          id: string;
-          mime_type: string;
-          ping_message_id: string;
-          storage_bucket: string;
-          uploaded_by: string;
-        };
-        Insert: {
-          created_at?: string;
-          file_name: string;
-          file_path: string;
-          file_size: number;
-          id?: string;
-          mime_type: string;
-          ping_message_id: string;
-          storage_bucket?: string;
-          uploaded_by: string;
-        };
-        Update: {
-          created_at?: string;
-          file_name?: string;
-          file_path?: string;
-          file_size?: number;
-          id?: string;
-          mime_type?: string;
-          ping_message_id?: string;
-          storage_bucket?: string;
-          uploaded_by?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: 'ping_attachments_ping_message_id_fkey';
-            columns: ['ping_message_id'];
-            isOneToOne: false;
-            referencedRelation: 'ping_messages';
-            referencedColumns: ['id'];
-          },
-          {
-            foreignKeyName: 'ping_attachments_uploaded_by_fkey';
-            columns: ['uploaded_by'];
-            isOneToOne: false;
-            referencedRelation: 'users';
-            referencedColumns: ['id'];
-          },
-        ];
       };
       ping_messages: {
         Row: {
@@ -255,16 +207,12 @@ export type Database = {
           closed_at: string | null;
           created_at: string;
           created_by: string;
-          first_response_at: string | null;
           id: string;
-          last_agent_reply_at: string | null;
-          last_user_reply_at: string | null;
           ping_number: number;
           priority: string;
           resolved_at: string | null;
           sla_due_at: string | null;
           status: string;
-          status_changed_at: string | null;
           tenant_id: string;
           title: string;
           updated_at: string;
@@ -276,16 +224,12 @@ export type Database = {
           closed_at?: string | null;
           created_at?: string;
           created_by: string;
-          first_response_at?: string | null;
           id?: string;
-          last_agent_reply_at?: string | null;
-          last_user_reply_at?: string | null;
           ping_number: number;
           priority?: string;
           resolved_at?: string | null;
           sla_due_at?: string | null;
           status?: string;
-          status_changed_at?: string | null;
           tenant_id: string;
           title: string;
           updated_at?: string;
@@ -297,16 +241,12 @@ export type Database = {
           closed_at?: string | null;
           created_at?: string;
           created_by?: string;
-          first_response_at?: string | null;
           id?: string;
-          last_agent_reply_at?: string | null;
-          last_user_reply_at?: string | null;
           ping_number?: number;
           priority?: string;
           resolved_at?: string | null;
           sla_due_at?: string | null;
           status?: string;
-          status_changed_at?: string | null;
           tenant_id?: string;
           title?: string;
           updated_at?: string;
@@ -391,8 +331,16 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      decrypt_api_key: {
+        Args: { encrypted_key: string; org_id: string };
+        Returns: string;
+      };
       decrypt_data: {
         Args: { encrypted_data: string; key: string };
+        Returns: string;
+      };
+      encrypt_api_key: {
+        Args: { api_key: string; org_id: string };
         Returns: string;
       };
       encrypt_data: { Args: { data: string; key: string }; Returns: string };

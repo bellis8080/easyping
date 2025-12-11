@@ -115,11 +115,33 @@ describe('POST /api/pings', () => {
       }),
     };
 
+    // Mock organization AI config check (no AI configured - fallback path)
+    const mockOrgQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: { ai_config: null }, // No AI configured
+        error: null,
+      }),
+    };
+
+    // Mock category lookup for "Needs Review"
+    const mockCategoryQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: { id: 'category-needs-review' },
+        error: null,
+      }),
+    };
+
     // Setup mock return values
     mockSupabaseClient.from
       .mockReturnValueOnce(mockProfileQuery) // First call: users table
-      .mockReturnValueOnce(mockPingInsert) // Second call: pings table
-      .mockReturnValueOnce(mockMessageInsert); // Third call: ping_messages table
+      .mockReturnValueOnce(mockOrgQuery) // Second call: organizations table (AI config)
+      .mockReturnValueOnce(mockCategoryQuery) // Third call: categories table
+      .mockReturnValueOnce(mockPingInsert) // Fourth call: pings table
+      .mockReturnValueOnce(mockMessageInsert); // Fifth call: ping_messages table
 
     const request = createMockRequest({ message: 'Test message content' });
     const response = await POST(request);
@@ -133,16 +155,19 @@ describe('POST /api/pings', () => {
 
     // Verify the correct database operations were performed
     expect(mockSupabaseClient.from).toHaveBeenCalledWith('users');
+    expect(mockSupabaseClient.from).toHaveBeenCalledWith('organizations');
+    expect(mockSupabaseClient.from).toHaveBeenCalledWith('categories');
     expect(mockSupabaseClient.from).toHaveBeenCalledWith('pings');
     expect(mockSupabaseClient.from).toHaveBeenCalledWith('ping_messages');
 
-    // Verify ping insert was called with correct data
+    // Verify ping insert was called with correct data (fallback path includes category_id)
     expect(mockPingInsert.insert).toHaveBeenCalledWith({
       tenant_id: 'tenant-123',
       created_by: 'user-123',
       title: 'Test message content',
       status: 'new',
       priority: 'normal',
+      category_id: 'category-needs-review',
     });
 
     // Verify message insert was called with correct data
@@ -313,8 +338,30 @@ describe('POST /api/pings', () => {
       }),
     };
 
+    // Mock organization AI config check (no AI configured - fallback path)
+    const mockOrgQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: { ai_config: null }, // No AI configured
+        error: null,
+      }),
+    };
+
+    // Mock category lookup for "Needs Review"
+    const mockCategoryQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: { id: 'category-needs-review' },
+        error: null,
+      }),
+    };
+
     mockSupabaseClient.from
       .mockReturnValueOnce(mockProfileQuery)
+      .mockReturnValueOnce(mockOrgQuery)
+      .mockReturnValueOnce(mockCategoryQuery)
       .mockReturnValueOnce(mockPingInsert)
       .mockReturnValueOnce(mockMessageInsert);
 
@@ -326,10 +373,11 @@ describe('POST /api/pings', () => {
     expect(data.ping.title).toBe(expectedTitle);
     expect(data.ping.title.length).toBe(53); // 50 chars + '...'
 
-    // Verify insert was called with truncated title
+    // Verify insert was called with truncated title (fallback path includes category_id)
     expect(mockPingInsert.insert).toHaveBeenCalledWith(
       expect.objectContaining({
         title: expectedTitle,
+        category_id: 'category-needs-review',
       })
     );
   });
@@ -384,8 +432,30 @@ describe('POST /api/pings', () => {
       }),
     };
 
+    // Mock organization AI config check (no AI configured - fallback path)
+    const mockOrgQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: { ai_config: null }, // No AI configured
+        error: null,
+      }),
+    };
+
+    // Mock category lookup for "Needs Review"
+    const mockCategoryQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: { id: 'category-needs-review' },
+        error: null,
+      }),
+    };
+
     mockSupabaseClient.from
       .mockReturnValueOnce(mockProfileQuery)
+      .mockReturnValueOnce(mockOrgQuery)
+      .mockReturnValueOnce(mockCategoryQuery)
       .mockReturnValueOnce(mockPingInsert)
       .mockReturnValueOnce(mockMessageInsert);
 
@@ -399,6 +469,8 @@ describe('POST /api/pings', () => {
 
   /**
    * Test 8: Rollback occurs if message creation fails
+   * Note: With AI integration, rollback happens for draft pings, not fallback path
+   * This test exercises the AI-enabled path where draft pings are created
    */
   it('should rollback ping creation if message creation fails', async () => {
     const mockUser = { id: 'user-123', email: 'test@example.com' };
@@ -408,8 +480,8 @@ describe('POST /api/pings', () => {
       tenant_id: 'tenant-123',
       ping_number: 1,
       created_by: 'user-123',
-      title: 'Test message',
-      status: 'new',
+      title: null, // Draft ping has null title
+      status: 'draft',
       priority: 'normal',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -425,6 +497,22 @@ describe('POST /api/pings', () => {
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({
         data: mockUserProfile,
+        error: null,
+      }),
+    };
+
+    // Mock organization AI config (AI IS configured - triggers draft path with rollback)
+    const mockOrgQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: {
+          ai_config: {
+            provider: 'openai',
+            model: 'gpt-4o-mini',
+            encrypted_api_key: 'encrypted-key',
+          },
+        },
         error: null,
       }),
     };
@@ -457,6 +545,7 @@ describe('POST /api/pings', () => {
 
     mockSupabaseClient.from
       .mockReturnValueOnce(mockProfileQuery) // users query
+      .mockReturnValueOnce(mockOrgQuery) // organizations query (AI config)
       .mockReturnValueOnce(mockPingInsert) // pings insert
       .mockReturnValueOnce(mockMessageInsert) // ping_messages insert (fails)
       .mockReturnValueOnce(mockPingDelete); // pings delete (rollback)

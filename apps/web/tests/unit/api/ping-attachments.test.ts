@@ -137,10 +137,12 @@ describe('POST /api/pings/[pingNumber]/messages with attachments', () => {
       }),
     });
 
-    // Mock ping update (using admin client now)
+    // Mock ping update (using admin client now) - need .select() chain
     mockAdminClient.from.mockReturnValueOnce({
       update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({
+      eq: vi.fn().mockReturnThis(),
+      select: vi.fn().mockResolvedValue({
+        data: [{ id: 'ping-123' }],
         error: null,
       }),
     });
@@ -373,10 +375,12 @@ describe('POST /api/pings/[pingNumber]/messages with attachments', () => {
       }),
     });
 
-    // Mock ping update (using admin client now)
+    // Mock ping update (using admin client now) - need .select() chain
     mockAdminClient.from.mockReturnValueOnce({
       update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({
+      eq: vi.fn().mockReturnThis(),
+      select: vi.fn().mockResolvedValue({
+        data: [{ id: 'ping-123' }],
         error: null,
       }),
     });

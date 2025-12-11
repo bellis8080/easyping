@@ -10,6 +10,12 @@ import { POST } from './route';
 import { NextRequest } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+// Helper to create proper PostgrestSingleResponse mock
+function mockRpcResponse<T>(data: T, error: null = null) {
+  return { data, error, count: null, status: 200, statusText: 'OK' };
+}
+// Note: mockRpcErrorResponse removed - not needed in this file
+
 // Mock Supabase server client
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(),
@@ -143,9 +149,9 @@ describe('POST /api/pings/[pingNumber]/echo/continue', () => {
     });
 
     // Mock RPC calls
-    vi.mocked(mockSupabase.rpc)
-      .mockResolvedValueOnce({ data: 'decrypted-key', error: null }) // decrypt_api_key
-      .mockResolvedValueOnce({ data: mockEchoUserId, error: null }); // get_echo_user
+    vi.mocked(mockSupabase.rpc!)
+      .mockResolvedValueOnce(mockRpcResponse('decrypted-key')) // decrypt_api_key
+      .mockResolvedValueOnce(mockRpcResponse(mockEchoUserId)); // get_echo_user
 
     const { determineWhenToEscalate, analyzeConversation } = await import(
       '@/lib/services/echo-conversation-service'
@@ -227,9 +233,9 @@ describe('POST /api/pings/[pingNumber]/echo/continue', () => {
     });
 
     // Mock RPC calls
-    vi.mocked(mockSupabase.rpc)
-      .mockResolvedValueOnce({ data: 'decrypted-key', error: null }) // decrypt_api_key
-      .mockResolvedValueOnce({ data: mockEchoUserId, error: null }); // get_echo_user
+    vi.mocked(mockSupabase.rpc!)
+      .mockResolvedValueOnce(mockRpcResponse('decrypted-key')) // decrypt_api_key
+      .mockResolvedValueOnce(mockRpcResponse(mockEchoUserId)); // get_echo_user
 
     const { determineWhenToEscalate, analyzeConversation } = await import(
       '@/lib/services/echo-conversation-service'
@@ -297,9 +303,9 @@ describe('POST /api/pings/[pingNumber]/echo/continue', () => {
     });
 
     // Mock RPC calls
-    vi.mocked(mockSupabase.rpc)
-      .mockResolvedValueOnce({ data: 'decrypted-key', error: null }) // decrypt_api_key
-      .mockResolvedValueOnce({ data: 'echo-123', error: null }); // get_echo_user
+    vi.mocked(mockSupabase.rpc!)
+      .mockResolvedValueOnce(mockRpcResponse('decrypted-key')) // decrypt_api_key
+      .mockResolvedValueOnce(mockRpcResponse('echo-123')); // get_echo_user
 
     const { determineWhenToEscalate, generateProblemStatement } = await import(
       '@/lib/services/echo-conversation-service'
@@ -364,9 +370,9 @@ describe('POST /api/pings/[pingNumber]/echo/continue', () => {
     });
 
     // Mock RPC calls
-    vi.mocked(mockSupabase.rpc)
-      .mockResolvedValueOnce({ data: 'decrypted-key', error: null }) // decrypt_api_key
-      .mockResolvedValueOnce({ data: 'echo-123', error: null }); // get_echo_user
+    vi.mocked(mockSupabase.rpc!)
+      .mockResolvedValueOnce(mockRpcResponse('decrypted-key')) // decrypt_api_key
+      .mockResolvedValueOnce(mockRpcResponse('echo-123')); // get_echo_user
 
     const { determineWhenToEscalate, generateProblemStatement } = await import(
       '@/lib/services/echo-conversation-service'
@@ -499,9 +505,9 @@ describe('POST /api/pings/[pingNumber]/echo/continue', () => {
     });
 
     // Mock RPC calls
-    vi.mocked(mockSupabase.rpc)
-      .mockResolvedValueOnce({ data: 'decrypted-key', error: null }) // decrypt_api_key
-      .mockResolvedValueOnce({ data: mockEchoUserId, error: null }); // get_echo_user
+    vi.mocked(mockSupabase.rpc!)
+      .mockResolvedValueOnce(mockRpcResponse('decrypted-key')) // decrypt_api_key
+      .mockResolvedValueOnce(mockRpcResponse(mockEchoUserId)); // get_echo_user
 
     const { determineWhenToEscalate, analyzeConversation } = await import(
       '@/lib/services/echo-conversation-service'

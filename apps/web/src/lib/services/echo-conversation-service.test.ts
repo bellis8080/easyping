@@ -11,8 +11,18 @@ import {
   generateProblemStatement,
   determineWhenToEscalate,
   type EchoConfig,
+  type ConversationMessage,
 } from './echo-conversation-service';
 import type { AIProvider } from '@easyping/ai';
+
+// Helper function to create ConversationMessage array from strings
+// Assumes odd messages are from user, even messages are from Echo
+function createConversation(messages: string[]): ConversationMessage[] {
+  return messages.map((content, index) => ({
+    role: index % 2 === 0 ? 'user' : 'echo',
+    content,
+  })) as ConversationMessage[];
+}
 
 // Mock the AI provider factory
 vi.mock('@easyping/ai', () => ({
@@ -57,7 +67,7 @@ describe('echo-conversation-service', () => {
         }),
       });
 
-      const conversation = ['My email is broken'];
+      const conversation = createConversation(['My email is broken']);
       const result = await analyzeConversation(conversation, config);
 
       expect(result.problemUnderstood).toBe(false);
@@ -80,12 +90,12 @@ describe('echo-conversation-service', () => {
         }),
       });
 
-      const conversation = [
+      const conversation = createConversation([
         'My email is broken',
         'I cannot log in',
         'It says credentials incorrect',
         'This started this morning',
-      ];
+      ]);
       const result = await analyzeConversation(conversation, config);
 
       expect(result.problemUnderstood).toBe(true);
@@ -104,7 +114,7 @@ describe('echo-conversation-service', () => {
         }),
       });
 
-      const conversation = ['My computer is not working'];
+      const conversation = createConversation(['My computer is not working']);
       const result = await analyzeConversation(conversation, config);
 
       // Question should be about understanding the problem, not categorizing
@@ -119,7 +129,7 @@ describe('echo-conversation-service', () => {
         new Error('AI service unavailable')
       );
 
-      const conversation = ['Help!'];
+      const conversation = createConversation(['Help!']);
       const result = await analyzeConversation(conversation, config);
 
       // Should return fallback question
@@ -134,13 +144,13 @@ describe('echo-conversation-service', () => {
         new Error('AI timeout')
       );
 
-      const conversation = [
+      const conversation = createConversation([
         'Issue 1',
         'Response 1',
         'Issue 2',
         'Response 2',
         'Issue 3',
-      ];
+      ]);
       const result = await analyzeConversation(conversation, config);
 
       // With enough conversation but AI failed, should mark as understood for escalation
@@ -158,12 +168,12 @@ describe('echo-conversation-service', () => {
           'User unable to log into email since this morning. Outlook shows credentials incorrect error. User tried resetting password but issue persists.',
       });
 
-      const conversation = [
+      const conversation = createConversation([
         'Cannot log into email',
         'Started this morning',
         'Credentials incorrect error in Outlook',
         'Already tried password reset',
-      ];
+      ]);
       const result = await generateProblemStatement(conversation, config);
 
       expect(result).toBeTruthy();
@@ -176,7 +186,11 @@ describe('echo-conversation-service', () => {
         new Error('AI error')
       );
 
-      const conversation = ['Problem A', 'Problem B', 'Problem C'];
+      const conversation = createConversation([
+        'Problem A',
+        'Problem B',
+        'Problem C',
+      ]);
       const result = await generateProblemStatement(conversation, config);
 
       // Should return joined conversation truncated to 500 chars
@@ -192,7 +206,7 @@ describe('echo-conversation-service', () => {
         reasoning: longReasoning,
       });
 
-      const conversation = ['Long problem description'];
+      const conversation = createConversation(['Long problem description']);
       const result = await generateProblemStatement(conversation, config);
 
       expect(result.length).toBeLessThanOrEqual(500);
@@ -201,7 +215,11 @@ describe('echo-conversation-service', () => {
 
   describe('determineWhenToEscalate', () => {
     it('should not escalate early in conversation', async () => {
-      const conversation = ['Issue', 'Response 1', 'Response 2'];
+      const conversation = createConversation([
+        'Issue',
+        'Response 1',
+        'Response 2',
+      ]);
       const clarificationCount = 2;
 
       const result = await determineWhenToEscalate(
@@ -214,7 +232,7 @@ describe('echo-conversation-service', () => {
     });
 
     it('should enforce hard limit at 12 questions', async () => {
-      const conversation = Array(12).fill('message');
+      const conversation = createConversation(Array(12).fill('message'));
       const clarificationCount = 12;
 
       const result = await determineWhenToEscalate(
@@ -227,7 +245,7 @@ describe('echo-conversation-service', () => {
     });
 
     it('should detect explicit requests for human help', async () => {
-      const conversation = ['I want to talk to a person'];
+      const conversation = createConversation(['I want to talk to a person']);
       const clarificationCount = 3;
 
       const result = await determineWhenToEscalate(
@@ -247,7 +265,11 @@ describe('echo-conversation-service', () => {
       ];
 
       for (const message of testCases) {
-        const result = await determineWhenToEscalate([message], 3, config);
+        const result = await determineWhenToEscalate(
+          createConversation([message]),
+          3,
+          config
+        );
         expect(result).toBe(true);
       }
     });
@@ -263,7 +285,9 @@ describe('echo-conversation-service', () => {
         }),
       });
 
-      const conversation = Array(9).fill('vague response');
+      const conversation = createConversation(
+        Array(9).fill('vague response') as string[]
+      );
       const clarificationCount = 9;
 
       const result = await determineWhenToEscalate(
@@ -285,7 +309,9 @@ describe('echo-conversation-service', () => {
         }),
       });
 
-      const conversation = Array(8).fill('detailed response');
+      const conversation = createConversation(
+        Array(8).fill('detailed response') as string[]
+      );
       const clarificationCount = 8;
 
       const result = await determineWhenToEscalate(
@@ -302,7 +328,9 @@ describe('echo-conversation-service', () => {
         new Error('AI timeout')
       );
 
-      const conversation = Array(10).fill('message');
+      const conversation = createConversation(
+        Array(10).fill('message') as string[]
+      );
       const clarificationCount = 10;
 
       const result = await determineWhenToEscalate(
@@ -320,7 +348,9 @@ describe('echo-conversation-service', () => {
         new Error('AI error')
       );
 
-      const conversation = Array(5).fill('message');
+      const conversation = createConversation(
+        Array(5).fill('message') as string[]
+      );
       const clarificationCount = 5;
 
       const result = await determineWhenToEscalate(

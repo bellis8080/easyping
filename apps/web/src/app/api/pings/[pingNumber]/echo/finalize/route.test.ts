@@ -10,6 +10,11 @@ import { POST } from './route';
 import { NextRequest } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+// Helper to create proper PostgrestSingleResponse mock
+function mockRpcResponse<T>(data: T, error: null = null) {
+  return { data, error, count: null, status: 200, statusText: 'OK' };
+}
+
 // Mock Supabase server client
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(),
@@ -149,10 +154,9 @@ describe('POST /api/pings/[pingNumber]/echo/finalize', () => {
       error: null,
     });
 
-    vi.mocked(mockSupabase.rpc).mockResolvedValueOnce({
-      data: 'decrypted-key',
-      error: null,
-    });
+    vi.mocked(mockSupabase.rpc!).mockResolvedValueOnce(
+      mockRpcResponse('decrypted-key')
+    );
 
     // Mock categories query
     (mockSupabase as any)._mockQueryResponse({
@@ -160,10 +164,9 @@ describe('POST /api/pings/[pingNumber]/echo/finalize', () => {
       error: null,
     });
 
-    vi.mocked(mockSupabase.rpc).mockResolvedValueOnce({
-      data: mockEchoUserId,
-      error: null,
-    });
+    vi.mocked(mockSupabase.rpc!).mockResolvedValueOnce(
+      mockRpcResponse(mockEchoUserId)
+    );
 
     const { categorizeProblemStatement, generateTitle } = await import(
       '@/lib/services/problem-categorization-service'
@@ -241,20 +244,18 @@ describe('POST /api/pings/[pingNumber]/echo/finalize', () => {
       error: null,
     });
 
-    vi.mocked(mockSupabase.rpc).mockResolvedValueOnce({
-      data: 'decrypted-key',
-      error: null,
-    });
+    vi.mocked(mockSupabase.rpc!).mockResolvedValueOnce(
+      mockRpcResponse('decrypted-key')
+    );
 
     (mockSupabase as any)._mockQueryResponse({
       data: mockCategories,
       error: null,
     });
 
-    vi.mocked(mockSupabase.rpc).mockResolvedValueOnce({
-      data: 'echo-123',
-      error: null,
-    });
+    vi.mocked(mockSupabase.rpc!).mockResolvedValueOnce(
+      mockRpcResponse('echo-123')
+    );
 
     const { categorizeProblemStatement, generateTitle } = await import(
       '@/lib/services/problem-categorization-service'
@@ -450,10 +451,9 @@ describe('POST /api/pings/[pingNumber]/echo/finalize', () => {
       error: null,
     });
 
-    vi.mocked(mockSupabase.rpc).mockResolvedValueOnce({
-      data: 'decrypted-key',
-      error: null,
-    });
+    vi.mocked(mockSupabase.rpc!).mockResolvedValueOnce(
+      mockRpcResponse('decrypted-key')
+    );
 
     // No categories available
     (mockSupabase as any)._mockQueryResponse({
@@ -512,10 +512,9 @@ describe('POST /api/pings/[pingNumber]/echo/finalize', () => {
       error: null,
     });
 
-    vi.mocked(mockSupabase.rpc).mockResolvedValueOnce({
-      data: 'decrypted-key',
-      error: null,
-    });
+    vi.mocked(mockSupabase.rpc!).mockResolvedValueOnce(
+      mockRpcResponse('decrypted-key')
+    );
 
     (mockSupabase as any)._mockQueryResponse({
       data: mockCategories,
@@ -584,20 +583,18 @@ describe('POST /api/pings/[pingNumber]/echo/finalize', () => {
       error: null,
     });
 
-    vi.mocked(mockSupabase.rpc).mockResolvedValueOnce({
-      data: 'decrypted-key',
-      error: null,
-    });
+    vi.mocked(mockSupabase.rpc!).mockResolvedValueOnce(
+      mockRpcResponse('decrypted-key')
+    );
 
     (mockSupabase as any)._mockQueryResponse({
       data: mockCategories,
       error: null,
     });
 
-    vi.mocked(mockSupabase.rpc).mockResolvedValueOnce({
-      data: 'echo-123',
-      error: null,
-    });
+    vi.mocked(mockSupabase.rpc!).mockResolvedValueOnce(
+      mockRpcResponse('echo-123')
+    );
 
     const { categorizeProblemStatement, generateTitle } = await import(
       '@/lib/services/problem-categorization-service'

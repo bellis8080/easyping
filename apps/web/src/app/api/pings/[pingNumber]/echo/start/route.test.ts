@@ -10,6 +10,21 @@ import { POST } from './route';
 import { NextRequest } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+// Helper to create proper PostgrestSingleResponse mock
+function mockRpcResponse<T>(data: T) {
+  return { data, error: null, count: null, status: 200, statusText: 'OK' };
+}
+function mockRpcErrorResponse(error: { message: string }) {
+  // Cast as any to satisfy PostgrestSingleResponse union type
+  return {
+    data: null,
+    error,
+    count: null,
+    status: 400,
+    statusText: 'Bad Request',
+  } as any;
+}
+
 // Mock Supabase server client
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(),
@@ -136,9 +151,9 @@ describe('POST /api/pings/[pingNumber]/echo/start', () => {
     });
 
     // Mock RPC calls
-    vi.mocked(mockSupabase.rpc)
-      .mockResolvedValueOnce({ data: mockEchoUserId, error: null }) // get_echo_user
-      .mockResolvedValueOnce({ data: 'decrypted-key', error: null }); // decrypt_api_key
+    vi.mocked(mockSupabase.rpc!)
+      .mockResolvedValueOnce(mockRpcResponse(mockEchoUserId)) // get_echo_user
+      .mockResolvedValueOnce(mockRpcResponse('decrypted-key')); // decrypt_api_key
 
     // Mock analyzeConversation
     const { analyzeConversation } = await import(
@@ -207,9 +222,9 @@ describe('POST /api/pings/[pingNumber]/echo/start', () => {
     });
 
     // Mock RPC calls
-    vi.mocked(mockSupabase.rpc)
-      .mockResolvedValueOnce({ data: mockEchoUserId, error: null }) // get_echo_user
-      .mockResolvedValueOnce({ data: 'decrypted-key', error: null }); // decrypt_api_key
+    vi.mocked(mockSupabase.rpc!)
+      .mockResolvedValueOnce(mockRpcResponse(mockEchoUserId)) // get_echo_user
+      .mockResolvedValueOnce(mockRpcResponse('decrypted-key')); // decrypt_api_key
 
     const { analyzeConversation } = await import(
       '@/lib/services/echo-conversation-service'
@@ -332,10 +347,9 @@ describe('POST /api/pings/[pingNumber]/echo/start', () => {
     (mockSupabase as any)._mockSingleResponse({ data: mockPing, error: null });
 
     // Echo user creation fails
-    vi.mocked(mockSupabase.rpc).mockResolvedValueOnce({
-      data: null,
-      error: { message: 'RPC failed' } as any,
-    });
+    vi.mocked(mockSupabase.rpc!).mockResolvedValueOnce(
+      mockRpcErrorResponse({ message: 'RPC failed' })
+    );
 
     const params = Promise.resolve({ pingNumber: '123' });
     const response = await POST(mockRequest, { params });
@@ -377,10 +391,9 @@ describe('POST /api/pings/[pingNumber]/echo/start', () => {
       error: null,
     });
 
-    vi.mocked(mockSupabase.rpc).mockResolvedValueOnce({
-      data: mockEchoUserId,
-      error: null,
-    });
+    vi.mocked(mockSupabase.rpc!).mockResolvedValueOnce(
+      mockRpcResponse(mockEchoUserId)
+    );
 
     const params = Promise.resolve({ pingNumber: '123' });
     const response = await POST(mockRequest, { params });
@@ -429,9 +442,9 @@ describe('POST /api/pings/[pingNumber]/echo/start', () => {
     });
 
     // Mock RPC calls
-    vi.mocked(mockSupabase.rpc)
-      .mockResolvedValueOnce({ data: mockEchoUserId, error: null }) // get_echo_user
-      .mockResolvedValueOnce({ data: 'decrypted-key', error: null }); // decrypt_api_key
+    vi.mocked(mockSupabase.rpc!)
+      .mockResolvedValueOnce(mockRpcResponse(mockEchoUserId)) // get_echo_user
+      .mockResolvedValueOnce(mockRpcResponse('decrypted-key')); // decrypt_api_key
 
     // AI returns no nextQuestion
     const { analyzeConversation } = await import(
@@ -492,9 +505,9 @@ describe('POST /api/pings/[pingNumber]/echo/start', () => {
     });
 
     // Mock RPC calls
-    vi.mocked(mockSupabase.rpc)
-      .mockResolvedValueOnce({ data: mockEchoUserId, error: null }) // get_echo_user
-      .mockResolvedValueOnce({ data: 'decrypted-key', error: null }); // decrypt_api_key
+    vi.mocked(mockSupabase.rpc!)
+      .mockResolvedValueOnce(mockRpcResponse(mockEchoUserId)) // get_echo_user
+      .mockResolvedValueOnce(mockRpcResponse('decrypted-key')); // decrypt_api_key
 
     const { analyzeConversation } = await import(
       '@/lib/services/echo-conversation-service'

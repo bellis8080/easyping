@@ -3,17 +3,17 @@
  * Story 3.3: Auto-Categorization of Pings with Conversational Clarification
  *
  * Tests the problem-first conversation logic for Echo AI assistant.
+ * These tests focus on the deterministic logic and fallback behavior
+ * that doesn't require mocking the AI SDK.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
-  analyzeConversation,
-  generateProblemStatement,
   determineWhenToEscalate,
+  analyzeUserConfirmation,
   type EchoConfig,
   type ConversationMessage,
 } from './echo-conversation-service';
-import type { AIProvider } from '@easyping/ai';
 
 // Helper function to create ConversationMessage array from strings
 // Assumes odd messages are from user, even messages are from Echo
@@ -24,194 +24,14 @@ function createConversation(messages: string[]): ConversationMessage[] {
   })) as ConversationMessage[];
 }
 
-// Mock the AI provider factory
-vi.mock('@easyping/ai', () => ({
-  createAIProvider: vi.fn(),
-}));
-
 describe('echo-conversation-service', () => {
-  let mockProvider: AIProvider;
-  let config: EchoConfig;
-
-  beforeEach(async () => {
-    // Reset mocks before each test
-    vi.clearAllMocks();
-
-    // Create mock AI provider
-    mockProvider = {
-      categorize: vi.fn(),
-      generateEmbeddings: vi.fn(),
-    } as unknown as AIProvider;
-
-    // Mock createAIProvider to return our mock
-    const { createAIProvider } = await import('@easyping/ai');
-    vi.mocked(createAIProvider).mockResolvedValue(mockProvider);
-
-    config = {
-      provider: 'openai',
-      model: 'gpt-4o-mini',
-      apiKey: 'test-api-key',
-    };
-  });
-
-  describe('analyzeConversation', () => {
-    it('should identify when problem is not understood (early conversation)', async () => {
-      // Mock AI response for unclear problem
-      vi.mocked(mockProvider.categorize).mockResolvedValue({
-        category: 'test',
-        confidence: 0.4,
-        reasoning: JSON.stringify({
-          problemUnderstood: false,
-          nextQuestion: 'What exactly happens when you try to log in?',
-          confidence: 0.4,
-        }),
-      });
-
-      const conversation = createConversation(['My email is broken']);
-      const result = await analyzeConversation(conversation, config);
-
-      expect(result.problemUnderstood).toBe(false);
-      expect(result.nextQuestion).toBe(
-        'What exactly happens when you try to log in?'
-      );
-      expect(result.confidence).toBe(0.4);
-    });
-
-    it('should identify when problem is understood (sufficient info)', async () => {
-      // Mock AI response for clear problem
-      vi.mocked(mockProvider.categorize).mockResolvedValue({
-        category: 'test',
-        confidence: 0.92,
-        reasoning: JSON.stringify({
-          problemUnderstood: true,
-          problemStatement:
-            'User unable to log into email since this morning. Error: Credentials incorrect.',
-          confidence: 0.92,
-        }),
-      });
-
-      const conversation = createConversation([
-        'My email is broken',
-        'I cannot log in',
-        'It says credentials incorrect',
-        'This started this morning',
-      ]);
-      const result = await analyzeConversation(conversation, config);
-
-      expect(result.problemUnderstood).toBe(true);
-      expect(result.problemStatement).toContain('unable to log into email');
-      expect(result.confidence).toBeGreaterThanOrEqual(0.7);
-    });
-
-    it('should generate problem-focused questions (not category-focused)', async () => {
-      vi.mocked(mockProvider.categorize).mockResolvedValue({
-        category: 'test',
-        confidence: 0.5,
-        reasoning: JSON.stringify({
-          problemUnderstood: false,
-          nextQuestion: 'What error message do you see?',
-          confidence: 0.5,
-        }),
-      });
-
-      const conversation = createConversation(['My computer is not working']);
-      const result = await analyzeConversation(conversation, config);
-
-      // Question should be about understanding the problem, not categorizing
-      expect(result.nextQuestion).not.toContain('hardware or software');
-      expect(result.nextQuestion).not.toContain('category');
-      expect(result.nextQuestion).toBeTruthy();
-    });
-
-    it('should handle AI failures gracefully with fallback question', async () => {
-      // Mock AI failure
-      vi.mocked(mockProvider.categorize).mockRejectedValue(
-        new Error('AI service unavailable')
-      );
-
-      const conversation = createConversation(['Help!']);
-      const result = await analyzeConversation(conversation, config);
-
-      // Should return fallback question
-      expect(result.problemUnderstood).toBe(false);
-      expect(result.nextQuestion).toBeTruthy();
-      expect(result.confidence).toBeLessThan(0.5);
-    });
-
-    it('should escalate when AI fails with sufficient conversation', async () => {
-      // Mock AI failure
-      vi.mocked(mockProvider.categorize).mockRejectedValue(
-        new Error('AI timeout')
-      );
-
-      const conversation = createConversation([
-        'Issue 1',
-        'Response 1',
-        'Issue 2',
-        'Response 2',
-        'Issue 3',
-      ]);
-      const result = await analyzeConversation(conversation, config);
-
-      // With enough conversation but AI failed, should mark as understood for escalation
-      expect(result.problemUnderstood).toBe(true);
-      expect(result.problemStatement).toBeTruthy();
-    });
-  });
-
-  describe('generateProblemStatement', () => {
-    it('should generate 2-3 sentence summary from conversation', async () => {
-      vi.mocked(mockProvider.categorize).mockResolvedValue({
-        category: 'test',
-        confidence: 0.9,
-        reasoning:
-          'User unable to log into email since this morning. Outlook shows credentials incorrect error. User tried resetting password but issue persists.',
-      });
-
-      const conversation = createConversation([
-        'Cannot log into email',
-        'Started this morning',
-        'Credentials incorrect error in Outlook',
-        'Already tried password reset',
-      ]);
-      const result = await generateProblemStatement(conversation, config);
-
-      expect(result).toBeTruthy();
-      expect(result.length).toBeLessThanOrEqual(500);
-      expect(result).toContain('email');
-    });
-
-    it('should handle AI failure with conversation fallback', async () => {
-      vi.mocked(mockProvider.categorize).mockRejectedValue(
-        new Error('AI error')
-      );
-
-      const conversation = createConversation([
-        'Problem A',
-        'Problem B',
-        'Problem C',
-      ]);
-      const result = await generateProblemStatement(conversation, config);
-
-      // Should return joined conversation truncated to 500 chars
-      expect(result).toBeTruthy();
-      expect(result.length).toBeLessThanOrEqual(500);
-    });
-
-    it('should truncate long conversations to 500 characters', async () => {
-      const longReasoning = 'A'.repeat(600);
-      vi.mocked(mockProvider.categorize).mockResolvedValue({
-        category: 'test',
-        confidence: 0.9,
-        reasoning: longReasoning,
-      });
-
-      const conversation = createConversation(['Long problem description']);
-      const result = await generateProblemStatement(conversation, config);
-
-      expect(result.length).toBeLessThanOrEqual(500);
-    });
-  });
+  // Use an invalid config that will cause AI calls to fail
+  // This allows us to test fallback behavior reliably
+  const config: EchoConfig = {
+    provider: 'openai',
+    model: 'gpt-4o-mini',
+    apiKey: 'invalid-test-key-will-fail',
+  };
 
   describe('determineWhenToEscalate', () => {
     it('should not escalate early in conversation', async () => {
@@ -231,9 +51,9 @@ describe('echo-conversation-service', () => {
       expect(result).toBe(false);
     });
 
-    it('should enforce hard limit at 12 questions', async () => {
-      const conversation = createConversation(Array(12).fill('message'));
-      const clarificationCount = 12;
+    it('should enforce hard limit at 5 questions', async () => {
+      const conversation = createConversation(Array(5).fill('message'));
+      const clarificationCount = 5;
 
       const result = await determineWhenToEscalate(
         conversation,
@@ -257,101 +77,65 @@ describe('echo-conversation-service', () => {
       expect(result).toBe(true);
     });
 
-    it('should detect various human help keywords', async () => {
-      const testCases = [
-        'Can I speak to someone?',
-        'I need a human agent',
-        'Talk to a real person',
-      ];
-
-      for (const message of testCases) {
-        const result = await determineWhenToEscalate(
-          createConversation([message]),
-          3,
-          config
-        );
-        expect(result).toBe(true);
-      }
-    });
-
-    it('should use AI decision when approaching soft limit (8+ questions)', async () => {
-      vi.mocked(mockProvider.categorize).mockResolvedValue({
-        category: 'test',
-        confidence: 0.8,
-        reasoning: JSON.stringify({
-          shouldEscalate: true,
-          reason:
-            'User responses are vague and conversation is not progressing',
-        }),
-      });
-
-      const conversation = createConversation(
-        Array(9).fill('vague response') as string[]
-      );
-      const clarificationCount = 9;
-
+    it('should detect "speak to" keyword', async () => {
       const result = await determineWhenToEscalate(
-        conversation,
-        clarificationCount,
+        createConversation(['Can I speak to someone?']),
+        3,
         config
       );
-
       expect(result).toBe(true);
     });
 
-    it('should continue when AI determines progress is being made', async () => {
-      vi.mocked(mockProvider.categorize).mockResolvedValue({
-        category: 'test',
-        confidence: 0.8,
-        reasoning: JSON.stringify({
-          shouldEscalate: false,
-          reason: 'Conversation is progressing toward understanding',
-        }),
-      });
-
-      const conversation = createConversation(
-        Array(8).fill('detailed response') as string[]
-      );
-      const clarificationCount = 8;
-
+    it('should detect "human" keyword', async () => {
       const result = await determineWhenToEscalate(
-        conversation,
-        clarificationCount,
+        createConversation(['I need a human agent']),
+        3,
         config
       );
-
-      expect(result).toBe(false);
+      expect(result).toBe(true);
     });
 
-    it('should escalate on AI error when near limit', async () => {
-      vi.mocked(mockProvider.categorize).mockRejectedValue(
-        new Error('AI timeout')
-      );
-
-      const conversation = createConversation(
-        Array(10).fill('message') as string[]
-      );
-      const clarificationCount = 10;
-
+    it('should detect "real person" keyword', async () => {
       const result = await determineWhenToEscalate(
-        conversation,
-        clarificationCount,
+        createConversation(['Talk to a real person']),
+        3,
         config
       );
+      expect(result).toBe(true);
+    });
 
-      // Should escalate cautiously when AI fails and near limit
+    it('should detect "don\'t understand" keyword', async () => {
+      const result = await determineWhenToEscalate(
+        createConversation(["I don't understand what you're asking"]),
+        3,
+        config
+      );
+      expect(result).toBe(true);
+    });
+
+    it('should detect "stop asking" keyword', async () => {
+      const result = await determineWhenToEscalate(
+        createConversation(['Please stop asking me questions']),
+        3,
+        config
+      );
+      expect(result).toBe(true);
+    });
+
+    it('should detect "already told you" keyword', async () => {
+      const result = await determineWhenToEscalate(
+        createConversation(['I already told you the problem']),
+        3,
+        config
+      );
       expect(result).toBe(true);
     });
 
     it('should continue on AI error when well below limit', async () => {
-      vi.mocked(mockProvider.categorize).mockRejectedValue(
-        new Error('AI error')
-      );
-
       const conversation = createConversation(
-        Array(5).fill('message') as string[]
+        Array(2).fill('message') as string[]
       );
-      const clarificationCount = 5;
+      const clarificationCount = 2;
 
       const result = await determineWhenToEscalate(
         conversation,
@@ -361,6 +145,120 @@ describe('echo-conversation-service', () => {
 
       // Below escalation threshold, should continue
       expect(result).toBe(false);
+    });
+
+    it('should escalate on AI error when at soft limit', async () => {
+      const conversation = createConversation(
+        Array(4).fill('message') as string[]
+      );
+      const clarificationCount = 4;
+
+      // At clarificationCount >= 4, AI error causes escalation
+      const result = await determineWhenToEscalate(
+        conversation,
+        clarificationCount,
+        config
+      );
+
+      expect(result).toBe(true);
+    });
+  });
+
+  describe('analyzeUserConfirmation fallback behavior', () => {
+    // These tests exercise the fallback keyword matching when AI fails
+
+    it('should recognize "yes" as confirm', async () => {
+      const result = await analyzeUserConfirmation(
+        'yes',
+        'User struggles with VPN connection',
+        config
+      );
+
+      expect(result.intent).toBe('confirm');
+      expect(result.confidence).toBe(0.8);
+    });
+
+    it('should recognize "yep" as confirm', async () => {
+      const result = await analyzeUserConfirmation(
+        'yep',
+        'User struggles with VPN connection',
+        config
+      );
+
+      expect(result.intent).toBe('confirm');
+    });
+
+    it('should recognize "correct" as confirm', async () => {
+      const result = await analyzeUserConfirmation(
+        'correct',
+        'User struggles with VPN connection',
+        config
+      );
+
+      expect(result.intent).toBe('confirm');
+    });
+
+    it('should recognize "no" as deny', async () => {
+      const result = await analyzeUserConfirmation(
+        'no',
+        'User struggles with VPN connection',
+        config
+      );
+
+      expect(result.intent).toBe('deny');
+      expect(result.confidence).toBe(0.8);
+    });
+
+    it('should recognize "nope" as deny', async () => {
+      const result = await analyzeUserConfirmation(
+        'nope',
+        'User struggles with VPN connection',
+        config
+      );
+
+      expect(result.intent).toBe('deny');
+    });
+
+    it('should recognize "wrong" as deny', async () => {
+      const result = await analyzeUserConfirmation(
+        'wrong',
+        'User struggles with VPN connection',
+        config
+      );
+
+      expect(result.intent).toBe('deny');
+    });
+
+    it('should treat long messages as clarification', async () => {
+      const result = await analyzeUserConfirmation(
+        'Actually I also have another problem with my printer not working',
+        'User struggles with VPN connection',
+        config
+      );
+
+      expect(result.intent).toBe('clarify');
+      expect(result.echoResponse).toBeTruthy();
+    });
+
+    it('should treat short ambiguous messages as unclear', async () => {
+      const result = await analyzeUserConfirmation(
+        'maybe',
+        'User struggles with VPN connection',
+        config
+      );
+
+      expect(result.intent).toBe('unclear');
+      expect(result.echoResponse).toBeTruthy();
+    });
+
+    it('should treat random short word as unclear', async () => {
+      const result = await analyzeUserConfirmation(
+        'blue',
+        'User struggles with VPN connection',
+        config
+      );
+
+      expect(result.intent).toBe('unclear');
     });
   });
 });

@@ -21,6 +21,11 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(),
 }));
 
+// Mock Supabase JS client (for service role admin client)
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(),
+}));
+
 // Mock Echo conversation service
 vi.mock('@/lib/services/echo-conversation-service', () => ({
   analyzeConversation: vi.fn(),
@@ -82,6 +87,10 @@ describe('POST /api/pings/[pingNumber]/echo/continue', () => {
 
     const { createClient } = await import('@/lib/supabase/server');
     vi.mocked(createClient).mockResolvedValue(mockSupabase as any);
+
+    // Mock @supabase/supabase-js createClient (for admin/service role client)
+    const supabaseJs = await import('@supabase/supabase-js');
+    vi.mocked(supabaseJs.createClient).mockReturnValue(mockSupabase as any);
 
     mockRequest = new NextRequest(
       'http://localhost:4000/api/pings/123/echo/continue',
@@ -271,7 +280,7 @@ describe('POST /api/pings/[pingNumber]/echo/continue', () => {
         .fill(null)
         .map((_, i) => ({
           id: `msg-${i}`,
-          message_text: `Message ${i}`,
+          content: `Message ${i}`,
           message_type: i % 2 === 0 ? 'user' : 'agent',
           created_at: new Date(Date.now() + i * 1000).toISOString(),
         })),
@@ -307,9 +316,17 @@ describe('POST /api/pings/[pingNumber]/echo/continue', () => {
       .mockResolvedValueOnce(mockRpcResponse('decrypted-key')) // decrypt_api_key
       .mockResolvedValueOnce(mockRpcResponse('echo-123')); // get_echo_user
 
-    const { determineWhenToEscalate, generateProblemStatement } = await import(
-      '@/lib/services/echo-conversation-service'
-    );
+    // Mock analyzeConversation to return problem NOT understood (so escalation path is checked)
+    const {
+      analyzeConversation,
+      determineWhenToEscalate,
+      generateProblemStatement,
+    } = await import('@/lib/services/echo-conversation-service');
+    vi.mocked(analyzeConversation).mockResolvedValue({
+      problemUnderstood: false,
+      nextQuestion: 'What else can you tell me?',
+      confidence: 0.4,
+    });
     vi.mocked(determineWhenToEscalate).mockResolvedValue(true);
     vi.mocked(generateProblemStatement).mockResolvedValue(
       'User requires assistance with complex issue after extended clarification.'
@@ -320,9 +337,10 @@ describe('POST /api/pings/[pingNumber]/echo/continue', () => {
     const result = await response.json();
 
     expect(response.status).toBe(200);
-    expect(result.status).toBe('escalated');
+    // Route returns 'confirming' status even for escalation (user must confirm before escalation)
+    expect(result.status).toBe('confirming');
     expect(result.problemStatement).toContain('requires assistance');
-    expect(result.reason).toContain('Escalating to human agent');
+    expect(result.note).toContain('Escalation pending user confirmation');
   });
 
   it('should escalate when user explicitly requests human help', async () => {
@@ -337,7 +355,7 @@ describe('POST /api/pings/[pingNumber]/echo/continue', () => {
       ping_messages: [
         {
           id: 'msg-1',
-          message_text: 'I want to talk to a person',
+          content: 'I want to talk to a person',
           message_type: 'user',
           created_at: new Date().toISOString(),
         },
@@ -374,9 +392,17 @@ describe('POST /api/pings/[pingNumber]/echo/continue', () => {
       .mockResolvedValueOnce(mockRpcResponse('decrypted-key')) // decrypt_api_key
       .mockResolvedValueOnce(mockRpcResponse('echo-123')); // get_echo_user
 
-    const { determineWhenToEscalate, generateProblemStatement } = await import(
-      '@/lib/services/echo-conversation-service'
-    );
+    // Mock analyzeConversation to return problem NOT understood (so escalation path is checked)
+    const {
+      analyzeConversation,
+      determineWhenToEscalate,
+      generateProblemStatement,
+    } = await import('@/lib/services/echo-conversation-service');
+    vi.mocked(analyzeConversation).mockResolvedValue({
+      problemUnderstood: false,
+      nextQuestion: 'What can I help with?',
+      confidence: 0.3,
+    });
     vi.mocked(determineWhenToEscalate).mockResolvedValue(true);
     vi.mocked(generateProblemStatement).mockResolvedValue(
       'User requested human assistance.'
@@ -387,7 +413,9 @@ describe('POST /api/pings/[pingNumber]/echo/continue', () => {
     const result = await response.json();
 
     expect(response.status).toBe(200);
-    expect(result.status).toBe('escalated');
+    // Route returns 'confirming' status even for escalation (user must confirm before escalation)
+    expect(result.status).toBe('confirming');
+    expect(result.note).toContain('Escalation pending user confirmation');
   });
 
   it('should return 401 if user is not authenticated', async () => {

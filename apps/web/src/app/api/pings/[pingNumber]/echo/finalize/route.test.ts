@@ -20,6 +20,11 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(),
 }));
 
+// Mock Supabase JS client (for service role admin client)
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(),
+}));
+
 // Mock problem categorization service
 vi.mock('@/lib/services/problem-categorization-service', () => ({
   categorizeProblemStatement: vi.fn(),
@@ -93,6 +98,10 @@ describe('POST /api/pings/[pingNumber]/echo/finalize', () => {
 
     const { createClient } = await import('@/lib/supabase/server');
     vi.mocked(createClient).mockResolvedValue(mockSupabase as any);
+
+    // Mock @supabase/supabase-js createClient (for admin/service role client)
+    const supabaseJs = await import('@supabase/supabase-js');
+    vi.mocked(supabaseJs.createClient).mockReturnValue(mockSupabase as any);
 
     mockRequest = new NextRequest(
       'http://localhost:4000/api/pings/123/echo/finalize',

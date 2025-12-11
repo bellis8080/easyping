@@ -20,9 +20,15 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(),
 }));
 
+// Mock Supabase JS client (for service role admin client)
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(),
+}));
+
 // Mock Echo conversation service
 vi.mock('@/lib/services/echo-conversation-service', () => ({
   generateProblemStatement: vi.fn(),
+  analyzeUserConfirmation: vi.fn(),
 }));
 
 describe('POST /api/pings/[pingNumber]/echo/confirm', () => {
@@ -80,6 +86,10 @@ describe('POST /api/pings/[pingNumber]/echo/confirm', () => {
     const { createClient } = await import('@/lib/supabase/server');
     vi.mocked(createClient).mockResolvedValue(mockSupabase as any);
 
+    // Mock @supabase/supabase-js createClient (for admin/service role client)
+    const supabaseJs = await import('@supabase/supabase-js');
+    vi.mocked(supabaseJs.createClient).mockReturnValue(mockSupabase as any);
+
     mockRequest = new NextRequest(
       'http://localhost:4000/api/pings/123/echo/confirm',
       {
@@ -91,15 +101,17 @@ describe('POST /api/pings/[pingNumber]/echo/confirm', () => {
   it('should confirm problem statement when user says "yes"', async () => {
     const mockUserId = 'user-123';
     const mockTenantId = 'tenant-456';
+    const mockEchoUserId = 'echo-789';
     const mockPing = {
       id: 'ping-id-1',
       ping_number: 123,
       status: 'draft',
       tenant_id: mockTenantId,
+      ai_summary: 'User has email login issues',
       ping_messages: [
         {
           id: 'msg-1',
-          message_text: "yes, that's correct",
+          content: "yes, that's correct",
           message_type: 'user',
           created_at: new Date().toISOString(),
         },
@@ -111,12 +123,38 @@ describe('POST /api/pings/[pingNumber]/echo/confirm', () => {
       error: null,
     });
 
+    // 1. User tenant lookup
     (mockSupabase as any)._mockSingleResponse({
       data: { tenant_id: mockTenantId },
       error: null,
     });
-
+    // 2. Ping lookup
     (mockSupabase as any)._mockSingleResponse({ data: mockPing, error: null });
+    // 3. Organization AI config
+    (mockSupabase as any)._mockSingleResponse({
+      data: {
+        ai_config: {
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          encrypted_api_key: 'encrypted-key',
+        },
+      },
+      error: null,
+    });
+
+    // Mock RPC calls
+    vi.mocked(mockSupabase.rpc!)
+      .mockResolvedValueOnce(mockRpcResponse('decrypted-key')) // decrypt_api_key
+      .mockResolvedValueOnce(mockRpcResponse(mockEchoUserId)); // get_echo_user
+
+    // Mock analyzeUserConfirmation to return 'confirm' intent
+    const { analyzeUserConfirmation } = await import(
+      '@/lib/services/echo-conversation-service'
+    );
+    vi.mocked(analyzeUserConfirmation).mockResolvedValue({
+      intent: 'confirm',
+      confidence: 0.95,
+    });
 
     const params = Promise.resolve({ pingNumber: '123' });
     const response = await POST(mockRequest, { params });
@@ -130,6 +168,7 @@ describe('POST /api/pings/[pingNumber]/echo/confirm', () => {
   it('should detect various confirmation keywords', async () => {
     const mockUserId = 'user-123';
     const mockTenantId = 'tenant-456';
+    const mockEchoUserId = 'echo-789';
 
     const confirmationKeywords = [
       'yes',
@@ -152,10 +191,11 @@ describe('POST /api/pings/[pingNumber]/echo/confirm', () => {
         ping_number: 123,
         status: 'draft',
         tenant_id: mockTenantId,
+        ai_summary: 'User has email login issues',
         ping_messages: [
           {
             id: 'msg-1',
-            message_text: keyword,
+            content: keyword,
             message_type: 'user',
             created_at: new Date().toISOString(),
           },
@@ -167,14 +207,40 @@ describe('POST /api/pings/[pingNumber]/echo/confirm', () => {
         error: null,
       });
 
+      // 1. User tenant lookup
       (mockSupabase as any)._mockSingleResponse({
         data: { tenant_id: mockTenantId },
         error: null,
       });
-
+      // 2. Ping lookup
       (mockSupabase as any)._mockSingleResponse({
         data: mockPing,
         error: null,
+      });
+      // 3. Organization AI config
+      (mockSupabase as any)._mockSingleResponse({
+        data: {
+          ai_config: {
+            provider: 'openai',
+            model: 'gpt-4o-mini',
+            encrypted_api_key: 'encrypted-key',
+          },
+        },
+        error: null,
+      });
+
+      // Mock RPC calls
+      vi.mocked(mockSupabase.rpc!)
+        .mockResolvedValueOnce(mockRpcResponse('decrypted-key')) // decrypt_api_key
+        .mockResolvedValueOnce(mockRpcResponse(mockEchoUserId)); // get_echo_user
+
+      // Mock analyzeUserConfirmation to return 'confirm' intent
+      const { analyzeUserConfirmation } = await import(
+        '@/lib/services/echo-conversation-service'
+      );
+      vi.mocked(analyzeUserConfirmation).mockResolvedValue({
+        intent: 'confirm',
+        confidence: 0.95,
       });
 
       const params = Promise.resolve({ pingNumber: '123' });
@@ -194,16 +260,17 @@ describe('POST /api/pings/[pingNumber]/echo/confirm', () => {
       ping_number: 123,
       status: 'draft',
       tenant_id: mockTenantId,
+      ai_summary: 'User has email login issues',
       ping_messages: [
         {
           id: 'msg-1',
-          message_text: "no, that's not quite right",
+          content: "no, that's not quite right",
           message_type: 'user',
           created_at: new Date().toISOString(),
         },
         {
           id: 'msg-2',
-          message_text: 'Previous message',
+          content: 'Previous message',
           message_type: 'agent',
           created_at: new Date(Date.now() - 1000).toISOString(),
         },
@@ -233,17 +300,18 @@ describe('POST /api/pings/[pingNumber]/echo/confirm', () => {
       error: null,
     });
 
-    vi.mocked(mockSupabase.rpc!).mockResolvedValueOnce(
-      mockRpcResponse('decrypted-key')
-    );
+    vi.mocked(mockSupabase.rpc!)
+      .mockResolvedValueOnce(mockRpcResponse('decrypted-key'))
+      .mockResolvedValueOnce(mockRpcResponse(mockEchoUserId));
 
-    vi.mocked(mockSupabase.rpc!).mockResolvedValueOnce(
-      mockRpcResponse(mockEchoUserId)
-    );
-
-    const { generateProblemStatement } = await import(
+    // Mock analyzeUserConfirmation to return 'clarify' intent (user provided correction)
+    const { analyzeUserConfirmation, generateProblemStatement } = await import(
       '@/lib/services/echo-conversation-service'
     );
+    vi.mocked(analyzeUserConfirmation).mockResolvedValue({
+      intent: 'clarify',
+      confidence: 0.85,
+    });
     vi.mocked(generateProblemStatement).mockResolvedValue(
       'Updated problem statement based on user corrections.'
     );
@@ -281,10 +349,11 @@ describe('POST /api/pings/[pingNumber]/echo/confirm', () => {
         ping_number: 123,
         status: 'draft',
         tenant_id: mockTenantId,
+        ai_summary: 'User has email login issues',
         ping_messages: [
           {
             id: 'msg-1',
-            message_text: keyword,
+            content: keyword,
             message_type: 'user',
             created_at: new Date().toISOString(),
           },
@@ -324,9 +393,13 @@ describe('POST /api/pings/[pingNumber]/echo/confirm', () => {
         .mockResolvedValueOnce(mockRpcResponse('decrypted-key')) // decrypt_api_key
         .mockResolvedValueOnce(mockRpcResponse(mockEchoUserId)); // get_echo_user
 
-      const { generateProblemStatement } = await import(
-        '@/lib/services/echo-conversation-service'
-      );
+      // Mock analyzeUserConfirmation to return 'clarify' intent
+      const { analyzeUserConfirmation, generateProblemStatement } =
+        await import('@/lib/services/echo-conversation-service');
+      vi.mocked(analyzeUserConfirmation).mockResolvedValue({
+        intent: 'clarify',
+        confidence: 0.85,
+      });
       vi.mocked(generateProblemStatement).mockResolvedValue(
         'Updated statement'
       );
@@ -348,10 +421,11 @@ describe('POST /api/pings/[pingNumber]/echo/confirm', () => {
       ping_number: 123,
       status: 'draft',
       tenant_id: mockTenantId,
+      ai_summary: 'User has mouse issues',
       ping_messages: [
         {
           id: 'msg-1',
-          message_text:
+          content:
             'Well, actually the issue is with the keyboard not the mouse',
           message_type: 'user',
           created_at: new Date().toISOString(),
@@ -382,17 +456,18 @@ describe('POST /api/pings/[pingNumber]/echo/confirm', () => {
       error: null,
     });
 
-    vi.mocked(mockSupabase.rpc!).mockResolvedValueOnce(
-      mockRpcResponse('decrypted-key')
-    );
+    vi.mocked(mockSupabase.rpc!)
+      .mockResolvedValueOnce(mockRpcResponse('decrypted-key'))
+      .mockResolvedValueOnce(mockRpcResponse(mockEchoUserId));
 
-    vi.mocked(mockSupabase.rpc!).mockResolvedValueOnce(
-      mockRpcResponse(mockEchoUserId)
-    );
-
-    const { generateProblemStatement } = await import(
+    // Mock analyzeUserConfirmation to return 'clarify' intent
+    const { analyzeUserConfirmation, generateProblemStatement } = await import(
       '@/lib/services/echo-conversation-service'
     );
+    vi.mocked(analyzeUserConfirmation).mockResolvedValue({
+      intent: 'clarify',
+      confidence: 0.85,
+    });
     vi.mocked(generateProblemStatement).mockResolvedValue(
       'User keyboard is malfunctioning.'
     );
@@ -415,10 +490,11 @@ describe('POST /api/pings/[pingNumber]/echo/confirm', () => {
       ping_number: 123,
       status: 'draft',
       tenant_id: mockTenantId,
+      ai_summary: 'User has email issues',
       ping_messages: [
         {
           id: 'msg-1',
-          message_text: 'hmm',
+          content: 'hmm',
           message_type: 'user',
           created_at: new Date().toISOString(),
         },
@@ -430,16 +506,37 @@ describe('POST /api/pings/[pingNumber]/echo/confirm', () => {
       error: null,
     });
 
+    // 1. User tenant lookup
     (mockSupabase as any)._mockSingleResponse({
       data: { tenant_id: mockTenantId },
       error: null,
     });
-
+    // 2. Ping lookup
     (mockSupabase as any)._mockSingleResponse({ data: mockPing, error: null });
+    // 3. Organization AI config
+    (mockSupabase as any)._mockSingleResponse({
+      data: {
+        ai_config: {
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          encrypted_api_key: 'encrypted-key',
+        },
+      },
+      error: null,
+    });
 
-    vi.mocked(mockSupabase.rpc!).mockResolvedValue(
-      mockRpcResponse(mockEchoUserId)
+    vi.mocked(mockSupabase.rpc!)
+      .mockResolvedValueOnce(mockRpcResponse('decrypted-key'))
+      .mockResolvedValueOnce(mockRpcResponse(mockEchoUserId));
+
+    // Mock analyzeUserConfirmation to return 'unclear' intent
+    const { analyzeUserConfirmation } = await import(
+      '@/lib/services/echo-conversation-service'
     );
+    vi.mocked(analyzeUserConfirmation).mockResolvedValue({
+      intent: 'unclear',
+      confidence: 0.3,
+    });
 
     const params = Promise.resolve({ pingNumber: '123' });
     const response = await POST(mockRequest, { params });
@@ -459,10 +556,11 @@ describe('POST /api/pings/[pingNumber]/echo/confirm', () => {
       ping_number: 123,
       status: 'draft',
       tenant_id: mockTenantId,
+      ai_summary: 'User has email issues',
       ping_messages: [
         {
           id: 'msg-1',
-          message_text: 'yes, but actually no',
+          content: 'yes, but actually no',
           message_type: 'user',
           created_at: new Date().toISOString(),
         },
@@ -492,17 +590,18 @@ describe('POST /api/pings/[pingNumber]/echo/confirm', () => {
       error: null,
     });
 
-    vi.mocked(mockSupabase.rpc!).mockResolvedValueOnce(
-      mockRpcResponse('decrypted-key')
-    );
+    vi.mocked(mockSupabase.rpc!)
+      .mockResolvedValueOnce(mockRpcResponse('decrypted-key'))
+      .mockResolvedValueOnce(mockRpcResponse(mockEchoUserId));
 
-    vi.mocked(mockSupabase.rpc!).mockResolvedValueOnce(
-      mockRpcResponse(mockEchoUserId)
-    );
-
-    const { generateProblemStatement } = await import(
+    // Mock analyzeUserConfirmation to return 'clarify' intent (AI detects mixed signals)
+    const { analyzeUserConfirmation, generateProblemStatement } = await import(
       '@/lib/services/echo-conversation-service'
     );
+    vi.mocked(analyzeUserConfirmation).mockResolvedValue({
+      intent: 'clarify',
+      confidence: 0.7,
+    });
     vi.mocked(generateProblemStatement).mockResolvedValue(
       'Clarified statement'
     );

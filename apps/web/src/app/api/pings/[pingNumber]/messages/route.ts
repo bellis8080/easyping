@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { MessageType } from '@easyping/types';
+import { MessageType, PingStatus } from '@easyping/types';
 import { calculateStatusTransition } from '@/lib/ping-status-transitions';
 
 const sendMessageSchema = z
@@ -182,6 +182,65 @@ export async function POST(
     attachments: createdAttachments,
   };
 
+  // Story 3.3: If ping is in draft status, route to Echo conversation
+  if (ping.status === 'draft') {
+    const apiUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:4000';
+
+    // Determine which Echo endpoint to call
+    // Get ping with confirmation status AND ai_summary
+    const { data: draftPing } = await supabase
+      .from('pings')
+      .select('problem_statement_confirmed, ai_summary')
+      .eq('id', ping.id)
+      .single();
+
+    // Only route to /confirm if:
+    // 1. problem_statement_confirmed is explicitly false (not null)
+    // 2. AND there's already a problem statement (ai_summary exists)
+    // This prevents routing to /confirm before a problem statement has been generated
+    const isAwaitingConfirmation =
+      draftPing?.problem_statement_confirmed === false &&
+      draftPing?.ai_summary !== null &&
+      draftPing?.ai_summary !== '';
+
+    const echoEndpoint = isAwaitingConfirmation
+      ? `/api/pings/${pingNumber}/echo/confirm`
+      : `/api/pings/${pingNumber}/echo/continue`;
+
+    // Call Echo endpoint asynchronously (fire and forget)
+    fetch(`${apiUrl}${echoEndpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: request.headers.get('cookie') || '',
+      },
+    })
+      .then(async (echoResponse) => {
+        const echoResult = await echoResponse.json();
+
+        // If Echo confirmed the problem, trigger finalization
+        // Note: Escalation now goes through confirmation flow too, so user sees the problem statement first
+        if (echoResult.status === 'confirmed') {
+          await fetch(`${apiUrl}/api/pings/${pingNumber}/echo/finalize`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Cookie: request.headers.get('cookie') || '',
+            },
+          });
+        }
+      })
+      .catch((err) => {
+        console.error('Error calling Echo endpoint:', err);
+      });
+
+    // Return immediately for draft pings (Echo will respond asynchronously)
+    return NextResponse.json(
+      { message: messageWithSender, echoEngaged: true },
+      { status: 201 }
+    );
+  }
+
   // Check for automatic status transition
   const creatorName = Array.isArray(ping.created_by_user)
     ? (ping.created_by_user[0] as { full_name: string } | undefined)
@@ -189,8 +248,17 @@ export async function POST(
     : (ping.created_by_user as { full_name: string } | undefined)?.full_name ||
       'User';
 
+  console.log('📊 Status transition check:', {
+    pingStatus: ping.status,
+    messageType,
+    userId: user.id,
+    pingCreatedBy: ping.created_by,
+    assignedTo: ping.assigned_to,
+    userRole: userProfile.role,
+  });
+
   const transition = calculateStatusTransition(
-    ping.status,
+    ping.status as PingStatus,
     messageType,
     user.id,
     ping.created_by,
@@ -199,6 +267,8 @@ export async function POST(
     creatorName,
     null // first_response_at - column doesn't exist yet
   );
+
+  console.log('📊 Transition result:', transition);
 
   if (transition) {
     // Update ping status and timestamps
@@ -209,17 +279,43 @@ export async function POST(
     };
 
     // Auto-assign to agent on first response (if unassigned)
+    console.log(
+      '📊 shouldAutoAssign:',
+      transition.shouldAutoAssign,
+      'user.id:',
+      user.id
+    );
     if (transition.shouldAutoAssign) {
       updatePayload.assigned_to = user.id;
     }
 
-    const { error: updateError } = await supabaseAdmin
+    console.log('📊 Update payload:', updatePayload);
+    console.log('📊 Updating ping with id:', ping.id);
+
+    const {
+      data: updateData,
+      error: updateError,
+      count,
+    } = await supabaseAdmin
       .from('pings')
       .update(updatePayload)
-      .eq('id', ping.id);
+      .eq('id', ping.id)
+      .select();
+
+    console.log('📊 Update result:', {
+      data: updateData,
+      error: updateError,
+      count,
+    });
 
     if (updateError) {
       console.error('Error updating ping status:', updateError);
+    } else if (!updateData || updateData.length === 0) {
+      console.error(
+        '📊 Update returned no rows! Ping may not exist or RLS may be blocking.'
+      );
+    } else {
+      console.log('📊 Ping updated successfully:', updateData[0]);
     }
 
     // Create system message if needed

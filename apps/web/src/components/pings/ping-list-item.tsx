@@ -5,6 +5,16 @@ import { formatDistanceToNow } from 'date-fns';
 import { User } from 'lucide-react';
 import { getStatusColor, getStatusLabel } from '@/lib/ping-status-utils';
 
+/**
+ * Strips markdown formatting from text for plain text display
+ * Converts **bold** to plain text
+ */
+function stripMarkdown(text: string): string {
+  if (!text) return '';
+  // Remove bold markers **text** → text
+  return text.replace(/\*\*([^*]+)\*\*/g, '$1');
+}
+
 interface PingListItemProps {
   ping: any;
 }
@@ -14,9 +24,10 @@ export function PingListItem({ ping }: PingListItemProps) {
     return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
   };
 
-  // Get last message preview
+  // Get last message preview (strip markdown for plain text display)
   const lastMessage = ping.messages?.[ping.messages.length - 1];
-  const messagePreview = lastMessage?.content.substring(0, 100) || ping.title;
+  const rawContent = lastMessage?.content || ping.title || '';
+  const messagePreview = stripMarkdown(rawContent).substring(0, 100);
 
   return (
     <Link href={`/pings/${ping.ping_number}`}>

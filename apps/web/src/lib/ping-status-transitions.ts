@@ -121,6 +121,7 @@ export function validateManualStatusChange(
 
 function getStatusLabel(status: PingStatus): string {
   const labels: Record<PingStatus, string> = {
+    draft: 'Draft',
     new: 'New',
     in_progress: 'In Progress',
     waiting_on_user: 'Waiting on User',

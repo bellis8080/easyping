@@ -4,12 +4,28 @@ import { UserRole } from '@easyping/types';
 import { canAccessRoute } from '@/lib/auth/permissions';
 import { isSetupComplete } from '@/lib/setup';
 
+// Use Node.js runtime instead of Edge for full fetch() support
+export const runtime = 'nodejs';
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isSetupRoute = pathname.startsWith('/setup');
 
   // Check if setup is complete (organization exists)
-  const setupComplete = await isSetupComplete();
+  // Wrap in try-catch to handle Edge Runtime network limitations
+  let setupComplete = false;
+  try {
+    setupComplete = await isSetupComplete();
+  } catch (error) {
+    console.error('Error checking setup completion:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      details: error instanceof Error ? error.stack : '',
+      hint: 'This may be expected in local development with Edge Runtime',
+      code: (error as any)?.code || '',
+    });
+    // On error, assume setup is NOT complete (allow access to /setup)
+    setupComplete = false;
+  }
 
   // Redirect to setup wizard if not complete and not already on setup page
   if (!setupComplete && !isSetupRoute) {

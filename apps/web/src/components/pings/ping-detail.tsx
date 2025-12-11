@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
-import { ChevronRight, Send } from 'lucide-react';
+import { ChevronRight, Send, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { PingMessage } from './ping-message';
 import { ReplyingIndicator } from './replying-indicator';
@@ -55,16 +55,20 @@ export function PingDetail({
     userId: string;
     userName: string;
   } | null>(null);
+  const [isEchoReplying, setIsEchoReplying] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>(
     {}
   );
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
+  const [isSummaryCollapsed, setIsSummaryCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const replyingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const presenceChannelRef = useRef<ReturnType<
     ReturnType<typeof createClient>['channel']
   > | null>(null);
+  const echoStartedRef = useRef(false);
 
   const formatTimestamp = (timestamp: string): string => {
     return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
@@ -160,6 +164,12 @@ export function PingDetail({
     setTimeout(scrollToBottom, 300);
   }, [messages]);
 
+  // Auto-focus the reply textarea when the page loads
+  useEffect(() => {
+    // Small delay to ensure DOM is fully rendered
+    setTimeout(() => replyTextareaRef.current?.focus(), 100);
+  }, []);
+
   // Auto-scroll when replying indicator appears/disappears
   useEffect(() => {
     if (isReplying) {
@@ -188,6 +198,40 @@ export function PingDetail({
 
     markAsRead();
   }, [ping.ping_number, messages.length]);
+
+  // Trigger Echo conversation for draft pings
+  useEffect(() => {
+    const startEchoConversation = async () => {
+      // Only trigger for draft pings, and only once
+      if (ping.status !== 'draft') return;
+      if (echoStartedRef.current) return; // Already started
+
+      echoStartedRef.current = true; // Mark as started
+
+      try {
+        const response = await fetch(
+          `/api/pings/${ping.ping_number}/echo/start`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+
+        if (!response.ok) {
+          console.error(
+            'Failed to start Echo conversation:',
+            await response.text()
+          );
+          echoStartedRef.current = false; // Reset on error so it can retry
+        }
+      } catch (error) {
+        console.error('Error starting Echo conversation:', error);
+        echoStartedRef.current = false; // Reset on error so it can retry
+      }
+    };
+
+    startEchoConversation();
+  }, [ping.ping_number, ping.status]);
 
   // Subscribe to realtime message updates
   useEffect(() => {
@@ -255,6 +299,14 @@ export function PingDetail({
             return [...prev, transformedMessage as any];
           });
 
+          // If Echo sent this message, hide the replying indicator
+          if (
+            transformedMessage.message_type === 'agent' &&
+            sender.full_name?.includes('Echo')
+          ) {
+            setIsEchoReplying(false);
+          }
+
           // Auto-mark as read if message is from another user (user is viewing the ping)
           if (newMessage.sender_id !== currentUser.id) {
             await fetch(`/api/pings/${ping.ping_number}/read`, {
@@ -296,7 +348,7 @@ export function PingDetail({
           const { data: updatedPing } = await supabase
             .from('pings')
             .select(
-              '*, assigned_to:users!pings_assigned_to_fkey(id, full_name, avatar_url, role)'
+              '*, assigned_to:users!pings_assigned_to_fkey(id, full_name, avatar_url, role), category:categories(id, name, color, icon)'
             )
             .eq('id', pingId)
             .single();
@@ -305,6 +357,13 @@ export function PingDetail({
             setPing((prev) => ({
               ...prev,
               status: updatedPing.status,
+              priority: updatedPing.priority,
+              title: updatedPing.title,
+              ai_summary: updatedPing.ai_summary,
+              category: Array.isArray(updatedPing.category)
+                ? updatedPing.category[0]
+                : updatedPing.category,
+              category_confidence: updatedPing.category_confidence,
               assigned_to: Array.isArray(updatedPing.assigned_to)
                 ? updatedPing.assigned_to[0]
                 : updatedPing.assigned_to,
@@ -430,6 +489,14 @@ export function PingDetail({
       setSelectedFiles([]);
       setUploadProgress({});
       setTimeout(scrollToBottom, 100);
+
+      // Re-focus the reply textarea so user can continue typing
+      setTimeout(() => replyTextareaRef.current?.focus(), 150);
+
+      // If this is a draft ping, show "Echo is replying..." indicator
+      if (ping.status === 'draft') {
+        setIsEchoReplying(true);
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message. Please try again.');
@@ -494,8 +561,8 @@ export function PingDetail({
         {/* Ping Header Info */}
         <div className="px-6 py-5">
           <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-bold text-white">
                   #PING-{String(ping.ping_number).padStart(3, '0')}
                 </h1>
@@ -504,24 +571,76 @@ export function PingDetail({
                 >
                   {getStatusLabel(ping.status)}
                 </span>
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm text-slate-400">
-                  Created {formatTimestamp(ping.created_at)}
-                </p>
+                {/* Category pill */}
+                {ping.category && (
+                  <span
+                    className="px-3 py-1 rounded-full text-xs font-semibold text-white"
+                    style={{ backgroundColor: ping.category.color }}
+                  >
+                    {ping.category.name}
+                  </span>
+                )}
+                {/* Priority pill */}
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    ping.priority === 'urgent'
+                      ? 'bg-red-500 text-white'
+                      : ping.priority === 'high'
+                        ? 'bg-orange-500 text-white'
+                        : ping.priority === 'normal'
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-gray-500 text-white'
+                  }`}
+                >
+                  {ping.priority === 'urgent'
+                    ? 'Urgent'
+                    : ping.priority === 'high'
+                      ? 'High'
+                      : ping.priority === 'normal'
+                        ? 'Normal'
+                        : 'Low'}
+                </span>
+                {/* Assigned agent pill */}
                 {ping.assigned_to && (
-                  <p className="text-sm text-slate-400">
-                    Assigned to{' '}
-                    <span className="text-white font-medium">
-                      {ping.assigned_to.full_name}
-                    </span>
-                  </p>
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500 text-white">
+                    {ping.assigned_to.full_name}
+                  </span>
                 )}
               </div>
+              <p className="text-sm text-slate-400">
+                Created {formatTimestamp(ping.created_at)}
+              </p>
             </div>
           </div>
         </div>
       </div>
+
+      {/* AI Summary - Sticky Collapsible */}
+      {ping.ai_summary && (
+        <div className="flex-shrink-0 bg-blue-500/10 backdrop-blur-sm border-b border-blue-200 shadow-sm sticky top-0 z-10">
+          <div className="max-w-4xl mx-auto px-6 py-4">
+            <button
+              onClick={() => setIsSummaryCollapsed(!isSummaryCollapsed)}
+              className="w-full flex items-start justify-between gap-4 text-left group"
+            >
+              <div className="flex-1">
+                {!isSummaryCollapsed && (
+                  <p className="text-slate-900 leading-relaxed">
+                    {ping.ai_summary}
+                  </p>
+                )}
+              </div>
+              <div className="flex-shrink-0 text-slate-400 group-hover:text-slate-600 transition-colors">
+                {isSummaryCollapsed ? (
+                  <ChevronDown className="w-5 h-5" />
+                ) : (
+                  <ChevronUp className="w-5 h-5" />
+                )}
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Messages Thread */}
       <div className="flex-1 overflow-y-auto p-6">
@@ -550,6 +669,13 @@ export function PingDetail({
             </div>
           )}
 
+          {/* Echo replying indicator */}
+          {isEchoReplying && (
+            <div className="max-w-4xl mx-auto">
+              <ReplyingIndicator userName="Echo" />
+            </div>
+          )}
+
           {/* Scroll anchor */}
           <div ref={messagesEndRef} />
         </div>
@@ -571,21 +697,21 @@ export function PingDetail({
           )}
 
           <div className="flex gap-3">
-            <div className="flex-1 space-y-2">
-              <textarea
-                value={replyMessage}
-                onChange={handleMessageChange}
-                onKeyDown={handleKeyDown}
-                placeholder="Type your reply..."
-                className="w-full px-4 py-3 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-slate-50"
-                rows={3}
-                disabled={isSending || isUploadingFiles}
-              />
-              <FileAttachmentInput
-                onFilesSelected={setSelectedFiles}
-                disabled={isSending || isUploadingFiles}
-              />
-            </div>
+            <FileAttachmentInput
+              onFilesSelected={setSelectedFiles}
+              isUploading={isUploadingFiles}
+              disabled={isSending}
+            />
+            <textarea
+              ref={replyTextareaRef}
+              value={replyMessage}
+              onChange={handleMessageChange}
+              onKeyDown={handleKeyDown}
+              placeholder="Type your reply..."
+              className="flex-1 px-4 py-3 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-slate-50"
+              rows={3}
+              disabled={isSending || isUploadingFiles}
+            />
             <button
               onClick={handleSendReply}
               disabled={

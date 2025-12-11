@@ -30,6 +30,16 @@ export interface PingWithMessages
   unread_count?: number;
 }
 
+/**
+ * Strips markdown formatting from text for plain text display
+ * Converts **bold** to plain text
+ */
+function stripMarkdown(text: string): string {
+  if (!text) return '';
+  // Remove bold markers **text** → text
+  return text.replace(/\*\*([^*]+)\*\*/g, '$1');
+}
+
 // Format relative time
 const formatRelativeTime = (timestamp: string): string => {
   const date = new Date(timestamp);
@@ -171,12 +181,12 @@ function PingListItem({ ping }: { ping: PingWithMessages }) {
             <StatusIndicator status={ping.status} />
           </div>
 
-          {/* Line 2: Message preview */}
+          {/* Line 2: Message preview (strip markdown for plain text display) */}
           {lastMessage && (
             <p
               className={`text-base mb-2 line-clamp-2 ${isUnread ? 'font-medium text-slate-800' : 'text-slate-600'}`}
             >
-              {lastMessage.content}
+              {stripMarkdown(lastMessage.content)}
             </p>
           )}
 

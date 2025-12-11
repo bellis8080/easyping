@@ -5,6 +5,23 @@ import { User } from 'lucide-react';
 import { PingAttachment } from '@easyping/types';
 import { AttachmentDisplay } from './attachment-display';
 
+/**
+ * Renders text with basic markdown support (bold **text**)
+ * Preserves newlines with whitespace-pre-wrap
+ */
+function renderMarkdown(content: string): React.ReactNode {
+  // Split by bold markers **text**
+  const parts = content.split(/(\*\*[^*]+\*\*)/g);
+
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      // Bold text - remove markers and wrap in <strong>
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+
 interface PingMessageProps {
   message: any;
   isCurrentUser: boolean;
@@ -40,7 +57,7 @@ export function PingMessage({
       <div className="flex justify-end">
         <div className="max-w-2xl px-5 py-3 rounded-lg shadow-md bg-gradient-to-r from-blue-500 to-blue-600 text-white">
           <p className="text-base leading-relaxed whitespace-pre-wrap">
-            {message.content}
+            {renderMarkdown(message.content)}
           </p>
           {attachments && attachments.length > 0 && (
             <div className="mt-3 space-y-2">
@@ -101,7 +118,7 @@ export function PingMessage({
           }`}
         >
           <p className="text-sm text-slate-900 whitespace-pre-wrap">
-            {message.content}
+            {renderMarkdown(message.content)}
           </p>
           {attachments && attachments.length > 0 && (
             <div className="mt-3 space-y-2">

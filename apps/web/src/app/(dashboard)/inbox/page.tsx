@@ -33,6 +33,7 @@ export default async function AgentInboxPage() {
   }
 
   // Fetch all pings in tenant (no assignment filter)
+  // Exclude draft pings (they're still in Echo conversation)
   const { data: pings, error: pingsError } = await supabase
     .from('pings')
     .select(
@@ -40,6 +41,7 @@ export default async function AgentInboxPage() {
       id,
       ping_number,
       title,
+      ai_summary,
       status,
       priority,
       created_at,
@@ -47,7 +49,7 @@ export default async function AgentInboxPage() {
       sla_due_at,
       created_by:users!pings_created_by_fkey(id, full_name, email, avatar_url),
       assigned_to:users!pings_assigned_to_fkey(id, full_name, avatar_url),
-      category:categories(name, color),
+      category:categories(id, name, color),
       messages:ping_messages(
         id,
         content,
@@ -58,6 +60,7 @@ export default async function AgentInboxPage() {
     `
     )
     .eq('tenant_id', userProfile.tenant_id)
+    .neq('status', 'draft')
     .order('updated_at', { ascending: false })
     .order('created_at', { foreignTable: 'ping_messages', ascending: true });
 
@@ -119,6 +122,7 @@ export default async function AgentInboxPage() {
       id: ping.id,
       ping_number: ping.ping_number,
       title: ping.title,
+      ai_summary: ping.ai_summary || null,
       status: ping.status,
       priority: ping.priority,
       created_at: ping.created_at,

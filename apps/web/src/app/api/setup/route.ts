@@ -102,6 +102,88 @@ export async function POST(request: NextRequest) {
       throw new Error(`Failed to create organization: ${orgError.message}`);
     }
 
+    // Create default categories for the organization
+    const { error: categoriesError } = await supabase
+      .from('categories')
+      .insert([
+        {
+          tenant_id: org.id,
+          name: 'Software Issue',
+          description:
+            'Problems with applications, software crashes, errors, or performance issues',
+          color: '#3B82F6',
+          sort_order: 10,
+        },
+        {
+          tenant_id: org.id,
+          name: 'Hardware Issue',
+          description: 'Computer, printer, phone, or other hardware problems',
+          color: '#EF4444',
+          sort_order: 20,
+        },
+        {
+          tenant_id: org.id,
+          name: 'Network & Connectivity',
+          description: 'Internet, WiFi, VPN, or network access problems',
+          color: '#10B981',
+          sort_order: 30,
+        },
+        {
+          tenant_id: org.id,
+          name: 'Account & Access',
+          description:
+            'Login issues, password resets, permissions, account setup',
+          color: '#F59E0B',
+          sort_order: 40,
+        },
+        {
+          tenant_id: org.id,
+          name: 'Email & Communication',
+          description:
+            'Email delivery, calendar, messaging, or communication tools',
+          color: '#8B5CF6',
+          sort_order: 50,
+        },
+        {
+          tenant_id: org.id,
+          name: 'Security',
+          description:
+            'Security concerns, suspicious activity, phishing, malware',
+          color: '#DC2626',
+          sort_order: 60,
+        },
+        {
+          tenant_id: org.id,
+          name: 'Request for Service',
+          description:
+            'New equipment, software installation, account creation, access requests',
+          color: '#06B6D4',
+          sort_order: 70,
+        },
+        {
+          tenant_id: org.id,
+          name: 'How-To / Training',
+          description:
+            'Questions about how to use software, features, or services',
+          color: '#84CC16',
+          sort_order: 80,
+        },
+        {
+          tenant_id: org.id,
+          name: 'Other',
+          description: 'Issues that do not fit into other categories',
+          color: '#6B7280',
+          sort_order: 90,
+        },
+      ]);
+
+    if (categoriesError) {
+      console.error('Categories creation error:', categoriesError);
+      // Rollback: delete organization
+      await supabase.from('organizations').delete().eq('id', org.id);
+      throw new Error('Failed to create default categories');
+    }
+
     // Encrypt and save AI config if provided
     if (data.aiConfig.provider !== 'skip' && data.aiConfig.apiKey) {
       // Encrypt API key using database function

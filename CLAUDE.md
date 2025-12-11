@@ -466,6 +466,31 @@ This project uses BMAD™ Core for AI-driven development workflows.
 
 ## Common Gotchas
 
+**Supabase Realtime and RLS Incompatibility:**
+
+⚠️ **CRITICAL:** Supabase Realtime does NOT work properly with Row Level Security (RLS) enabled on tables that need real-time updates.
+
+**Tables that MUST have RLS DISABLED for Realtime to work:**
+- `ping_messages` - Real-time message updates in conversations
+- `pings` - Real-time status/assignment updates
+- Any other table requiring real-time subscriptions
+
+**Why this happens:**
+- Supabase Realtime cannot properly evaluate RLS policies
+- Messages/updates won't appear in real-time even though they're in the database
+- Presence indicators (typing) work, but actual data changes don't propagate
+
+**Security Model (when RLS is disabled):**
+- Authentication is enforced at the API layer via Supabase Auth
+- Tenant isolation is enforced in API routes by checking `tenant_id`
+- Admin client (service role) is used only AFTER validation passes
+- This is intentional and documented in migration files
+
+**If Realtime stops working after a database reset:**
+1. Check if RLS got re-enabled: `SELECT relname, relrowsecurity FROM pg_class WHERE relname = 'ping_messages';`
+2. If `relrowsecurity = t`, RLS is enabled and needs to be disabled
+3. Create a migration to disable RLS on affected tables
+
 **Supabase Local vs Production:**
 - Local: `supabase start` runs containers on localhost
 - `.env.local` should point to local instance

@@ -56,22 +56,39 @@ export function SetupWizard() {
   });
 
   const handleNext = async () => {
+    console.log('handleNext called, currentStep:', currentStep);
     let isValid = false;
 
     if (currentStep === 1) {
+      console.log('Triggering org form validation');
       isValid = await orgForm.trigger();
+      console.log(
+        'Org form valid:',
+        isValid,
+        'Errors:',
+        orgForm.formState.errors
+      );
     } else if (currentStep === 2) {
+      console.log('Triggering admin form validation');
       isValid = await adminForm.trigger();
+      console.log('Admin form valid:', isValid);
     } else if (currentStep === 3) {
+      console.log('Triggering AI form validation');
       isValid = await aiForm.trigger();
+      console.log('AI form valid:', isValid);
     }
 
+    console.log('Form validation result:', isValid);
     if (isValid) {
       if (currentStep < 3) {
+        console.log('Moving to next step');
         setCurrentStep(currentStep + 1);
       } else {
+        console.log('Submitting form');
         await handleSubmit();
       }
+    } else {
+      console.log('Form validation failed, staying on current step');
     }
   };
 

@@ -9,6 +9,8 @@ import {
   AlertCircle,
   CheckCircle2,
   Pause,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import {
   Ping,
@@ -33,6 +35,7 @@ interface PingWithRelations {
   id: string;
   ping_number: number;
   title: string;
+  ai_summary: string | null;
   status: Ping['status'];
   priority: Ping['priority'];
   created_at: string;
@@ -40,7 +43,7 @@ interface PingWithRelations {
   sla_due_at: string | null;
   created_by: Pick<User, 'id' | 'full_name' | 'email' | 'avatar_url'>;
   assigned_to: Pick<User, 'id' | 'full_name' | 'avatar_url'> | null;
-  category: { name: string; color: string } | null;
+  category: { id: string; name: string; color: string } | null;
   messages: Array<{
     id: string;
     content: string;
@@ -241,7 +244,13 @@ export function InboxClient({
   const [isConnected, setIsConnected] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [soundEnabled, _setSoundEnabled] = useState(true);
+  const [availableCategories, setAvailableCategories] = useState<
+    Array<{ id: string; name: string; color: string }>
+  >([]);
+  const [isUpdatingCategory, setIsUpdatingCategory] = useState(false);
+  const [isSummaryCollapsed, setIsSummaryCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const replyingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const presenceChannelRef = useRef<ReturnType<
     ReturnType<typeof createClient>['channel']
@@ -422,6 +431,49 @@ export function InboxClient({
     }
   };
 
+  // Handle category change
+  const handleCategoryChange = async (newCategoryId: string) => {
+    if (!selectedPing) return;
+
+    setIsUpdatingCategory(true);
+    try {
+      const response = await fetch(
+        `/api/pings/${selectedPing.ping_number}/category`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ categoryId: newCategoryId }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update category');
+      }
+
+      const { category } = await response.json();
+
+      // Update local ping state
+      setSelectedPing((prev) => (prev ? { ...prev, category } : null));
+
+      // Update ping in the list
+      setPings((prevPings) =>
+        prevPings.map((p) =>
+          p.id === selectedPing.id ? { ...p, category } : p
+        )
+      );
+
+      toast.success('Category updated successfully');
+    } catch (error) {
+      console.error('Error updating category:', error);
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to update category'
+      );
+    } finally {
+      setIsUpdatingCategory(false);
+    }
+  };
+
   // Scroll to bottom when selectedPing changes
   useEffect(() => {
     // Use longer timeout to ensure images and attachments are rendered
@@ -453,6 +505,28 @@ export function InboxClient({
     };
 
     fetchAgents();
+  }, []);
+
+  // Fetch available categories for the category selector
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const supabase = createClient();
+        const { data: categories } = await supabase
+          .from('categories')
+          .select('id, name, color')
+          .eq('is_active', true)
+          .order('sort_order');
+
+        if (categories) {
+          setAvailableCategories(categories);
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+
+    fetchCategories();
   }, []);
 
   // Subscribe to realtime message updates
@@ -657,8 +731,100 @@ export function InboxClient({
   // Subscribe to new pings appearing in the inbox
   useEffect(() => {
     const supabase = createClient();
+
+    const handleNewPing = async (payload: any) => {
+      // Fetch the full ping with all relations using split-query pattern
+      const { data: newPing, error: pingError } = await supabase
+        .from('pings')
+        .select('*')
+        .eq('id', payload.new.id)
+        .single();
+
+      if (pingError || !newPing) {
+        return;
+      }
+
+      // Skip draft pings (they're still in Echo conversation)
+      if (newPing.status === 'draft') {
+        return;
+      }
+
+      // Fetch creator
+      const { data: creator } = await supabase
+        .from('users')
+        .select('id, full_name, email, avatar_url')
+        .eq('id', newPing.created_by)
+        .single();
+
+      // Fetch category if exists
+      let category = null;
+      if (newPing.category_id) {
+        const { data: cat } = await supabase
+          .from('categories')
+          .select('id, name, color, icon')
+          .eq('id', newPing.category_id)
+          .single();
+        category = cat;
+      }
+
+      // Fetch assigned user if exists
+      let assigned = null;
+      if (newPing.assigned_to) {
+        const { data: assignee } = await supabase
+          .from('users')
+          .select('id, full_name, avatar_url')
+          .eq('id', newPing.assigned_to)
+          .single();
+        assigned = assignee;
+      }
+
+      // Fetch initial messages
+      const { data: messages } = await supabase
+        .from('ping_messages')
+        .select('*')
+        .eq('ping_id', newPing.id)
+        .order('created_at', { ascending: true });
+
+      // Fetch senders for messages
+      const messagesWithSenders = await Promise.all(
+        (messages || []).map(async (msg) => {
+          const { data: sender } = await supabase
+            .from('users')
+            .select('id, full_name, avatar_url, role')
+            .eq('id', msg.sender_id)
+            .single();
+          return { ...msg, sender };
+        })
+      );
+
+      const transformedPing = {
+        ...newPing,
+        created_by: creator,
+        assigned_to: assigned,
+        category,
+        messages: messagesWithSenders,
+      };
+
+      // Add new ping to the list (agents see all pings for their tenant)
+      setPings((prev: PingWithRelations[]) => {
+        // Check if already exists
+        const exists = prev.some(
+          (p: PingWithRelations) => p.id === transformedPing.id
+        );
+        if (exists) return prev;
+        // Add to top of list
+        return [transformedPing as PingWithRelations, ...prev];
+      });
+
+      // Show toast notification
+      toast.info(
+        `New ping #PING-${String(newPing.ping_number).padStart(3, '0')} from ${creator?.full_name || 'Unknown'}`
+      );
+    };
+
     const channel = supabase
       .channel('inbox-pings')
+      // Listen for newly created pings
       .on(
         'postgres_changes',
         {
@@ -667,93 +833,36 @@ export function InboxClient({
           table: 'pings',
           filter: `tenant_id=eq.${currentUser.tenant_id}`,
         },
+        handleNewPing
+      )
+      // Listen for pings transitioning from draft to non-draft (Echo finalization)
+      // Note: payload.old only contains primary key (replica identity default), not full row
+      // So we check if the ping exists in our current list to determine if it's new
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'pings',
+          filter: `tenant_id=eq.${currentUser.tenant_id}`,
+        },
         async (payload) => {
-          // Fetch the full ping with all relations using split-query pattern
-          const { data: newPing, error: pingError } = await supabase
-            .from('pings')
-            .select('*')
-            .eq('id', payload.new.id)
-            .single();
+          const newStatus = (payload.new as any).status;
+          const pingId = (payload.new as any).id;
 
-          if (pingError || !newPing) {
-            return;
-          }
-
-          // Fetch creator
-          const { data: creator } = await supabase
-            .from('users')
-            .select('id, full_name, email, avatar_url')
-            .eq('id', newPing.created_by)
-            .single();
-
-          // Fetch category if exists
-          let category = null;
-          if (newPing.category_id) {
-            const { data: cat } = await supabase
-              .from('categories')
-              .select('id, name, color, icon')
-              .eq('id', newPing.category_id)
-              .single();
-            category = cat;
-          }
-
-          // Fetch assigned user if exists
-          let assigned = null;
-          if (newPing.assigned_to) {
-            const { data: assignee } = await supabase
-              .from('users')
-              .select('id, full_name, avatar_url')
-              .eq('id', newPing.assigned_to)
-              .single();
-            assigned = assignee;
-          }
-
-          // Fetch initial messages
-          const { data: messages } = await supabase
-            .from('ping_messages')
-            .select('*')
-            .eq('ping_id', newPing.id)
-            .order('created_at', { ascending: true });
-
-          // Fetch senders for messages
-          const messagesWithSenders = await Promise.all(
-            (messages || []).map(async (msg) => {
-              const { data: sender } = await supabase
-                .from('users')
-                .select('id, full_name, avatar_url, role')
-                .eq('id', msg.sender_id)
-                .single();
-              return { ...msg, sender };
-            })
-          );
-
-          const transformedPing = {
-            ...newPing,
-            created_by: creator,
-            assigned_to: assigned,
-            category,
-            messages: messagesWithSenders,
-          };
-
-          // Only add if agent is unassigned or assigned to this agent
-          if (
-            !transformedPing.assigned_to ||
-            transformedPing.assigned_to.id === currentUser.id
-          ) {
-            setPings((prev: PingWithRelations[]) => {
-              // Check if already exists
-              const exists = prev.some(
-                (p: PingWithRelations) => p.id === transformedPing.id
-              );
-              if (exists) return prev;
-              // Add to top of list
-              return [transformedPing as PingWithRelations, ...prev];
+          // Handle ping finalization (status changed to non-draft)
+          // If status is not draft and we don't have this ping in our list, add it
+          if (newStatus !== 'draft') {
+            // Use a ref or callback to get current pings state to avoid stale closure
+            setPings((currentPings) => {
+              const existsInList = currentPings.some((p) => p.id === pingId);
+              if (!existsInList) {
+                // Trigger the async handler but return current state
+                // The handleNewPing will update state separately
+                handleNewPing(payload);
+              }
+              return currentPings;
             });
-
-            // Show toast notification
-            toast.info(
-              `New ping #PING-${String(newPing.ping_number).padStart(3, '0')} from ${creator?.full_name || 'Unknown'}`
-            );
           }
         }
       )
@@ -1097,6 +1206,9 @@ export function InboxClient({
 
       // Scroll to bottom of thread
       setTimeout(scrollToBottom, 100);
+
+      // Re-focus the reply textarea so agent can continue typing
+      setTimeout(() => replyTextareaRef.current?.focus(), 150);
     } catch (_error) {
       toast.error('Failed to send message. Please try again.');
     } finally {
@@ -1295,22 +1407,36 @@ export function InboxClient({
           ) : (
             <>
               {/* Ping Header */}
-              <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-950 border-b border-slate-700 p-4 shadow-xl min-h-[121px]">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-3 mb-1">
-                      <h3 className="text-xl font-bold text-white">
-                        #PING-
-                        {String(selectedPing.ping_number).padStart(3, '0')}
-                      </h3>
-                      <PriorityBadge priority={selectedPing.priority} />
-                    </div>
+              <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-950 border-b border-slate-700 px-4 py-3 shadow-xl">
+                <div className="flex items-start justify-between gap-4">
+                  {/* Left: Title, User Info, and SLA */}
+                  <div className="flex-1 space-y-2">
+                    <h3 className="text-xl font-bold text-white">
+                      #PING-{String(selectedPing.ping_number).padStart(3, '0')}
+                    </h3>
                     <p className="text-sm text-slate-400">
                       {selectedPing.created_by.full_name} •{' '}
                       {selectedPing.created_by.email}
                     </p>
+                    <div className="flex items-center gap-4 text-sm">
+                      {selectedPing.sla_due_at ? (
+                        <div className="flex items-center gap-2">
+                          <SLATimer ping={selectedPing} />
+                          <span className="text-slate-400 leading-none">
+                            resolution due
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-slate-400">
+                          No SLA configured
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
+
+                  {/* Right: All Dropdowns */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* Status */}
                     <select
                       value={selectedPing.status}
                       onChange={(e) =>
@@ -1325,6 +1451,29 @@ export function InboxClient({
                       <option value="resolved">Resolved</option>
                       <option value="closed">Closed</option>
                     </select>
+
+                    {/* Category */}
+                    {availableCategories.length > 0 &&
+                      selectedPing.status !== 'draft' &&
+                      currentUser.role !== 'end_user' && (
+                        <select
+                          value={selectedPing.category?.id || ''}
+                          onChange={(e) => handleCategoryChange(e.target.value)}
+                          disabled={isUpdatingCategory}
+                          className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {!selectedPing.category && (
+                            <option value="">Select Category</option>
+                          )}
+                          {availableCategories.map((cat) => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+
+                    {/* Priority */}
                     <select
                       value={selectedPing.priority}
                       onChange={(e) =>
@@ -1343,13 +1492,15 @@ export function InboxClient({
                       <option value="high">⬆️ High</option>
                       <option value="urgent">🔴 Urgent</option>
                     </select>
+
+                    {/* Assignment */}
                     <select
                       value={selectedPing.assigned_to?.id || ''}
                       onChange={(e) =>
                         handleAssignmentChange(e.target.value || null)
                       }
                       disabled={isUpdatingAssignment || isLoadingAgents}
-                      className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed min-w-[180px]"
+                      className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <option value="">Unassigned</option>
                       {agents.map((agent) => (
@@ -1366,38 +1517,38 @@ export function InboxClient({
                     </select>
                   </div>
                 </div>
-
-                {/* SLA Info */}
-                <div className="flex items-center gap-4 text-sm">
-                  {selectedPing.sla_due_at ? (
-                    <>
-                      <div className="flex items-center gap-2">
-                        <SLATimer ping={selectedPing} />
-                        <span className="text-slate-400 leading-none">
-                          resolution due
-                        </span>
-                      </div>
-                    </>
-                  ) : (
-                    <span className="text-slate-400">No SLA configured</span>
-                  )}
-                </div>
               </div>
+
+              {/* Sticky Summary Section */}
+              {selectedPing.ai_summary && (
+                <div className="flex-shrink-0 bg-blue-500/10 backdrop-blur-sm border-b border-blue-200 shadow-sm sticky top-0 z-10">
+                  <div className="px-6 py-4">
+                    <button
+                      onClick={() => setIsSummaryCollapsed(!isSummaryCollapsed)}
+                      className="w-full flex items-start justify-between gap-4 text-left group"
+                    >
+                      <div className="flex-1">
+                        {!isSummaryCollapsed && (
+                          <p className="text-slate-900 leading-relaxed">
+                            {selectedPing.ai_summary}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex-shrink-0 text-slate-400 group-hover:text-slate-600 transition-colors">
+                        {isSummaryCollapsed ? (
+                          <ChevronDown className="w-5 h-5" />
+                        ) : (
+                          <ChevronUp className="w-5 h-5" />
+                        )}
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-white to-slate-50">
                 <div className="space-y-4 px-6">
-                  <div className="text-center mb-6">
-                    <h4 className="text-lg font-bold text-slate-900 mb-1">
-                      {selectedPing.title}
-                    </h4>
-                    {selectedPing.category && (
-                      <p className="text-sm text-slate-500">
-                        {selectedPing.category.name}
-                      </p>
-                    )}
-                  </div>
-
                   {selectedPing.messages
                     .filter((message) => message.sender) // Filter out messages with null sender
                     .map((message) => {
@@ -1433,6 +1584,7 @@ export function InboxClient({
                       disabled={isSending}
                     />
                     <textarea
+                      ref={replyTextareaRef}
                       value={replyMessage}
                       onChange={handleMessageChange}
                       onKeyDown={handleKeyDown}

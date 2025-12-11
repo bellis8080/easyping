@@ -87,6 +87,7 @@ export function getAllUserRoles(): UserRole[] {
  * Ping status enumeration
  */
 export enum PingStatus {
+  DRAFT = 'draft',
   NEW = 'new',
   IN_PROGRESS = 'in_progress',
   WAITING_ON_USER = 'waiting_on_user',

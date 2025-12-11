@@ -23,6 +23,14 @@ export interface StatusConfig {
  */
 export function getStatusConfig(status: PingStatus): StatusConfig {
   const configs: Record<PingStatus, StatusConfig> = {
+    draft: {
+      icon: Radio,
+      label: 'Draft',
+      color: 'text-slate-500',
+      bgColor: 'bg-slate-500/10',
+      borderColor: 'border-slate-500/30',
+      pulse: true,
+    },
     resolved: {
       icon: CheckCircle2,
       label: 'Resolved',
@@ -70,6 +78,7 @@ export function getStatusConfig(status: PingStatus): StatusConfig {
  */
 export function getStatusColor(status: PingStatus): string {
   const colors: Record<PingStatus, string> = {
+    draft: 'bg-slate-500', // Gray for draft pings
     new: 'bg-purple-500', // Purple for new pings
     in_progress: 'bg-blue-500', // Blue for active/in-progress
     waiting_on_user: 'bg-orange-500', // Orange for waiting
@@ -85,6 +94,7 @@ export function getStatusColor(status: PingStatus): string {
  */
 export function getStatusLabel(status: PingStatus): string {
   const labels: Record<PingStatus, string> = {
+    draft: 'Draft',
     new: 'New',
     in_progress: 'In Progress',
     waiting_on_user: 'Waiting on User',

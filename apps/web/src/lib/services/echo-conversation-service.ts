@@ -27,6 +27,16 @@ export interface ConversationMessage {
 }
 
 /**
+ * Organization's support profile context
+ */
+export interface SupportProfileContext {
+  support_type: string;
+  description: string;
+  typical_users: string;
+  common_issues?: string[];
+}
+
+/**
  * Configuration for Echo conversation
  */
 export interface EchoConfig {
@@ -34,6 +44,40 @@ export interface EchoConfig {
   model: string;
   apiKey: string;
   temperature?: number;
+  supportProfile?: SupportProfileContext;
+}
+
+/**
+ * Builds support context description for prompts
+ */
+function buildSupportContext(profile?: SupportProfileContext): {
+  supportType: string;
+  supportDescription: string;
+  inScopeExamples: string;
+  outOfScopeExamples: string;
+} {
+  if (!profile) {
+    // Fallback to generic support (shouldn't happen in practice)
+    return {
+      supportType: 'support',
+      supportDescription: 'general support requests',
+      inScopeExamples: 'issues, requests, or questions related to their work',
+      outOfScopeExamples:
+        'personal matters or topics clearly unrelated to work',
+    };
+  }
+
+  // Build examples from common_issues if available
+  const inScopeExamples = profile.common_issues?.length
+    ? profile.common_issues.slice(0, 5).join(', ')
+    : `issues related to ${profile.support_type}`;
+
+  return {
+    supportType: profile.support_type,
+    supportDescription: profile.description,
+    inScopeExamples,
+    outOfScopeExamples: `topics unrelated to ${profile.support_type}`,
+  };
 }
 
 /**
@@ -57,16 +101,21 @@ export async function analyzeConversation(
     })
     .join('\n');
 
+  // Get support context from profile
+  const ctx = buildSupportContext(config.supportProfile);
+
   // Build prompt that focuses on problem understanding with full context
-  const prompt = `You are Echo, an AI support assistant. Your goal is to understand the user's PROBLEM through conversation.
+  const prompt = `You are Echo, an AI support assistant for **${ctx.supportType}**. Your organization handles: ${ctx.supportDescription}
+
+Your goal is to understand the user's request or issue through conversation. Users are typically: ${config.supportProfile?.typical_users || 'organization members'}.
 
 **CRITICAL RULE - READ THIS FIRST:**
-You CANNOT create a problem statement until you know WHAT SPECIFIC THING the user is having trouble with.
-- "I can't connect" is NOT specific enough → you MUST ask "What are you trying to connect to?"
+You CANNOT create a problem statement until you know WHAT SPECIFIC THING the user needs help with.
+- "I need help" is NOT specific enough → you MUST ask "What specifically do you need help with?"
 - "It's not working" is NOT specific enough → you MUST ask "What exactly isn't working?"
-- "I have a problem" is NOT specific enough → you MUST ask "What specifically is happening?"
+- "I have a question" is NOT specific enough → you MUST ask "What's your question about?"
 
-DO NOT say "problemUnderstood: true" unless you can name the SPECIFIC system, application, or device involved (e.g., VPN, email, Outlook, printer, laptop).
+DO NOT say "problemUnderstood: true" unless you can identify the SPECIFIC topic, request, or issue.
 
 Here is the conversation so far:
 
@@ -77,61 +126,47 @@ CONVERSATION CONTEXT:
 - Build on what you've learned - DON'T repeat questions you already asked
 - If user gives vague answers to 3+ questions, summarize what you know and move forward
 
-SPECIFICITY CHECK (apply this to every user response):
-✗ TOO VAGUE - must ask follow-up:
-  - "I can't connect" → Ask: "What are you trying to connect to? (VPN, WiFi, email, a website, a specific app?)"
-  - "It's not working" → Ask: "What exactly isn't working for you?"
-  - "I have a problem" → Ask: "What specifically is happening?"
-  - "Something is wrong" → Ask: "Can you describe what's happening?"
-  - "It won't open" → Ask: "What are you trying to open?"
+SUPPORT SCOPE for ${ctx.supportType}:
+✓ IN SCOPE - topics you can help with: ${ctx.inScopeExamples}
+✗ OUT OF SCOPE - redirect politely: ${ctx.outOfScopeExamples}
 
-✓ SPECIFIC ENOUGH - can create problem statement:
-  - "I can't connect to the VPN" → VPN is identified
-  - "My email won't load" → email is identified
-  - "The printer isn't printing" → printer is identified
-  - "I can't log into Salesforce" → Salesforce is identified
-  - "My laptop won't boot" → laptop is identified
-  - "I can't access any websites" → websites/internet browsing is identified
-  - "My internet isn't working" → internet connection is identified
-  - "I can't get online" → internet/network is identified
+IMPORTANT: Not every message is a problem or issue! Users may have:
+- Questions (needing information, not fixes)
+- Requests (wanting something done, not a problem)
+- Feedback (sharing thoughts, not needing action)
+- Actual issues (something broken or not working)
 
-PROBLEM STATEMENT FORMAT:
-When you understand the problem, write it in this format (no quotes):
-User struggles with [core problem] because [root cause], resulting in [negative impact].
+Adapt your problem statement format accordingly:
+- For ISSUES: "User struggles with [problem] because [cause], resulting in [impact]."
+- For QUESTIONS: "User wants to know [topic/question]."
+- For REQUESTS: "User requests [what they want], for [reason if given]."
+- For FEEDBACK: "User provides feedback about [topic]: [summary]."
 
 IMPORTANT - CAPTURE ALL USER NEEDS:
-- If the user mentions MULTIPLE issues or needs, include ALL of them in the problem statement
-- Use "and" to connect multiple issues: "User struggles with X and needs Y because Z"
-- Don't drop secondary requests - they're often equally important to the user
-- Example: If user says "my laptop was stolen and I need VPN on my personal PC" → capture BOTH the stolen laptop AND the VPN need
-
-Examples (note the SPECIFIC systems/applications identified):
-- User struggles with connecting to the VPN because it shows a timeout error, resulting in inability to access work files.
-- User struggles with accessing Outlook email because their password was reset, resulting in missed communications.
-- User struggles with a stolen laptop and needs VPN installed on personal PC because they cannot access work systems, resulting in inability to perform their job.
-- User struggles with the HP printer on floor 3 not printing because it shows offline status, resulting in inability to print reports.
-- User struggles with slow computer performance because of an unidentified issue, resulting in reduced productivity.
+- If the user mentions MULTIPLE things, include ALL of them
+- Use "and" to connect multiple items
+- Don't drop secondary requests - they're often equally important
 
 Respond with JSON:
 
-If the request is OUT OF SCOPE (not related):
+If the request is OUT OF SCOPE (not related to ${ctx.supportType}):
 {
   "outOfScope": true,
-  "outOfScopeResponse": "A polite message explaining you can only help with relevant issues. Vary the response slightly if the user keeps asking off-topic questions. For example: 'I appreciate the question, but I'm specifically designed to help with IT and workplace technology issues. Do you have a computer problem, software issue, or need help accessing a work system?'",
+  "outOfScopeResponse": "A polite message explaining what you CAN help with. For example: 'I'm Echo, your ${ctx.supportType} assistant. I can help with ${ctx.inScopeExamples}. Is there something in that area I can help you with today?'",
   "confidence": 0.95
 }
 
-If you know the SPECIFIC system/application/device (e.g., VPN, email, printer, laptop):
+If you understand the SPECIFIC request/issue/question:
 {
   "problemUnderstood": true,
-  "problemStatement": "User struggles with [SPECIFIC thing] because [cause], resulting in [impact].",
+  "problemStatement": "[Appropriate format based on type - see above]",
   "confidence": 0.XX
 }
 
-If the user's response is VAGUE (like "I can't connect" without saying WHAT):
+If the user's message is too vague:
 {
   "problemUnderstood": false,
-  "nextQuestion": "What are you trying to connect to? (VPN, WiFi, email, a website, a specific app?)",
+  "nextQuestion": "A friendly question to get more details about their specific need",
   "confidence": 0.XX
 }
 
@@ -143,11 +178,8 @@ Respond with ONLY valid JSON.`;
     console.log(prompt);
     console.log('=================================');
 
-    const response = await generateTextCompletion(
-      prompt,
-      config,
-      'You are Echo, an AI assistant for IT support. You are continuing a conversation. Respond with JSON only.'
-    );
+    const systemPrompt = `You are Echo, an AI assistant for ${ctx.supportType}. You are continuing a conversation. Respond with JSON only.`;
+    const response = await generateTextCompletion(prompt, config, systemPrompt);
 
     console.log('=== AI RESPONSE ===');
     console.log(response);
@@ -232,42 +264,42 @@ export async function generateProblemStatement(
     })
     .join('\n');
 
-  const prompt = `Analyze this support conversation and create a problem statement.
+  // Get support context
+  const ctx = buildSupportContext(config.supportProfile);
+
+  const prompt = `Analyze this ${ctx.supportType} conversation and create a summary statement.
 
 Conversation:
 ${conversationText}
 
-Create a problem statement using this EXACT format (no quotes around it):
-User struggles with [core problem] because [root cause], resulting in [negative impact].
+Context: This is a ${ctx.supportType} team that handles: ${ctx.supportDescription}
+
+IMPORTANT: Not everything is a "problem" or "issue". Adapt the format based on what the user needs:
+
+For ISSUES/PROBLEMS (something broken or not working):
+- Format: "User struggles with [problem] because [cause], resulting in [impact]."
+
+For QUESTIONS (seeking information):
+- Format: "User wants to know [topic/question]."
+
+For REQUESTS (wanting something done):
+- Format: "User requests [what they want], for [reason if given]."
+
+For FEEDBACK (sharing thoughts):
+- Format: "User provides feedback about [topic]: [summary]."
 
 Guidelines:
-- [core problem]: What exactly is broken, not working, or what the user needs (from User messages)
-- [root cause]: Why it's happening or what's blocking them. If unknown, say "because of an unidentified issue"
-- [negative impact]: How this affects them (can't work, missed deadline, frustration, etc.)
+- Choose the appropriate format based on the user's actual need
+- If unknown root cause, say "because of an unidentified issue" (for problems only)
+- Capture ALL user needs if they mention multiple things
 
-IMPORTANT - CAPTURE ALL USER NEEDS:
-- If the user mentions MULTIPLE issues or needs, include ALL of them
-- Use "and" to connect multiple issues: "User struggles with X and needs Y because Z"
-- Don't drop secondary requests - they're often equally important
-- Example: "my laptop was stolen and I need VPN on my personal PC" → include BOTH issues
-
-Examples of good problem statements (note the SPECIFIC systems/applications identified):
-- User struggles with connecting to the VPN because it shows a timeout error, resulting in inability to access work files.
-- User struggles with accessing Outlook email because their password was reset, resulting in inability to access work communications.
-- User struggles with a stolen laptop and needs VPN installed on personal PC because they cannot access work systems, resulting in inability to perform their job.
-- User struggles with the HP printer on floor 3 not printing because it shows offline status, resulting in inability to print reports.
-- User struggles with slow computer performance because of an unidentified issue, resulting in reduced productivity.
-
-If the conversation is vague, still use the format but note limited details:
-- User struggles with an unspecified issue because details were not provided, resulting in unknown impact.
-
-Respond with ONLY the problem statement - no quotes, no additional text, no explanation.`;
+Respond with ONLY the statement - no quotes, no additional text, no explanation.`;
 
   try {
     const response = await generateTextCompletion(
       prompt,
       config,
-      'You are a support ticket summarizer. Create clear, concise problem statements.'
+      `You are a ${ctx.supportType} ticket summarizer. Create clear, concise statements.`
     );
 
     let statement = response.trim();

@@ -6,6 +6,8 @@ export type { Database, Json } from './supabase';
 // Re-export application data models
 export type {
   AIConfig,
+  SupportType,
+  SupportProfile,
   Organization,
   User,
   Ping,

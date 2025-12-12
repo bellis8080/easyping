@@ -12,6 +12,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js';
 import {
   analyzeConversation,
   type ConversationMessage,
+  type SupportProfileContext,
 } from '@/lib/services/echo-conversation-service';
 
 const ECHO_INTRODUCTION =
@@ -117,10 +118,10 @@ export async function POST(
         .eq('id', ping.id);
     }
 
-    // Get AI configuration
+    // Get AI configuration and support profile
     const { data: orgData, error: orgError } = await supabase
       .from('organizations')
-      .select('ai_config')
+      .select('ai_config, support_profile')
       .eq('id', tenantId)
       .single();
 
@@ -132,6 +133,9 @@ export async function POST(
     }
 
     const aiConfig = orgData.ai_config as any;
+    const supportProfile = orgData.support_profile as
+      | SupportProfileContext
+      | undefined;
 
     // Decrypt API key
     const { data: decryptedKey, error: decryptError } = await supabase.rpc(
@@ -172,6 +176,7 @@ export async function POST(
       provider: aiConfig.provider,
       model: aiConfig.model,
       apiKey: decryptedKey,
+      supportProfile,
     });
 
     // Handle out-of-scope requests from the very first message

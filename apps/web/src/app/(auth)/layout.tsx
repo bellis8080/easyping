@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 p-4">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-2xl">
         {/* Logo - centered above login card */}
         <div className="flex flex-col items-center mb-8">
           <div className="relative inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-600 mb-3 ring-4 ring-orange-500/30">

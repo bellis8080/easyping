@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   User,
   Bell,
@@ -10,6 +10,12 @@ import {
   Save,
   Loader2,
   Users,
+  Building2,
+  Plus,
+  Pencil,
+  Archive,
+  ArchiveRestore,
+  GripVertical,
 } from 'lucide-react';
 import UserManagementTable from './users/UserManagementTable';
 
@@ -18,6 +24,7 @@ type TabType =
   | 'notifications'
   | 'ai'
   | 'users'
+  | 'supportProfile'
   | 'categories'
   | 'security';
 
@@ -32,6 +39,7 @@ const tabs: TabConfig[] = [
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'ai', label: 'AI Configuration', icon: Sparkles },
   { id: 'users', label: 'Users', icon: Users },
+  { id: 'supportProfile', label: 'Support Profile', icon: Building2 },
   { id: 'categories', label: 'Categories', icon: FolderTree },
   { id: 'security', label: 'Security', icon: Shield },
 ];
@@ -61,9 +69,13 @@ export default function SettingsPage() {
 
   // Filter tabs based on user role
   const visibleTabs = tabs.filter((tab) => {
-    // Only show AI Configuration and Users tabs to owners
-    if (tab.id === 'ai' || tab.id === 'users') {
+    // Only show AI Configuration, Users, and Support Profile tabs to owners
+    if (tab.id === 'ai' || tab.id === 'users' || tab.id === 'supportProfile') {
       return userRole === 'owner';
+    }
+    // Show categories to managers and owners
+    if (tab.id === 'categories') {
+      return userRole === 'owner' || userRole === 'manager';
     }
     return true;
   });
@@ -124,7 +136,13 @@ export default function SettingsPage() {
               {activeTab === 'notifications' && <NotificationsTab />}
               {activeTab === 'ai' && userRole === 'owner' && <AIConfigTab />}
               {activeTab === 'users' && userRole === 'owner' && <UsersTab />}
-              {activeTab === 'categories' && <CategoriesTab />}
+              {activeTab === 'supportProfile' && userRole === 'owner' && (
+                <SupportProfileTab />
+              )}
+              {activeTab === 'categories' &&
+                (userRole === 'owner' || userRole === 'manager') && (
+                  <CategoriesTab />
+                )}
               {activeTab === 'security' && <SecurityTab />}
             </div>
           </div>
@@ -547,55 +565,901 @@ function AIConfigTab() {
   );
 }
 
-function CategoriesTab() {
-  const categories = [
-    'Hardware',
-    'Software',
-    'Network',
-    'Access',
-    'Password Reset',
-    'Other',
-  ];
+interface SupportProfile {
+  support_type: string;
+  description: string;
+  typical_users?: string;
+  systems_supported?: string[];
+  common_issues?: string[];
+  ai_generated: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Common support type suggestions (user can type anything)
+const SUPPORT_TYPE_SUGGESTIONS = [
+  'IT Support',
+  'HR Support',
+  'Customer Service',
+  'Product Support',
+  'Facilities',
+  'Sales Support',
+  'Legal',
+  'Finance',
+  'General Support',
+];
+
+function SupportProfileTab() {
+  const [profile, setProfile] = useState<SupportProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showInterviewModal, setShowInterviewModal] = useState(false);
+  const [editForm, setEditForm] = useState({
+    support_type: '',
+    description: '',
+    typical_users: '',
+  });
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    try {
+      const response = await fetch('/api/organization/profile');
+      if (response.ok) {
+        const data = await response.json();
+        setProfile(data.support_profile);
+        if (data.support_profile) {
+          setEditForm({
+            support_type: data.support_profile.support_type,
+            description: data.support_profile.description,
+            typical_users: data.support_profile.typical_users || '',
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load profile:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!editForm.support_type.trim()) {
+      alert('Support type is required');
+      return;
+    }
+    if (!editForm.description.trim()) {
+      alert('Description is required');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetch('/api/organization/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          support_profile: {
+            support_type: editForm.support_type,
+            description: editForm.description.trim(),
+            typical_users: editForm.typical_users.trim() || null,
+            ai_generated: false,
+            updated_at: new Date().toISOString(),
+          },
+        }),
+      });
+
+      if (response.ok) {
+        await loadProfile();
+        setIsEditing(false);
+      } else {
+        const error = await response.json();
+        alert(`Failed to save: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to save profile:', error);
+      alert('Failed to save profile');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-2">
-          Ticket Categories
-        </h2>
-        <p className="text-sm text-slate-600">
-          Manage categories for ticket organization
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 mb-2">
+            Support Profile
+          </h2>
+          <p className="text-sm text-slate-600">
+            Configure your organization&apos;s support profile
+          </p>
+        </div>
+        {profile && !isEditing && (
+          <button
+            onClick={() => setIsEditing(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <Pencil className="w-4 h-4" />
+            Edit
+          </button>
+        )}
+      </div>
+
+      <div className="bg-white rounded-lg border-2 border-slate-200 p-6 shadow-lg space-y-6">
+        {!profile && !isEditing ? (
+          <div className="text-center py-8">
+            <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-slate-900 mb-2">
+              No Support Profile Configured
+            </h3>
+            <p className="text-sm text-slate-600 mb-4">
+              Set up your support profile to help Echo understand your
+              organization&apos;s needs.
+            </p>
+            <button
+              onClick={() => setIsEditing(true)}
+              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors"
+            >
+              Create Profile
+            </button>
+          </div>
+        ) : isEditing ? (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Support Type *
+              </label>
+              <input
+                type="text"
+                value={editForm.support_type}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, support_type: e.target.value })
+                }
+                list="support-type-suggestions-settings"
+                className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                placeholder="e.g., IT Support, Customer Service, Product Support..."
+              />
+              <datalist id="support-type-suggestions-settings">
+                {SUPPORT_TYPE_SUGGESTIONS.map((suggestion) => (
+                  <option key={suggestion} value={suggestion} />
+                ))}
+              </datalist>
+              <p className="text-xs text-slate-500 mt-1">
+                Type your own or select a suggestion
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Description *
+              </label>
+              <textarea
+                value={editForm.description}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, description: e.target.value })
+                }
+                rows={4}
+                className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+                placeholder="Describe what your support team handles..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Typical Users
+              </label>
+              <input
+                type="text"
+                value={editForm.typical_users}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, typical_users: e.target.value })
+                }
+                className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                placeholder="e.g., Company employees, customers..."
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+              <button
+                onClick={() => {
+                  setIsEditing(false);
+                  if (profile) {
+                    setEditForm({
+                      support_type: profile.support_type,
+                      description: profile.description,
+                      typical_users: profile.typical_users || '',
+                    });
+                  }
+                }}
+                className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving || !editForm.description.trim()}
+                className="flex items-center gap-2 px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Save Profile
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        ) : profile ? (
+          <div className="space-y-4">
+            <div className="flex items-start gap-4">
+              <div className="flex-1">
+                <span className="text-sm font-medium text-slate-500">
+                  Support Type
+                </span>
+                <p className="text-lg font-semibold text-slate-900">
+                  {profile.support_type}
+                </p>
+              </div>
+              {profile.ai_generated && (
+                <span className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded">
+                  AI Generated
+                </span>
+              )}
+            </div>
+
+            <div>
+              <span className="text-sm font-medium text-slate-500">
+                Description
+              </span>
+              <p className="text-slate-900 mt-1">{profile.description}</p>
+            </div>
+
+            {profile.typical_users && (
+              <div>
+                <span className="text-sm font-medium text-slate-500">
+                  Typical Users
+                </span>
+                <p className="text-slate-900 mt-1">{profile.typical_users}</p>
+              </div>
+            )}
+
+            {profile.systems_supported &&
+              profile.systems_supported.length > 0 && (
+                <div>
+                  <span className="text-sm font-medium text-slate-500">
+                    Systems Supported
+                  </span>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {profile.systems_supported.map((system, i) => (
+                      <span
+                        key={i}
+                        className="px-2 py-1 bg-slate-100 text-slate-700 rounded text-sm"
+                      >
+                        {system}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            {profile.common_issues && profile.common_issues.length > 0 && (
+              <div>
+                <span className="text-sm font-medium text-slate-500">
+                  Common Issues
+                </span>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {profile.common_issues.map((issue, i) => (
+                    <span
+                      key={i}
+                      className="px-2 py-1 bg-slate-100 text-slate-700 rounded text-sm"
+                    >
+                      {issue}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="pt-4 border-t border-slate-200 flex items-center justify-between">
+              <span className="text-xs text-slate-500">
+                Last updated:{' '}
+                {new Date(profile.updated_at).toLocaleDateString()}
+              </span>
+              <button
+                onClick={() => setShowInterviewModal(true)}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              >
+                <Sparkles className="w-4 h-4" />
+                Re-run AI Interview
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {/* AI Interview Modal */}
+        {showInterviewModal && (
+          <AIInterviewModal
+            onClose={() => setShowInterviewModal(false)}
+            onComplete={async (newProfile) => {
+              // Save the new profile
+              setSaving(true);
+              try {
+                const response = await fetch('/api/organization/profile', {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    support_profile: {
+                      ...newProfile,
+                      ai_generated: true,
+                      updated_at: new Date().toISOString(),
+                    },
+                  }),
+                });
+
+                if (response.ok) {
+                  await loadProfile();
+                  setShowInterviewModal(false);
+                } else {
+                  const error = await response.json();
+                  alert(`Failed to save: ${error.error}`);
+                }
+              } catch (error) {
+                console.error('Failed to save profile:', error);
+                alert('Failed to save profile');
+              } finally {
+                setSaving(false);
+              }
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface Category {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  icon: string | null;
+  sort_order: number;
+  is_active: boolean;
+  is_default: boolean;
+}
+
+const MAX_CATEGORIES = 20;
+
+function CategoriesTab() {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [newCategory, setNewCategory] = useState({
+    name: '',
+    description: '',
+    color: '#3B82F6',
+  });
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  // Load categories
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  const loadCategories = async () => {
+    try {
+      // Include archived categories so we can show them in the archived section
+      const response = await fetch('/api/categories?include_archived=true');
+      if (response.ok) {
+        const data = await response.json();
+        setCategories(data);
+      }
+    } catch (error) {
+      console.error('Failed to load categories:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const activeCategories = categories.filter((c) => c.is_active);
+  const archivedCategories = categories.filter((c) => !c.is_active);
+  const canAddMore = activeCategories.length < MAX_CATEGORIES;
+
+  const handleAddCategory = async () => {
+    if (!newCategory.name.trim() || !canAddMore) return;
+
+    setSaving(true);
+    try {
+      const response = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newCategory.name.trim(),
+          description: newCategory.description.trim(),
+          color: newCategory.color,
+          sort_order: (activeCategories.length + 1) * 10,
+        }),
+      });
+
+      if (response.ok) {
+        await loadCategories();
+        setNewCategory({ name: '', description: '', color: '#3B82F6' });
+        setIsAddingNew(false);
+      } else {
+        const error = await response.json();
+        alert(`Failed to add category: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to add category:', error);
+      alert('Failed to add category');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdateCategory = async (category: Category) => {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/categories/${category.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: category.name,
+          description: category.description,
+          color: category.color,
+        }),
+      });
+
+      if (response.ok) {
+        await loadCategories();
+        setEditingCategory(null);
+      } else {
+        const error = await response.json();
+        alert(`Failed to update category: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to update category:', error);
+      alert('Failed to update category');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleArchiveCategory = async (categoryId: string) => {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/categories/${categoryId}/archive`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        await loadCategories();
+      } else {
+        const error = await response.json();
+        alert(`Failed to archive category: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to archive category:', error);
+      alert('Failed to archive category');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRestoreCategory = async (categoryId: string) => {
+    if (!canAddMore) {
+      alert(
+        `Cannot restore: Maximum ${MAX_CATEGORIES} active categories allowed`
+      );
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/categories/${categoryId}/restore`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        await loadCategories();
+      } else {
+        const error = await response.json();
+        alert(`Failed to restore category: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to restore category:', error);
+      alert('Failed to restore category');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, categoryId: string) => {
+    setDraggedId(categoryId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, categoryId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (categoryId !== draggedId) {
+      setDragOverId(categoryId);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOverId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedId(null);
+    setDragOverId(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    setDragOverId(null);
+
+    if (!draggedId || draggedId === targetId) {
+      setDraggedId(null);
+      return;
+    }
+
+    // Calculate new order
+    const sortedActive = [...activeCategories].sort(
+      (a, b) => a.sort_order - b.sort_order
+    );
+    const draggedIndex = sortedActive.findIndex((c) => c.id === draggedId);
+    const targetIndex = sortedActive.findIndex((c) => c.id === targetId);
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      setDraggedId(null);
+      return;
+    }
+
+    // Reorder locally first for immediate feedback
+    const reordered = [...sortedActive];
+    const [removed] = reordered.splice(draggedIndex, 1);
+    reordered.splice(targetIndex, 0, removed);
+
+    // Update local state immediately
+    const newCategoryIds = reordered.map((c) => c.id);
+    const updatedCategories = categories.map((cat) => {
+      const newIndex = newCategoryIds.indexOf(cat.id);
+      if (newIndex !== -1) {
+        return { ...cat, sort_order: (newIndex + 1) * 10 };
+      }
+      return cat;
+    });
+    setCategories(updatedCategories);
+
+    // Persist to server
+    try {
+      const response = await fetch('/api/categories/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryIds: newCategoryIds }),
+      });
+
+      if (!response.ok) {
+        // Reload on error to restore server state
+        await loadCategories();
+      }
+    } catch (error) {
+      console.error('Failed to save category order:', error);
+      await loadCategories();
+    }
+
+    setDraggedId(null);
+  };
+
+  // Sort active categories for display
+  const sortedActiveCategories = [...activeCategories].sort(
+    (a, b) => a.sort_order - b.sort_order
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 mb-2">
+            Ping Categories
+          </h2>
+          <p className="text-sm text-slate-600">
+            Manage categories for organizing pings ({activeCategories.length}/
+            {MAX_CATEGORIES} active)
+          </p>
+        </div>
+        <button
+          onClick={() => setShowArchived(!showArchived)}
+          className="text-sm text-slate-600 hover:text-slate-900 flex items-center gap-2"
+        >
+          <Archive className="w-4 h-4" />
+          {showArchived ? 'Hide' : 'Show'} Archived ({archivedCategories.length}
+          )
+        </button>
       </div>
 
       <div className="bg-white rounded-lg border-2 border-slate-200 p-6 shadow-lg space-y-4">
-        {categories.map((category, index) => (
+        {/* Active Categories */}
+        {sortedActiveCategories.map((category) => (
           <div
-            key={category}
-            className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:border-orange-500 hover:shadow-md transition-all"
+            key={category.id}
+            draggable={!editingCategory}
+            onDragStart={(e) => handleDragStart(e, category.id)}
+            onDragOver={(e) => handleDragOver(e, category.id)}
+            onDragLeave={handleDragLeave}
+            onDragEnd={handleDragEnd}
+            onDrop={(e) => handleDrop(e, category.id)}
+            className={`flex items-center justify-between p-4 border rounded-lg transition-all ${
+              draggedId === category.id
+                ? 'opacity-50 border-orange-500 bg-orange-50'
+                : dragOverId === category.id
+                  ? 'border-orange-500 border-2 shadow-md'
+                  : 'border-slate-200 hover:border-orange-500 hover:shadow-md'
+            }`}
           >
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-xs">
-                {index + 1}
+            {editingCategory?.id === category.id ? (
+              <div className="flex-1 flex items-center gap-4">
+                <input
+                  type="color"
+                  value={editingCategory.color}
+                  onChange={(e) =>
+                    setEditingCategory({
+                      ...editingCategory,
+                      color: e.target.value,
+                    })
+                  }
+                  className="w-10 h-10 rounded cursor-pointer"
+                />
+                <div className="flex-1 space-y-2">
+                  <input
+                    type="text"
+                    value={editingCategory.name}
+                    onChange={(e) =>
+                      setEditingCategory({
+                        ...editingCategory,
+                        name: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    placeholder="Category name"
+                  />
+                  <input
+                    type="text"
+                    value={editingCategory.description}
+                    onChange={(e) =>
+                      setEditingCategory({
+                        ...editingCategory,
+                        description: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                    placeholder="Description (optional)"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleUpdateCategory(editingCategory)}
+                    disabled={saving || !editingCategory.name.trim()}
+                    className="px-3 py-1.5 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded transition-colors disabled:opacity-50"
+                  >
+                    {saving ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      'Save'
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setEditingCategory(null)}
+                    className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
-              <span className="font-medium text-slate-900">{category}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button className="px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded transition-colors">
-                Edit
-              </button>
-              {category !== 'Other' && (
-                <button className="px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded transition-colors">
-                  Archive
-                </button>
-              )}
-            </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-3">
+                  <GripVertical
+                    className={`w-5 h-5 text-slate-300 ${draggedId ? 'cursor-grabbing' : 'cursor-grab'}`}
+                  />
+                  <div
+                    className="w-8 h-8 rounded flex items-center justify-center"
+                    style={{ backgroundColor: category.color }}
+                  >
+                    <span className="text-white text-xs font-bold">
+                      {category.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-slate-900">
+                      {category.name}
+                    </span>
+                    {category.description && (
+                      <p className="text-xs text-slate-500">
+                        {category.description}
+                      </p>
+                    )}
+                  </div>
+                  {category.is_default && (
+                    <span className="px-2 py-0.5 text-xs bg-slate-100 text-slate-600 rounded">
+                      Default
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setEditingCategory(category)}
+                    className="p-2 text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                    title="Edit"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  {!category.is_default && (
+                    <button
+                      onClick={() => handleArchiveCategory(category.id)}
+                      disabled={saving}
+                      className="p-2 text-slate-600 hover:bg-red-50 hover:text-red-600 rounded transition-colors"
+                      title="Archive"
+                    >
+                      <Archive className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         ))}
 
-        <button className="w-full py-3 border-2 border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-orange-500 hover:text-orange-500 transition-colors font-medium">
-          + Add New Category
-        </button>
+        {/* Add New Category */}
+        {isAddingNew ? (
+          <div className="p-4 border-2 border-dashed border-orange-300 rounded-lg bg-orange-50">
+            <div className="flex items-center gap-4">
+              <input
+                type="color"
+                value={newCategory.color}
+                onChange={(e) =>
+                  setNewCategory({ ...newCategory, color: e.target.value })
+                }
+                className="w-10 h-10 rounded cursor-pointer"
+              />
+              <div className="flex-1 space-y-2">
+                <input
+                  type="text"
+                  value={newCategory.name}
+                  onChange={(e) =>
+                    setNewCategory({ ...newCategory, name: e.target.value })
+                  }
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  placeholder="Category name"
+                  autoFocus
+                />
+                <input
+                  type="text"
+                  value={newCategory.description}
+                  onChange={(e) =>
+                    setNewCategory({
+                      ...newCategory,
+                      description: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                  placeholder="Description (optional)"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleAddCategory}
+                  disabled={saving || !newCategory.name.trim()}
+                  className="px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {saving ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                  Add
+                </button>
+                <button
+                  onClick={() => {
+                    setIsAddingNew(false);
+                    setNewCategory({
+                      name: '',
+                      description: '',
+                      color: '#3B82F6',
+                    });
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setIsAddingNew(true)}
+            disabled={!canAddMore}
+            className="w-full py-3 border-2 border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-orange-500 hover:text-orange-500 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add New Category
+          </button>
+        )}
+
+        {!canAddMore && (
+          <p className="text-sm text-amber-600 text-center">
+            Maximum {MAX_CATEGORIES} active categories reached. Archive some
+            categories to add more.
+          </p>
+        )}
+
+        {/* Archived Categories */}
+        {showArchived && archivedCategories.length > 0 && (
+          <div className="mt-6 pt-6 border-t border-slate-200">
+            <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+              <Archive className="w-4 h-4" />
+              Archived Categories
+            </h3>
+            <div className="space-y-2">
+              {archivedCategories.map((category) => (
+                <div
+                  key={category.id}
+                  className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg opacity-60"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-6 h-6 rounded"
+                      style={{ backgroundColor: category.color }}
+                    />
+                    <span className="text-sm text-slate-600">
+                      {category.name}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleRestoreCategory(category.id)}
+                    disabled={saving || !canAddMore}
+                    className="p-1.5 text-slate-600 hover:bg-slate-200 rounded transition-colors disabled:opacity-50"
+                    title="Restore"
+                  >
+                    <ArchiveRestore className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -743,6 +1607,281 @@ function UsersTab() {
           />
         </div>
       )}
+    </div>
+  );
+}
+
+// AI Interview Modal Component
+interface AIInterviewModalProps {
+  onClose: () => void;
+  onComplete: (
+    profile: Omit<SupportProfile, 'created_at' | 'updated_at'>
+  ) => void;
+}
+
+interface InterviewMessage {
+  role: 'echo' | 'user';
+  content: string;
+}
+
+interface AIConfig {
+  provider: 'openai' | 'anthropic' | 'azure' | 'skip';
+  apiKey?: string;
+  model?: string;
+}
+
+function AIInterviewModal({ onClose, onComplete }: AIInterviewModalProps) {
+  const [messages, setMessages] = useState<InterviewMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [generatedProfile, setGeneratedProfile] =
+    useState<SupportProfile | null>(null);
+  const [aiConfig, setAiConfig] = useState<AIConfig | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Load AI config and start interview on mount
+  useEffect(() => {
+    loadAIConfigAndStart();
+  }, []);
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const loadAIConfigAndStart = async () => {
+    setIsLoading(true);
+    try {
+      // First, load AI config
+      const configResponse = await fetch('/api/ai-config');
+      let config: AIConfig = { provider: 'skip' };
+      if (configResponse.ok) {
+        const data = await configResponse.json();
+        config = {
+          provider: data.provider || 'skip',
+          apiKey: data.apiKey,
+          model: data.model,
+        };
+        setAiConfig(config);
+      }
+
+      // Then start the interview
+      const response = await fetch('/api/setup/interview/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restart: true }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // API returns { opening: ... }
+        setMessages([{ role: 'echo', content: data.opening }]);
+      } else {
+        // If API fails, use default message
+        setMessages([
+          {
+            role: 'echo',
+            content:
+              "Hi! I'd like to learn about your support team. What kind of support do you provide?",
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error('Failed to start interview:', error);
+      setMessages([
+        {
+          role: 'echo',
+          content:
+            "Hi! I'd like to learn about your support team. What kind of support do you provide?",
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!input.trim() || isLoading || !aiConfig) return;
+
+    const userMessage = input.trim();
+    setInput('');
+    setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/setup/interview/continue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation: [...messages, { role: 'user', content: userMessage }],
+          aiConfig: aiConfig,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        if (data.complete && data.profile) {
+          // Interview complete - show the generated profile
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: 'echo',
+              content:
+                "Great! I've gathered enough information to create your support profile.",
+            },
+          ]);
+          setGeneratedProfile(data.profile);
+        } else if (data.nextQuestion) {
+          // Continue with next question
+          setMessages((prev) => [
+            ...prev,
+            { role: 'echo', content: data.nextQuestion },
+          ]);
+        } else {
+          // Fallback
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: 'echo',
+              content: 'Could you tell me more about your support team?',
+            },
+          ]);
+        }
+      } else {
+        const errorData = await response.json();
+        console.error('Interview continue error:', errorData);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'echo',
+            content:
+              'I had trouble processing that. Could you tell me more about what your support team handles?',
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error('Failed to continue interview:', error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'echo',
+          content:
+            "I didn't quite catch that. Could you tell me more about what your support team handles?",
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-slate-900">
+                Echo AI Interview
+              </h3>
+              <p className="text-xs text-slate-500">
+                Update your support profile
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.map((msg, i) => (
+            <div
+              key={i}
+              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[80%] px-4 py-2 rounded-2xl ${
+                  msg.role === 'user'
+                    ? 'bg-blue-600 text-white rounded-br-md'
+                    : 'bg-slate-100 text-slate-900 rounded-bl-md'
+                }`}
+              >
+                {msg.content}
+              </div>
+            </div>
+          ))}
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="bg-slate-100 text-slate-500 px-4 py-2 rounded-2xl rounded-bl-md">
+                <Loader2 className="w-4 h-4 animate-spin" />
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Generated Profile Preview */}
+        {generatedProfile && (
+          <div className="mx-4 mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="w-4 h-4 text-green-600" />
+              <span className="font-medium text-green-800">
+                Profile Generated
+              </span>
+            </div>
+            <p className="text-sm text-green-700 mb-3">
+              <strong>{generatedProfile.support_type}</strong>:{' '}
+              {generatedProfile.description}
+            </p>
+            <button
+              onClick={() => onComplete(generatedProfile)}
+              className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+            >
+              Use This Profile
+            </button>
+          </div>
+        )}
+
+        {/* Input */}
+        {!generatedProfile && (
+          <div className="p-4 border-t border-slate-200">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Type your response..."
+                disabled={isLoading}
+                className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50"
+              />
+              <button
+                onClick={sendMessage}
+                disabled={isLoading || !input.trim()}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Send
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

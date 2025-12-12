@@ -42,6 +42,7 @@ export type Database = {
           icon: string | null;
           id: string;
           is_active: boolean;
+          is_default: boolean;
           name: string;
           sort_order: number;
           tenant_id: string;
@@ -53,6 +54,7 @@ export type Database = {
           icon?: string | null;
           id?: string;
           is_active?: boolean;
+          is_default?: boolean;
           name: string;
           sort_order?: number;
           tenant_id: string;
@@ -64,6 +66,7 @@ export type Database = {
           icon?: string | null;
           id?: string;
           is_active?: boolean;
+          is_default?: boolean;
           name?: string;
           sort_order?: number;
           tenant_id?: string;
@@ -86,6 +89,7 @@ export type Database = {
           id: string;
           name: string;
           settings: Json | null;
+          support_profile: Json | null;
         };
         Insert: {
           ai_config?: Json | null;
@@ -94,6 +98,7 @@ export type Database = {
           id?: string;
           name: string;
           settings?: Json | null;
+          support_profile?: Json | null;
         };
         Update: {
           ai_config?: Json | null;
@@ -102,6 +107,7 @@ export type Database = {
           id?: string;
           name?: string;
           settings?: Json | null;
+          support_profile?: Json | null;
         };
         Relationships: [];
       };

@@ -10,22 +10,37 @@ import { StepIndicator } from './step-indicator';
 import { OrganizationStep } from './organization-step';
 import { AdminAccountStep } from './admin-account-step';
 import { AIConfigStep } from './ai-config-step';
+import { SupportProfileStep } from './support-profile-step';
+import { CategoriesStep } from './categories-step';
 import {
   organizationSchema,
   adminAccountSchema,
   aiConfigSchema,
+  supportProfileSchema,
+  categoriesSchema,
   type OrganizationData,
   type AdminAccountData,
   type AIConfigData,
+  type SupportProfileData,
+  type CategoriesData,
 } from '@/lib/schemas/setup';
+import type { SupportProfile } from '@easyping/types';
 
-const STEPS = ['Organization', 'Admin Account', 'AI Config'];
+const STEPS = [
+  'Organization',
+  'Admin Account',
+  'AI Config',
+  'Support Profile',
+  'Categories',
+];
 
 export function SetupWizard() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [generatedProfile, setGeneratedProfile] =
+    useState<SupportProfile | null>(null);
 
   // Separate forms for each step
   const orgForm = useForm<OrganizationData>({
@@ -55,6 +70,29 @@ export function SetupWizard() {
     },
   });
 
+  const profileForm = useForm<SupportProfileData>({
+    resolver: zodResolver(supportProfileSchema),
+    defaultValues: {
+      support_type: 'general',
+      description: '',
+      typical_users: '',
+      systems_supported: [],
+      common_issues: [],
+      ai_generated: false,
+    },
+  });
+
+  const categoriesForm = useForm<CategoriesData>({
+    resolver: zodResolver(categoriesSchema),
+    defaultValues: {
+      categories: [],
+    },
+  });
+
+  const handleProfileGenerated = (profile: SupportProfile) => {
+    setGeneratedProfile(profile);
+  };
+
   const handleNext = async () => {
     console.log('handleNext called, currentStep:', currentStep);
     let isValid = false;
@@ -76,11 +114,20 @@ export function SetupWizard() {
       console.log('Triggering AI form validation');
       isValid = await aiForm.trigger();
       console.log('AI form valid:', isValid);
+    } else if (currentStep === 4) {
+      console.log('Triggering profile form validation');
+      isValid = await profileForm.trigger();
+      console.log('Profile form valid:', isValid);
+    } else if (currentStep === 5) {
+      console.log('Triggering categories form validation');
+      // Categories step is optional - allow empty categories
+      isValid = true;
+      console.log('Categories form valid:', isValid);
     }
 
     console.log('Form validation result:', isValid);
     if (isValid) {
-      if (currentStep < 3) {
+      if (currentStep < 5) {
         console.log('Moving to next step');
         setCurrentStep(currentStep + 1);
       } else {
@@ -108,6 +155,8 @@ export function SetupWizard() {
         organization: orgForm.getValues(),
         admin: adminForm.getValues(),
         aiConfig: aiForm.getValues(),
+        supportProfile: profileForm.getValues(),
+        categories: categoriesForm.getValues(),
       };
 
       const response = await fetch('/api/setup', {
@@ -155,6 +204,29 @@ export function SetupWizard() {
           {currentStep === 1 && <OrganizationStep form={orgForm} />}
           {currentStep === 2 && <AdminAccountStep form={adminForm} />}
           {currentStep === 3 && <AIConfigStep form={aiForm} />}
+          {currentStep === 4 && (
+            <SupportProfileStep
+              form={profileForm}
+              aiConfig={aiForm.getValues()}
+              onProfileGenerated={handleProfileGenerated}
+            />
+          )}
+          {currentStep === 5 && (
+            <CategoriesStep
+              form={categoriesForm}
+              supportProfile={
+                generatedProfile || {
+                  support_type: profileForm.getValues().support_type,
+                  description: profileForm.getValues().description,
+                  typical_users: profileForm.getValues().typical_users || '',
+                  ai_generated: profileForm.getValues().ai_generated,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                }
+              }
+              aiConfig={aiForm.getValues()}
+            />
+          )}
         </div>
 
         <div className="flex justify-between">
@@ -174,7 +246,7 @@ export function SetupWizard() {
           >
             {isSubmitting
               ? 'Setting up...'
-              : currentStep === 3
+              : currentStep === 5
                 ? 'Complete Setup'
                 : 'Next'}
           </Button>

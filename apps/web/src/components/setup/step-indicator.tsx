@@ -9,7 +9,7 @@ interface StepIndicatorProps {
 
 export function StepIndicator({ currentStep, steps }: StepIndicatorProps) {
   return (
-    <div className="flex items-center justify-center gap-2 mb-8">
+    <div className="flex items-center justify-center gap-1 mb-8 flex-wrap">
       {steps.map((step, index) => {
         const stepNumber = index + 1;
         const isCompleted = stepNumber < currentStep;
@@ -18,16 +18,18 @@ export function StepIndicator({ currentStep, steps }: StepIndicatorProps) {
 
         return (
           <div key={step} className="flex items-center">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               {isCompleted && (
-                <CheckCircle className="w-5 h-5 text-green-500" />
+                <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
               )}
               {isCurrent && (
-                <Circle className="w-5 h-5 text-blue-500 fill-blue-500" />
+                <Circle className="w-4 h-4 text-blue-500 fill-blue-500 flex-shrink-0" />
               )}
-              {isPending && <Circle className="w-5 h-5 text-gray-300" />}
+              {isPending && (
+                <Circle className="w-4 h-4 text-gray-300 flex-shrink-0" />
+              )}
               <span
-                className={`text-sm ${
+                className={`text-xs whitespace-nowrap ${
                   isCurrent
                     ? 'font-semibold text-white'
                     : isCompleted
@@ -40,7 +42,7 @@ export function StepIndicator({ currentStep, steps }: StepIndicatorProps) {
             </div>
             {index < steps.length - 1 && (
               <div
-                className={`w-8 h-0.5 mx-2 ${
+                className={`w-4 h-0.5 mx-1 flex-shrink-0 ${
                   isCompleted ? 'bg-green-500' : 'bg-gray-300'
                 }`}
               />

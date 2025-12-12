@@ -87,12 +87,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Build support profile if provided
+    const supportProfile = data.supportProfile
+      ? {
+          support_type: data.supportProfile.support_type,
+          description: data.supportProfile.description,
+          typical_users: data.supportProfile.typical_users || null,
+          systems_supported: data.supportProfile.systems_supported || null,
+          common_issues: data.supportProfile.common_issues || null,
+          ai_generated: data.supportProfile.ai_generated || false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+      : null;
+
     // Create organization first (we need the org ID for encryption)
     const { data: org, error: orgError } = await supabase
       .from('organizations')
       .insert({
         name: data.organization.name,
         domain: data.organization.domain || null,
+        support_profile: supportProfile,
       })
       .select()
       .single();
@@ -102,31 +117,74 @@ export async function POST(request: NextRequest) {
       throw new Error(`Failed to create organization: ${orgError.message}`);
     }
 
-    // Create default categories for the organization
-    const { error: categoriesError } = await supabase
-      .from('categories')
-      .insert([
+    // Build categories from wizard selection or use defaults
+    let categoriesToInsert: Array<{
+      tenant_id: string;
+      name: string;
+      description: string;
+      color: string;
+      icon: string | null;
+      sort_order: number;
+      is_default: boolean;
+    }> = [];
+
+    if (data.categories?.categories && data.categories.categories.length > 0) {
+      // Use categories from wizard
+      categoriesToInsert = data.categories.categories.map((cat, index) => ({
+        tenant_id: org.id,
+        name: cat.name,
+        description: cat.description || '',
+        color: cat.color,
+        icon: cat.icon || null,
+        sort_order: (index + 1) * 10,
+        is_default: cat.is_default || false,
+      }));
+
+      // Ensure "Other" category exists as default
+      const hasOther = categoriesToInsert.some(
+        (c) => c.name.toLowerCase() === 'other'
+      );
+      if (!hasOther) {
+        categoriesToInsert.push({
+          tenant_id: org.id,
+          name: 'Other',
+          description: 'Issues that do not fit into other categories',
+          color: '#6B7280',
+          icon: 'Circle',
+          sort_order: (categoriesToInsert.length + 1) * 10,
+          is_default: true,
+        });
+      }
+    } else {
+      // Use default IT support categories
+      categoriesToInsert = [
         {
           tenant_id: org.id,
           name: 'Software Issue',
           description:
             'Problems with applications, software crashes, errors, or performance issues',
           color: '#3B82F6',
+          icon: null,
           sort_order: 10,
+          is_default: false,
         },
         {
           tenant_id: org.id,
           name: 'Hardware Issue',
           description: 'Computer, printer, phone, or other hardware problems',
           color: '#EF4444',
+          icon: null,
           sort_order: 20,
+          is_default: false,
         },
         {
           tenant_id: org.id,
           name: 'Network & Connectivity',
           description: 'Internet, WiFi, VPN, or network access problems',
           color: '#10B981',
+          icon: null,
           sort_order: 30,
+          is_default: false,
         },
         {
           tenant_id: org.id,
@@ -134,7 +192,9 @@ export async function POST(request: NextRequest) {
           description:
             'Login issues, password resets, permissions, account setup',
           color: '#F59E0B',
+          icon: null,
           sort_order: 40,
+          is_default: false,
         },
         {
           tenant_id: org.id,
@@ -142,7 +202,9 @@ export async function POST(request: NextRequest) {
           description:
             'Email delivery, calendar, messaging, or communication tools',
           color: '#8B5CF6',
+          icon: null,
           sort_order: 50,
+          is_default: false,
         },
         {
           tenant_id: org.id,
@@ -150,7 +212,9 @@ export async function POST(request: NextRequest) {
           description:
             'Security concerns, suspicious activity, phishing, malware',
           color: '#DC2626',
+          icon: null,
           sort_order: 60,
+          is_default: false,
         },
         {
           tenant_id: org.id,
@@ -158,7 +222,9 @@ export async function POST(request: NextRequest) {
           description:
             'New equipment, software installation, account creation, access requests',
           color: '#06B6D4',
+          icon: null,
           sort_order: 70,
+          is_default: false,
         },
         {
           tenant_id: org.id,
@@ -166,16 +232,26 @@ export async function POST(request: NextRequest) {
           description:
             'Questions about how to use software, features, or services',
           color: '#84CC16',
+          icon: null,
           sort_order: 80,
+          is_default: false,
         },
         {
           tenant_id: org.id,
           name: 'Other',
           description: 'Issues that do not fit into other categories',
           color: '#6B7280',
+          icon: null,
           sort_order: 90,
+          is_default: true,
         },
-      ]);
+      ];
+    }
+
+    // Create categories for the organization
+    const { error: categoriesError } = await supabase
+      .from('categories')
+      .insert(categoriesToInsert);
 
     if (categoriesError) {
       console.error('Categories creation error:', categoriesError);

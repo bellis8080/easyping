@@ -14,6 +14,20 @@ export interface AIConfig {
   api_version?: string;
 }
 
+// Support type is now a free-form string to allow any use case
+export type SupportType = string;
+
+export interface SupportProfile {
+  support_type: SupportType;
+  description: string; // Freeform description of what support handles
+  typical_users: string; // Who submits pings (employees, customers, etc.)
+  systems_supported?: string[]; // Optional list of systems/tools
+  common_issues?: string[]; // Optional list of common issue types
+  ai_generated: boolean; // Whether Echo created this profile
+  created_at: string; // ISO timestamp
+  updated_at: string; // ISO timestamp
+}
+
 export interface Organization {
   id: string; // UUID
   name: string;
@@ -21,6 +35,7 @@ export interface Organization {
   created_at: string; // ISO timestamp
   settings: Record<string, any>; // JSONB
   ai_config?: AIConfig; // JSONB - AI provider configuration
+  support_profile?: SupportProfile; // JSONB - Support profile describing what this org handles
 }
 
 export interface User {

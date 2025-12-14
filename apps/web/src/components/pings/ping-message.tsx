@@ -106,7 +106,7 @@ export function PingMessage({
           <span className="text-sm font-semibold text-slate-900">
             {message.sender.full_name}
           </span>
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-slate-500" suppressHydrationWarning>
             {formatTimestamp(message.created_at)}
           </span>
         </div>

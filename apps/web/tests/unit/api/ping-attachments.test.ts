@@ -23,6 +23,12 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: vi.fn(),
 }));
 
+// Mock summary-trigger to avoid needing to set up complex mock chains
+vi.mock('@/lib/services/summary-trigger', () => ({
+  shouldRegenerateSummary: vi.fn().mockResolvedValue(false),
+  triggerSummaryRegeneration: vi.fn(),
+}));
+
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 

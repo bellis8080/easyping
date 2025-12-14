@@ -66,6 +66,7 @@ export interface Ping {
   closed_at: string | null; // ISO timestamp
   sla_due_at: string | null; // ISO timestamp
   ai_summary: string | null;
+  summary_updated_at: string | null; // ISO timestamp - when AI summary was last generated
   first_response_at: string | null; // ISO timestamp - when agent first replied
   last_user_reply_at: string | null; // ISO timestamp - last time user replied
   last_agent_reply_at: string | null; // ISO timestamp - last time agent replied

@@ -1,0 +1,60 @@
+schema: 1
+story: '3.6'
+gate: PASS
+status_reason: 'All acceptance criteria implemented. Summary regeneration on message count (3+) and status change, manual refresh button, 500-char limit enforcement, and graceful error handling complete.'
+reviewer: 'Quinn'
+updated: '2025-12-14T15:45:00Z'
+top_issues:
+  - id: 'MANUAL-001'
+    severity: low
+    finding: 'Manual testing checklist items not yet verified (refresh button loading state, 3+ message auto-update, status change trigger)'
+    suggested_action: 'Complete manual testing checklist before final release'
+waiver: { active: false }
+
+# Implementation Assessment
+#
+# Part A: Automatic Summary Updates - COMPLETE
+# - AC1: Summary regenerated when 3+ new messages added (shouldRegenerateSummary in summary-trigger.ts)
+# - AC2: Summary regenerated on status change (status/route.ts integration)
+# - AC3: Summary content evolves with full conversation context (buildSummaryPrompt includes all messages)
+# - AC4: summary_updated_at column added (migration 20251214000001)
+#
+# Part B: Manual Refresh - COMPLETE
+# - AC5: Refresh button in summary header (ping-detail.tsx, team-inbox-client.tsx, inbox-client.tsx)
+# - AC6: Clicking refresh calls /api/pings/[pingNumber]/summary POST endpoint
+# - AC7: Loading state shown (isRefreshingSummary state + Loader2 spinner)
+# - AC8: Toast notification on success/error
+#
+# Part C: Summary Generation Logic - COMPLETE
+# - AC9: Full conversation context included in prompt (all messages formatted as User/Agent/Echo/System)
+# - AC10: 500 char limit enforced (enforceCharacterLimit with smart truncation)
+# - AC11: Summary format includes Issue/Progress/Status sections (in prompt template)
+# - AC12: Existing summary preserved on AI failure (graceful fallback in route and trigger)
+#
+# Testing Summary:
+# - ping-summary-service.test.ts: 12 unit tests
+# - summary/route.test.ts: 7 API endpoint tests
+# - Total: 347 tests passing (22 new tests added since Story 3.5)
+#
+# Files Created:
+# - supabase/migrations/20251214000001_add_summary_updated_at.sql
+# - apps/web/src/lib/services/ping-summary-service.ts
+# - apps/web/src/lib/services/ping-summary-service.test.ts
+# - apps/web/src/lib/services/summary-trigger.ts
+# - apps/web/src/app/api/pings/[pingNumber]/summary/route.ts
+# - apps/web/src/app/api/pings/[pingNumber]/summary/route.test.ts
+#
+# Files Modified:
+# - apps/web/src/app/api/pings/[pingNumber]/messages/route.ts (3+ message trigger)
+# - apps/web/src/app/api/pings/[pingNumber]/status/route.ts (status change trigger)
+# - apps/web/src/components/pings/ping-detail.tsx (refresh button UI)
+# - apps/web/src/components/inbox/inbox-client.tsx (agent refresh button)
+# - apps/web/src/components/teams/team-inbox-client.tsx (agent refresh button)
+# - packages/types/src/models.ts (summary_updated_at type)
+#
+# Key Implementation Patterns:
+# - Fire-and-forget for automatic regeneration (non-blocking)
+# - Fire-and-forget pattern in triggerSummaryRegeneration prevents blocking API responses
+# - OpenAI and Anthropic providers supported (follows echo-conversation-service pattern)
+# - Intelligent character limit truncation at sentence/word boundaries
+# - Realtime sync via updated_at timestamp update

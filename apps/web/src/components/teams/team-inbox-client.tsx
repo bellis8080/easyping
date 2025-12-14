@@ -17,6 +17,7 @@ import {
   Loader2,
   Plus,
   Trash2,
+  RefreshCw,
 } from 'lucide-react';
 import {
   Ping,
@@ -271,6 +272,7 @@ export function TeamInboxClient({
   const [isConnected, setIsConnected] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [isSummaryCollapsed, setIsSummaryCollapsed] = useState(false);
+  const [isRefreshingSummary, setIsRefreshingSummary] = useState(false);
   const [showMemberList, setShowMemberList] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(members);
   const [availableAgents, setAvailableAgents] = useState<
@@ -599,6 +601,44 @@ export function TeamInboxClient({
     }
   };
 
+  // Refresh AI summary
+  const handleRefreshSummary = async () => {
+    if (!selectedPing || isRefreshingSummary) return;
+
+    setIsRefreshingSummary(true);
+    try {
+      const response = await fetch(
+        `/api/pings/${selectedPing.ping_number}/summary`,
+        {
+          method: 'POST',
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok && data.summary) {
+        setSelectedPing((prev) =>
+          prev ? { ...prev, ai_summary: data.summary } : null
+        );
+        setPings((prevPings) =>
+          prevPings.map((p) =>
+            p.id === selectedPing.id ? { ...p, ai_summary: data.summary } : p
+          )
+        );
+        toast.success('Summary updated');
+      } else if (data.notice) {
+        toast.info(data.notice);
+      } else {
+        toast.error('Failed to refresh summary');
+      }
+    } catch (error) {
+      console.error('Error refreshing summary:', error);
+      toast.error('Failed to refresh summary');
+    } finally {
+      setIsRefreshingSummary(false);
+    }
+  };
+
   // Fetch available agents for adding to team
   const fetchAvailableAgents = async () => {
     setIsLoadingAgents(true);
@@ -737,13 +777,13 @@ export function TeamInboxClient({
     }
   }, [isReplying]);
 
-  // Subscribe to realtime updates
+  // Subscribe to realtime message updates
   useEffect(() => {
     if (!selectedPing) return;
 
     const supabase = createClient();
     const channel = supabase
-      .channel(`team-inbox-ping:${selectedPing.id}`)
+      .channel(`team-inbox-messages:${selectedPing.id}`)
       .on(
         'postgres_changes',
         {
@@ -829,6 +869,114 @@ export function TeamInboxClient({
     };
   }, [selectedPing?.id]);
 
+  // Subscribe to realtime ping updates (status, ai_summary, etc.)
+  useEffect(() => {
+    if (!selectedPing) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`team-inbox-ping-updates:${selectedPing.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'pings',
+          filter: `id=eq.${selectedPing.id}`,
+        },
+        async (payload) => {
+          const updatedRecord = payload.new as Record<string, unknown>;
+
+          // Fetch updated ping with assigned_to relation
+          const { data: updatedPing } = await supabase
+            .from('pings')
+            .select(
+              'assigned_to:users!pings_assigned_to_fkey(id, full_name, avatar_url)'
+            )
+            .eq('id', selectedPing.id)
+            .single();
+
+          const assignedTo = updatedPing?.assigned_to
+            ? Array.isArray(updatedPing.assigned_to)
+              ? updatedPing.assigned_to[0]
+              : updatedPing.assigned_to
+            : null;
+
+          // Update selectedPing with new data from payload
+          setSelectedPing((prev) => {
+            if (!prev) return prev;
+
+            // CRITICAL: For ai_summary, use summary_updated_at for comparison
+            // This prevents stale updates from overwriting fresh summaries
+            const payloadSummaryUpdatedAt = updatedRecord.summary_updated_at as
+              | string
+              | null;
+            const prevSummaryUpdatedAt = (prev as any).summary_updated_at;
+
+            let newAiSummary = prev.ai_summary;
+            if (payloadSummaryUpdatedAt) {
+              const payloadTime = new Date(payloadSummaryUpdatedAt).getTime();
+              const prevTime = prevSummaryUpdatedAt
+                ? new Date(prevSummaryUpdatedAt).getTime()
+                : 0;
+
+              if (payloadTime >= prevTime) {
+                newAiSummary = updatedRecord.ai_summary as string | null;
+              }
+            }
+
+            return {
+              ...prev,
+              status: updatedRecord.status as typeof prev.status,
+              priority: updatedRecord.priority as typeof prev.priority,
+              title: updatedRecord.title as string,
+              ai_summary: newAiSummary,
+              updated_at: updatedRecord.updated_at as string,
+              assigned_to: assignedTo,
+            };
+          });
+
+          // Also update the ping in the list
+          setPings((prevPings) =>
+            prevPings.map((p) => {
+              if (p.id !== selectedPing.id) return p;
+
+              const payloadSummaryUpdatedAt =
+                updatedRecord.summary_updated_at as string | null;
+              const prevSummaryUpdatedAt = (p as any).summary_updated_at;
+
+              let newAiSummary = p.ai_summary;
+              if (payloadSummaryUpdatedAt) {
+                const payloadTime = new Date(payloadSummaryUpdatedAt).getTime();
+                const prevTime = prevSummaryUpdatedAt
+                  ? new Date(prevSummaryUpdatedAt).getTime()
+                  : 0;
+
+                if (payloadTime >= prevTime) {
+                  newAiSummary = updatedRecord.ai_summary as string | null;
+                }
+              }
+
+              return {
+                ...p,
+                status: updatedRecord.status as typeof p.status,
+                priority: updatedRecord.priority as typeof p.priority,
+                title: updatedRecord.title as string,
+                ai_summary: newAiSummary,
+                updated_at: updatedRecord.updated_at as string,
+                assigned_to: assignedTo,
+              };
+            })
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedPing?.id]);
+
   // Subscribe to presence for replying indicators
   useEffect(() => {
     if (!selectedPing) return;
@@ -871,6 +1019,132 @@ export function TeamInboxClient({
       supabase.removeChannel(channel);
     };
   }, [selectedPing?.id, currentUser.id, currentUser.full_name]);
+
+  // Subscribe to new pings being routed to this team
+  useEffect(() => {
+    const supabase = createClient();
+
+    const handleNewTeamPing = async (payload: any) => {
+      const pingData = payload.new as Record<string, unknown>;
+
+      // Only process if this ping belongs to our team
+      if (pingData.team_id !== team.id) return;
+
+      // Skip draft pings
+      if (pingData.status === 'draft') return;
+
+      // Check if we already have this ping
+      const existsInList = pings.some((p) => p.id === pingData.id);
+      if (existsInList) return;
+
+      // Fetch the full ping with all relations
+      const { data: newPing, error: pingError } = await supabase
+        .from('pings')
+        .select('*')
+        .eq('id', pingData.id)
+        .single();
+
+      if (pingError || !newPing) return;
+
+      // Fetch creator
+      const { data: creator } = await supabase
+        .from('users')
+        .select('id, full_name, email, avatar_url')
+        .eq('id', newPing.created_by)
+        .single();
+
+      // Fetch category if exists
+      let category = null;
+      if (newPing.category_id) {
+        const { data: cat } = await supabase
+          .from('categories')
+          .select('id, name, color, icon')
+          .eq('id', newPing.category_id)
+          .single();
+        category = cat;
+      }
+
+      // Fetch assigned user if exists
+      let assigned = null;
+      if (newPing.assigned_to) {
+        const { data: assignee } = await supabase
+          .from('users')
+          .select('id, full_name, avatar_url')
+          .eq('id', newPing.assigned_to)
+          .single();
+        assigned = assignee;
+      }
+
+      // Fetch initial messages
+      const { data: messages } = await supabase
+        .from('ping_messages')
+        .select('*')
+        .eq('ping_id', newPing.id)
+        .order('created_at', { ascending: true });
+
+      // Fetch senders for messages
+      const messagesWithSenders = await Promise.all(
+        (messages || []).map(async (msg) => {
+          const { data: sender } = await supabase
+            .from('users')
+            .select('id, full_name, avatar_url, role')
+            .eq('id', msg.sender_id)
+            .single();
+          return { ...msg, sender };
+        })
+      );
+
+      const transformedPing = {
+        ...newPing,
+        created_by: creator,
+        assigned_to: assigned,
+        category,
+        messages: messagesWithSenders,
+      };
+
+      // Add new ping to the list
+      setPings((prev: PingWithRelations[]) => {
+        const exists = prev.some((p) => p.id === transformedPing.id);
+        if (exists) return prev;
+        return [transformedPing as PingWithRelations, ...prev];
+      });
+
+      // Show toast notification
+      toast.info(
+        `New ping #PING-${String(newPing.ping_number).padStart(3, '0')} routed to ${team.name}`
+      );
+    };
+
+    const channel = supabase
+      .channel(`team-inbox-new-pings:${team.id}`)
+      // Listen for pings being routed to this team (UPDATE with team_id change)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'pings',
+          filter: `team_id=eq.${team.id}`,
+        },
+        handleNewTeamPing
+      )
+      // Also listen for new pings created directly with this team_id
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'pings',
+          filter: `team_id=eq.${team.id}`,
+        },
+        handleNewTeamPing
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [team.id, team.name, pings]);
 
   // Filter pings
   const filteredPings = pings
@@ -1445,25 +1719,45 @@ export function TeamInboxClient({
 
                   {/* AI Summary (collapsible) */}
                   {selectedPing.ai_summary && (
-                    <button
-                      onClick={() => setIsSummaryCollapsed(!isSummaryCollapsed)}
-                      className="w-full flex items-start justify-between gap-4 text-left group"
-                    >
-                      <div className="flex-1">
-                        {!isSummaryCollapsed && (
-                          <p className="text-slate-900 leading-relaxed">
-                            {selectedPing.ai_summary}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex-shrink-0 text-slate-400 group-hover:text-slate-600 transition-colors">
-                        {isSummaryCollapsed ? (
-                          <ChevronDown className="w-5 h-5" />
+                    <div className="flex items-start justify-between gap-4">
+                      <button
+                        onClick={() =>
+                          setIsSummaryCollapsed(!isSummaryCollapsed)
+                        }
+                        className="flex-1 flex items-start justify-between gap-4 text-left group"
+                      >
+                        <div className="flex-1">
+                          {isSummaryCollapsed ? (
+                            <span className="text-sm font-medium text-slate-600">
+                              AI Summary
+                            </span>
+                          ) : (
+                            <p className="text-slate-900 leading-relaxed">
+                              {selectedPing.ai_summary}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex-shrink-0 text-slate-400 group-hover:text-slate-600 transition-colors">
+                          {isSummaryCollapsed ? (
+                            <ChevronDown className="w-5 h-5" />
+                          ) : (
+                            <ChevronUp className="w-5 h-5" />
+                          )}
+                        </div>
+                      </button>
+                      <button
+                        onClick={handleRefreshSummary}
+                        disabled={isRefreshingSummary}
+                        className="flex-shrink-0 p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 transition-colors disabled:opacity-50"
+                        title="Refresh summary"
+                      >
+                        {isRefreshingSummary ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
-                          <ChevronUp className="w-5 h-5" />
+                          <RefreshCw className="w-4 h-4" />
                         )}
-                      </div>
-                    </button>
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

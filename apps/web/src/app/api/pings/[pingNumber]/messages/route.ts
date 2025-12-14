@@ -4,6 +4,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { MessageType, PingStatus } from '@easyping/types';
 import { calculateStatusTransition } from '@/lib/ping-status-transitions';
+import {
+  shouldRegenerateSummary,
+  triggerSummaryRegeneration,
+} from '@/lib/services/summary-trigger';
 
 const sendMessageSchema = z
   .object({
@@ -83,7 +87,7 @@ export async function POST(
   const { data: ping, error: pingError } = await supabaseAdmin
     .from('pings')
     .select(
-      'id, tenant_id, status, created_by, assigned_to, created_by_user:users!pings_created_by_fkey(full_name)'
+      'id, tenant_id, status, created_by, assigned_to, summary_updated_at, created_by_user:users!pings_created_by_fkey(full_name)'
     )
     .eq('ping_number', parseInt(pingNumber))
     .eq('tenant_id', userProfile.tenant_id)
@@ -336,6 +340,21 @@ export async function POST(
       .from('pings')
       .update({ updated_at: new Date().toISOString() })
       .eq('id', ping.id);
+  }
+
+  // Story 3.6: Check if summary should be regenerated (3+ new messages since last update)
+  // Only for non-draft pings (draft pings are handled by Echo)
+  if (ping.status !== 'draft') {
+    const shouldRegenerate = await shouldRegenerateSummary(
+      supabaseAdmin,
+      ping.id,
+      ping.summary_updated_at
+    );
+
+    if (shouldRegenerate) {
+      // Fire and forget - don't block the response
+      triggerSummaryRegeneration(supabaseAdmin, ping.id, ping.tenant_id);
+    }
   }
 
   return NextResponse.json({ message: messageWithSender }, { status: 201 });

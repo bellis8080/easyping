@@ -3,7 +3,14 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
-import { ChevronRight, Send, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  ChevronRight,
+  Send,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+  Loader2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { PingMessage } from './ping-message';
 import { ReplyingIndicator } from './replying-indicator';
@@ -62,6 +69,7 @@ export function PingDetail({
   );
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [isSummaryCollapsed, setIsSummaryCollapsed] = useState(false);
+  const [isRefreshingSummary, setIsRefreshingSummary] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const replyingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -76,6 +84,37 @@ export function PingDetail({
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // Refresh AI summary
+  const handleRefreshSummary = async () => {
+    if (isRefreshingSummary) return;
+
+    setIsRefreshingSummary(true);
+    try {
+      const response = await fetch(`/api/pings/${ping.ping_number}/summary`, {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.summary) {
+        setPing((prev) => ({
+          ...prev,
+          ai_summary: data.summary,
+        }));
+        toast.success('Summary updated');
+      } else if (data.notice) {
+        toast.info(data.notice);
+      } else {
+        toast.error('Failed to refresh summary');
+      }
+    } catch (error) {
+      console.error('Error refreshing summary:', error);
+      toast.error('Failed to refresh summary');
+    } finally {
+      setIsRefreshingSummary(false);
+    }
   };
 
   // Upload files to Supabase Storage
@@ -333,6 +372,12 @@ export function PingDetail({
   useEffect(() => {
     const supabase = createClient();
     const pingId = initialPing.id; // Use stable initialPing.id to avoid re-subscription
+
+    // Track current relation IDs to know when to refetch
+    let currentAssignedToId: string | null =
+      initialPing.assigned_to?.id || null;
+    let currentCategoryId: string | null = initialPing.category?.id || null;
+
     const channel = supabase
       .channel(`ping-updates:${pingId}`)
       .on(
@@ -343,37 +388,118 @@ export function PingDetail({
           table: 'pings',
           filter: `id=eq.${pingId}`,
         },
-        async () => {
-          // Fetch full ping data with relations
-          const { data: updatedPing } = await supabase
-            .from('pings')
-            .select(
-              '*, assigned_to:users!pings_assigned_to_fkey(id, full_name, avatar_url, role), category:categories(id, name, color, icon)'
-            )
-            .eq('id', pingId)
-            .single();
+        async (payload) => {
+          // Extract data directly from Realtime payload - this is the source of truth
+          const updatedRecord = payload.new as Record<string, unknown>;
 
-          if (updatedPing) {
-            setPing((prev) => ({
-              ...prev,
-              status: updatedPing.status,
-              priority: updatedPing.priority,
-              title: updatedPing.title,
-              ai_summary: updatedPing.ai_summary,
-              category: Array.isArray(updatedPing.category)
-                ? updatedPing.category[0]
-                : updatedPing.category,
-              category_confidence: updatedPing.category_confidence,
-              assigned_to: Array.isArray(updatedPing.assigned_to)
-                ? updatedPing.assigned_to[0]
-                : updatedPing.assigned_to,
-              updated_at: updatedPing.updated_at,
-              first_response_at: updatedPing.first_response_at,
-              last_user_reply_at: updatedPing.last_user_reply_at,
-              last_agent_reply_at: updatedPing.last_agent_reply_at,
-              status_changed_at: updatedPing.status_changed_at,
-            }));
+          // Check if we need to fetch relations (only when IDs change)
+          const newAssignedToId = updatedRecord.assigned_to as string | null;
+          const newCategoryId = updatedRecord.category_id as string | null;
+          const needsRelationFetch =
+            newAssignedToId !== currentAssignedToId ||
+            newCategoryId !== currentCategoryId;
+
+          let fetchedRelations: {
+            assigned_to?: Pick<
+              User,
+              'id' | 'full_name' | 'avatar_url' | 'role'
+            >;
+            category?: {
+              id: string;
+              name: string;
+              color: string;
+              icon: string;
+            };
+          } = {};
+
+          // Only fetch if relation IDs changed
+          if (needsRelationFetch) {
+            const { data: updatedPing } = await supabase
+              .from('pings')
+              .select(
+                'assigned_to:users!pings_assigned_to_fkey(id, full_name, avatar_url, role), category:categories(id, name, color, icon)'
+              )
+              .eq('id', pingId)
+              .single();
+
+            if (updatedPing) {
+              fetchedRelations = {
+                assigned_to: Array.isArray(updatedPing.assigned_to)
+                  ? updatedPing.assigned_to[0]
+                  : updatedPing.assigned_to,
+                category: Array.isArray(updatedPing.category)
+                  ? updatedPing.category[0]
+                  : updatedPing.category,
+              };
+              currentAssignedToId = newAssignedToId;
+              currentCategoryId = newCategoryId;
+            }
           }
+
+          setPing((prev) => {
+            // CRITICAL FIX: For ai_summary, use summary_updated_at for comparison
+            // This field is ONLY updated when the AI summary is regenerated,
+            // making it the perfect discriminator to prevent stale updates
+            const payloadSummaryUpdatedAt = updatedRecord.summary_updated_at as
+              | string
+              | null;
+            const prevSummaryUpdatedAt = prev.summary_updated_at;
+
+            // Determine the new ai_summary value
+            let newAiSummary = prev.ai_summary;
+            let newSummaryUpdatedAt = prev.summary_updated_at;
+
+            if (payloadSummaryUpdatedAt) {
+              // Only update ai_summary if the payload's summary_updated_at is newer
+              // or if we didn't have a previous timestamp
+              const payloadTime = new Date(payloadSummaryUpdatedAt).getTime();
+              const prevTime = prevSummaryUpdatedAt
+                ? new Date(prevSummaryUpdatedAt).getTime()
+                : 0;
+
+              if (payloadTime >= prevTime) {
+                newAiSummary = updatedRecord.ai_summary as string | null;
+                newSummaryUpdatedAt = payloadSummaryUpdatedAt;
+              }
+              // If payload's timestamp is older, keep existing summary (don't regress)
+            }
+            // If payload has no summary_updated_at, keep existing summary
+
+            // Build the updated object with proper typing
+            const updated: typeof prev = {
+              ...prev,
+              status: updatedRecord.status as typeof prev.status,
+              priority: updatedRecord.priority as typeof prev.priority,
+              title: updatedRecord.title as string,
+              ai_summary: newAiSummary,
+              summary_updated_at: newSummaryUpdatedAt,
+              updated_at: updatedRecord.updated_at as string,
+              first_response_at: updatedRecord.first_response_at as
+                | string
+                | null,
+              last_user_reply_at: updatedRecord.last_user_reply_at as
+                | string
+                | null,
+              last_agent_reply_at: updatedRecord.last_agent_reply_at as
+                | string
+                | null,
+              status_changed_at: updatedRecord.status_changed_at as
+                | string
+                | null,
+            };
+
+            // Update relations only if we fetched new data
+            if (needsRelationFetch) {
+              if (fetchedRelations.assigned_to !== undefined) {
+                updated.assigned_to = fetchedRelations.assigned_to;
+              }
+              if (fetchedRelations.category !== undefined) {
+                updated.category = fetchedRelations.category;
+              }
+            }
+
+            return updated;
+          });
         }
       )
       .subscribe();
@@ -381,7 +507,7 @@ export function PingDetail({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [initialPing.id]);
+  }, [initialPing.id, initialPing.assigned_to?.id, initialPing.category?.id]);
 
   // Subscribe to presence for replying indicators
   useEffect(() => {
@@ -619,25 +745,43 @@ export function PingDetail({
       {ping.ai_summary && (
         <div className="flex-shrink-0 bg-blue-500/10 backdrop-blur-sm border-b border-blue-200 shadow-sm sticky top-0 z-10">
           <div className="max-w-4xl mx-auto px-6 py-4">
-            <button
-              onClick={() => setIsSummaryCollapsed(!isSummaryCollapsed)}
-              className="w-full flex items-start justify-between gap-4 text-left group"
-            >
-              <div className="flex-1">
-                {!isSummaryCollapsed && (
-                  <p className="text-slate-900 leading-relaxed">
-                    {ping.ai_summary}
-                  </p>
-                )}
-              </div>
-              <div className="flex-shrink-0 text-slate-400 group-hover:text-slate-600 transition-colors">
-                {isSummaryCollapsed ? (
-                  <ChevronDown className="w-5 h-5" />
+            <div className="flex items-start justify-between gap-4">
+              <button
+                onClick={() => setIsSummaryCollapsed(!isSummaryCollapsed)}
+                className="flex-1 flex items-start justify-between gap-4 text-left group"
+              >
+                <div className="flex-1">
+                  {isSummaryCollapsed ? (
+                    <span className="text-sm font-medium text-slate-600">
+                      AI Summary
+                    </span>
+                  ) : (
+                    <p className="text-slate-900 leading-relaxed">
+                      {ping.ai_summary}
+                    </p>
+                  )}
+                </div>
+                <div className="flex-shrink-0 text-slate-400 group-hover:text-slate-600 transition-colors">
+                  {isSummaryCollapsed ? (
+                    <ChevronDown className="w-5 h-5" />
+                  ) : (
+                    <ChevronUp className="w-5 h-5" />
+                  )}
+                </div>
+              </button>
+              <button
+                onClick={handleRefreshSummary}
+                disabled={isRefreshingSummary}
+                className="flex-shrink-0 p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 transition-colors disabled:opacity-50"
+                title="Refresh summary"
+              >
+                {isRefreshingSummary ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <ChevronUp className="w-5 h-5" />
+                  <RefreshCw className="w-4 h-4" />
                 )}
-              </div>
-            </button>
+              </button>
+            </div>
           </div>
         </div>
       )}

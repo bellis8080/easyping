@@ -12,6 +12,8 @@ import {
   Pause,
   ChevronDown,
   ChevronUp,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import {
   Ping,
@@ -278,6 +280,7 @@ export function InboxClient({
   >([]);
   const [isUpdatingTeam, setIsUpdatingTeam] = useState(false);
   const [isSummaryCollapsed, setIsSummaryCollapsed] = useState(false);
+  const [isRefreshingSummary, setIsRefreshingSummary] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const replyingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -554,6 +557,44 @@ export function InboxClient({
     }
   };
 
+  // Refresh AI summary
+  const handleRefreshSummary = async () => {
+    if (!selectedPing || isRefreshingSummary) return;
+
+    setIsRefreshingSummary(true);
+    try {
+      const response = await fetch(
+        `/api/pings/${selectedPing.ping_number}/summary`,
+        {
+          method: 'POST',
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok && data.summary) {
+        setSelectedPing((prev) =>
+          prev ? { ...prev, ai_summary: data.summary } : null
+        );
+        setPings((prevPings) =>
+          prevPings.map((p) =>
+            p.id === selectedPing.id ? { ...p, ai_summary: data.summary } : p
+          )
+        );
+        toast.success('Summary updated');
+      } else if (data.notice) {
+        toast.info(data.notice);
+      } else {
+        toast.error('Failed to refresh summary');
+      }
+    } catch (error) {
+      console.error('Error refreshing summary:', error);
+      toast.error('Failed to refresh summary');
+    } finally {
+      setIsRefreshingSummary(false);
+    }
+  };
+
   // Handle claim ping (assign to current user)
   const handleClaimPing = async () => {
     if (!selectedPing) return;
@@ -809,49 +850,97 @@ export function InboxClient({
           table: 'pings',
           filter: `id=eq.${selectedPing.id}`,
         },
-        async () => {
-          // Fetch updated ping with assigned_to relation
+        async (payload) => {
+          // Extract data from payload for scalar fields (source of truth)
+          const updatedRecord = payload.new as Record<string, unknown>;
+
+          // Fetch updated ping with assigned_to relation (only for relations)
           const { data: updatedPing } = await supabase
             .from('pings')
             .select(
-              '*, assigned_to:users!pings_assigned_to_fkey(id, full_name, avatar_url)'
+              'assigned_to:users!pings_assigned_to_fkey(id, full_name, avatar_url)'
             )
             .eq('id', selectedPing.id)
             .single();
 
-          if (updatedPing) {
-            const assignedTo = updatedPing.assigned_to
-              ? Array.isArray(updatedPing.assigned_to)
-                ? updatedPing.assigned_to[0]
-                : updatedPing.assigned_to
-              : null;
+          const assignedTo = updatedPing?.assigned_to
+            ? Array.isArray(updatedPing.assigned_to)
+              ? updatedPing.assigned_to[0]
+              : updatedPing.assigned_to
+            : null;
 
-            // Update selected ping
-            setSelectedPing((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    status: updatedPing.status,
-                    priority: updatedPing.priority,
-                    assigned_to: assignedTo,
-                  }
-                : null
-            );
+          // Update selected ping using payload data for scalar fields
+          setSelectedPing((prev) => {
+            if (!prev) return null;
 
-            // Update ping in list
-            setPings((prevPings) =>
-              prevPings.map((p) =>
-                p.id === selectedPing.id
-                  ? {
-                      ...p,
-                      status: updatedPing.status,
-                      priority: updatedPing.priority,
-                      assigned_to: assignedTo,
-                    }
-                  : p
-              )
-            );
-          }
+            // CRITICAL: For ai_summary, use summary_updated_at for comparison
+            // This prevents stale updates from overwriting fresh summaries
+            const payloadSummaryUpdatedAt = updatedRecord.summary_updated_at as
+              | string
+              | null;
+            const prevSummaryUpdatedAt = (prev as any).summary_updated_at;
+
+            let newAiSummary = prev.ai_summary;
+            let newSummaryUpdatedAt = prevSummaryUpdatedAt;
+            if (payloadSummaryUpdatedAt) {
+              const payloadTime = new Date(payloadSummaryUpdatedAt).getTime();
+              const prevTime = prevSummaryUpdatedAt
+                ? new Date(prevSummaryUpdatedAt).getTime()
+                : 0;
+
+              if (payloadTime >= prevTime) {
+                newAiSummary = updatedRecord.ai_summary as string | null;
+                newSummaryUpdatedAt = payloadSummaryUpdatedAt;
+              }
+            }
+
+            return {
+              ...prev,
+              status: updatedRecord.status as typeof prev.status,
+              priority: updatedRecord.priority as typeof prev.priority,
+              title: updatedRecord.title as string,
+              ai_summary: newAiSummary,
+              summary_updated_at: newSummaryUpdatedAt,
+              updated_at: updatedRecord.updated_at as string,
+              assigned_to: assignedTo,
+            };
+          });
+
+          // Update ping in list
+          setPings((prevPings) =>
+            prevPings.map((p) => {
+              if (p.id !== selectedPing.id) return p;
+
+              const payloadSummaryUpdatedAt =
+                updatedRecord.summary_updated_at as string | null;
+              const prevSummaryUpdatedAt = (p as any).summary_updated_at;
+
+              let newAiSummary = p.ai_summary;
+              let newSummaryUpdatedAt = prevSummaryUpdatedAt;
+              if (payloadSummaryUpdatedAt) {
+                const payloadTime = new Date(payloadSummaryUpdatedAt).getTime();
+                const prevTime = prevSummaryUpdatedAt
+                  ? new Date(prevSummaryUpdatedAt).getTime()
+                  : 0;
+
+                if (payloadTime >= prevTime) {
+                  newAiSummary = updatedRecord.ai_summary as string | null;
+                  newSummaryUpdatedAt = payloadSummaryUpdatedAt;
+                }
+              }
+
+              return {
+                ...p,
+                status: updatedRecord.status as typeof p.status,
+                priority: updatedRecord.priority as typeof p.priority,
+                title: updatedRecord.title as string,
+                ai_summary: newAiSummary,
+                summary_updated_at: newSummaryUpdatedAt,
+                updated_at: updatedRecord.updated_at as string,
+                assigned_to: assignedTo,
+              };
+            })
+          );
         }
       )
       .subscribe((status) => {
@@ -1633,25 +1722,45 @@ export function InboxClient({
 
                   {/* AI Summary (collapsible) */}
                   {selectedPing.ai_summary && (
-                    <button
-                      onClick={() => setIsSummaryCollapsed(!isSummaryCollapsed)}
-                      className="w-full flex items-start justify-between gap-4 text-left group"
-                    >
-                      <div className="flex-1">
-                        {!isSummaryCollapsed && (
-                          <p className="text-slate-900 leading-relaxed">
-                            {selectedPing.ai_summary}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex-shrink-0 text-slate-400 group-hover:text-slate-600 transition-colors">
-                        {isSummaryCollapsed ? (
-                          <ChevronDown className="w-5 h-5" />
+                    <div className="flex items-start justify-between gap-4">
+                      <button
+                        onClick={() =>
+                          setIsSummaryCollapsed(!isSummaryCollapsed)
+                        }
+                        className="flex-1 flex items-start justify-between gap-4 text-left group"
+                      >
+                        <div className="flex-1">
+                          {isSummaryCollapsed ? (
+                            <span className="text-sm font-medium text-slate-600">
+                              AI Summary
+                            </span>
+                          ) : (
+                            <p className="text-slate-900 leading-relaxed">
+                              {selectedPing.ai_summary}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex-shrink-0 text-slate-400 group-hover:text-slate-600 transition-colors">
+                          {isSummaryCollapsed ? (
+                            <ChevronDown className="w-5 h-5" />
+                          ) : (
+                            <ChevronUp className="w-5 h-5" />
+                          )}
+                        </div>
+                      </button>
+                      <button
+                        onClick={handleRefreshSummary}
+                        disabled={isRefreshingSummary}
+                        className="flex-shrink-0 p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 transition-colors disabled:opacity-50"
+                        title="Refresh summary"
+                      >
+                        {isRefreshingSummary ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
-                          <ChevronUp className="w-5 h-5" />
+                          <RefreshCw className="w-4 h-4" />
                         )}
-                      </div>
-                    </button>
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

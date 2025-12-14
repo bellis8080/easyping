@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { z } from 'zod';
 import { PingStatus } from '@easyping/types';
 import { validateManualStatusChange } from '@/lib/ping-status-transitions';
+import { triggerSummaryRegeneration } from '@/lib/services/summary-trigger';
 
 const updateStatusSchema = z.object({
   status: z.enum([
@@ -133,6 +134,12 @@ export async function PATCH(
       content: validation.systemMessageContent,
       message_type: 'system',
     });
+
+    // Story 3.6: Trigger summary regeneration on status change (fire and forget)
+    // Skip draft pings (handled by Echo) - note: newStatus can't be 'draft' per schema validation
+    if (ping.status !== 'draft') {
+      triggerSummaryRegeneration(supabaseAdmin, ping.id, ping.tenant_id);
+    }
 
     return NextResponse.json({ ping: updatedPing }, { status: 200 });
   } catch (error) {

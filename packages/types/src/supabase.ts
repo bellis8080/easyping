@@ -298,6 +298,7 @@ export type Database = {
           sla_due_at: string | null;
           status: string;
           status_changed_at: string | null;
+          summary_updated_at: string | null;
           team_id: string | null;
           tenant_id: string;
           title: string | null;
@@ -324,6 +325,7 @@ export type Database = {
           sla_due_at?: string | null;
           status?: string;
           status_changed_at?: string | null;
+          summary_updated_at?: string | null;
           team_id?: string | null;
           tenant_id: string;
           title?: string | null;
@@ -350,6 +352,7 @@ export type Database = {
           sla_due_at?: string | null;
           status?: string;
           status_changed_at?: string | null;
+          summary_updated_at?: string | null;
           team_id?: string | null;
           tenant_id?: string;
           title?: string | null;

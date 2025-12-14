@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { generatePingTitle } from '@/lib/utils';
+import { createRoutingService } from '@/lib/services/routing-service';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -79,6 +81,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (!hasAI) {
       // Fallback: No AI configured - create ping with status='new' immediately
       const title = generatePingTitle(message, 50);
+      const adminClient = createAdminClient();
 
       // Get "Needs Review" category
       const { data: needsReviewCategory } = await supabase
@@ -88,7 +91,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         .eq('name', 'Needs Review')
         .single();
 
-      const { data: ping, error: pingError } = await supabase
+      // Apply routing if category has a routing rule
+      const routingService = createRoutingService(adminClient, tenantId);
+      const routingResult = await routingService.routePing(
+        needsReviewCategory?.id || null
+      );
+      const routingUpdates = routingService.applyRoutingToUpdate(routingResult);
+
+      const { data: ping, error: pingError } = await adminClient
         .from('pings')
         .insert({
           tenant_id: tenantId,
@@ -97,6 +107,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           status: 'new',
           priority: 'normal',
           category_id: needsReviewCategory?.id || null,
+          ...routingUpdates,
         })
         .select('*')
         .single();
@@ -110,12 +121,27 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
 
       // Create first ping message
-      await supabase.from('ping_messages').insert({
+      await adminClient.from('ping_messages').insert({
         ping_id: ping.id,
         sender_id: user.id,
         content: message,
         message_type: 'user',
       });
+
+      // Add routing system message if routing was applied
+      if (routingResult.routed && routingResult.routedTo) {
+        const routingMessage =
+          routingResult.routedTo.type === 'team'
+            ? `Automatically routed to ${routingResult.routedTo.name} team`
+            : `Automatically assigned to ${routingResult.routedTo.name}`;
+
+        await adminClient.from('ping_messages').insert({
+          ping_id: ping.id,
+          sender_id: null,
+          content: routingMessage,
+          message_type: 'system',
+        });
+      }
 
       return NextResponse.json(
         {

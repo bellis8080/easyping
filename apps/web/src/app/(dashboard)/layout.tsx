@@ -1,7 +1,8 @@
-import { ReactNode } from 'react';
+import { ReactNode, Suspense } from 'react';
 import { getUserProfile } from '@/lib/auth/helpers';
 import { UserRole } from '@easyping/types';
 import { DashboardLayoutClient } from '@/components/layout/dashboard-layout-client';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export default async function DashboardLayout({
   children,
@@ -10,6 +11,53 @@ export default async function DashboardLayout({
 }) {
   const profile = await getUserProfile();
   const userRole = profile?.role as UserRole;
+  const isAgentOrAbove =
+    userRole === UserRole.AGENT ||
+    userRole === UserRole.MANAGER ||
+    userRole === UserRole.OWNER;
+
+  // Fetch teams for agents
+  let teams: { id: string; name: string; description: string | null }[] = [];
+  if (isAgentOrAbove && profile?.id && profile?.tenant_id) {
+    const adminClient = createAdminClient();
+
+    if (userRole === UserRole.MANAGER || userRole === UserRole.OWNER) {
+      // Managers/owners see all teams
+      const { data } = await adminClient
+        .from('agent_teams')
+        .select('id, name, description')
+        .eq('tenant_id', profile.tenant_id)
+        .order('name');
+
+      teams = data || [];
+    } else {
+      // Agents only see teams they're members of
+      const { data } = await adminClient
+        .from('agent_team_members')
+        .select(
+          `
+          team_id,
+          agent_teams!inner(id, name, description, tenant_id)
+        `
+        )
+        .eq('user_id', profile.id);
+
+      if (data) {
+        teams = data
+          .filter(
+            (m) =>
+              m.agent_teams &&
+              (m.agent_teams as any).tenant_id === profile.tenant_id
+          )
+          .map((m) => ({
+            id: (m.agent_teams as any).id,
+            name: (m.agent_teams as any).name,
+            description: (m.agent_teams as any).description,
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+      }
+    }
+  }
 
   // Define all navigation items with role requirements
   const allNavigationItems = [
@@ -73,17 +121,21 @@ export default async function DashboardLayout({
   ];
 
   return (
-    <DashboardLayoutClient
-      navigation={navigation}
-      secondaryNav={secondaryNav}
-      userId={profile?.id || null}
-      isAgent={
-        userRole === UserRole.AGENT ||
-        userRole === UserRole.MANAGER ||
-        userRole === UserRole.OWNER
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50" />
       }
     >
-      {children}
-    </DashboardLayoutClient>
+      <DashboardLayoutClient
+        navigation={navigation}
+        secondaryNav={secondaryNav}
+        initialTeams={teams}
+        userId={profile?.id || null}
+        isAgent={isAgentOrAbove}
+        userRole={userRole}
+      >
+        {children}
+      </DashboardLayoutClient>
+    </Suspense>
   );
 }

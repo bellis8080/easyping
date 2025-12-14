@@ -473,6 +473,8 @@ This project uses BMAD™ Core for AI-driven development workflows.
 **Tables that MUST have RLS DISABLED for Realtime to work:**
 - `ping_messages` - Real-time message updates in conversations
 - `pings` - Real-time status/assignment updates
+- `agent_teams` - Real-time team updates (name changes, deletions)
+- `agent_team_members` - Real-time team membership changes (agent added/removed from team)
 - Any other table requiring real-time subscriptions
 
 **Why this happens:**

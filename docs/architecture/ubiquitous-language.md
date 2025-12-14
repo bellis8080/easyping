@@ -183,6 +183,46 @@ This document defines the shared vocabulary used across EasyPing - in code, docu
 
 ---
 
+### Team
+
+**Definition:** A group of agents who handle specific types of pings. Used for routing pings to specialized groups (e.g., "Hardware Team", "Network Team").
+
+**Technical Implementation:**
+- Database table: `agent_teams`
+- Database table: `agent_team_members` (many-to-many join)
+- TypeScript interface: `AgentTeam`
+
+**Usage:**
+- ✅ Correct: "Route to Hardware Team", "Assign to team"
+- ❌ Incorrect: "Route to Hardware Queue", "Assign to queue"
+
+**Why "Team" not "Queue":**
+- Teams are groups of people; queues are lists of work items
+- More human/collaborative mental model
+- Consistent with modern support tools (not traditional ITSM)
+- A ping is routed TO a team, not INTO a queue
+
+---
+
+### Routing Rule
+
+**Definition:** A configuration that automatically assigns pings to agents or teams based on category.
+
+**Technical Implementation:**
+- Database table: `routing_rules`
+- TypeScript interface: `RoutingRule`
+
+**Rule Types:**
+- `agent`: Assign to a specific agent
+- `team`: Round-robin among team members
+- `round_robin`: Round-robin among all agents
+
+**Usage:**
+- "Create a routing rule for Hardware → Hardware Team"
+- "This category routes to Bob"
+
+---
+
 ### Knowledge Base Article (KB Article)
 
 **Definition:** A help article generated from resolved pings or manually authored by agents, used for self-service support.
@@ -272,6 +312,8 @@ This document defines the shared vocabulary used across EasyPing - in code, docu
 | Typing | Replying | Users reply to pings, not type messages |
 | Type a message | Reply to ping / Send a reply | Matches domain language |
 | Send message | Send reply | More specific to ping context |
+| Queue | Team | Teams are groups of people, queues are lists of work |
+| Agent queue | Team | Route pings TO teams, not INTO queues |
 
 ---
 
@@ -288,6 +330,8 @@ This document defines the shared vocabulary used across EasyPing - in code, docu
 | End User | `users` (role='end_user') | `User` | User's full name |
 | Agent | `users` (role='agent') | `User` | Agent's full name + "Agent" label |
 | Category | `categories` | `Category` | Colored badge with icon |
+| Team | `agent_teams` | `AgentTeam` | Team name in routing rules |
+| Routing Rule | `routing_rules` | `RoutingRule` | Rule in settings |
 | KB Article | `knowledge_base_articles` | `KnowledgeBaseArticle` | Article title in sidebar |
 | Known Issue | `known_issues` | `KnownIssue` | Issue title on status page |
 
@@ -316,4 +360,4 @@ Update existing terms when:
 
 ---
 
-**Last Updated:** 2025-01-11 by Bob (Scrum Master) - Added "Reply / Replying" terminology
+**Last Updated:** 2025-12-12 by Bob (Scrum Master) - Added "Team" and "Routing Rule" terminology for Story 3.5

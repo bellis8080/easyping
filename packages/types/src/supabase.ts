@@ -34,6 +34,74 @@ export type Database = {
   };
   public: {
     Tables: {
+      agent_team_members: {
+        Row: {
+          added_at: string;
+          team_id: string;
+          user_id: string;
+        };
+        Insert: {
+          added_at?: string;
+          team_id: string;
+          user_id: string;
+        };
+        Update: {
+          added_at?: string;
+          team_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'agent_team_members_team_id_fkey';
+            columns: ['team_id'];
+            isOneToOne: false;
+            referencedRelation: 'agent_teams';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'agent_team_members_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      agent_teams: {
+        Row: {
+          created_at: string;
+          description: string | null;
+          id: string;
+          name: string;
+          tenant_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          description?: string | null;
+          id?: string;
+          name: string;
+          tenant_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          description?: string | null;
+          id?: string;
+          name?: string;
+          tenant_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'agent_teams_tenant_id_fkey';
+            columns: ['tenant_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       categories: {
         Row: {
           color: string;
@@ -230,6 +298,7 @@ export type Database = {
           sla_due_at: string | null;
           status: string;
           status_changed_at: string | null;
+          team_id: string | null;
           tenant_id: string;
           title: string | null;
           updated_at: string;
@@ -255,6 +324,7 @@ export type Database = {
           sla_due_at?: string | null;
           status?: string;
           status_changed_at?: string | null;
+          team_id?: string | null;
           tenant_id: string;
           title?: string | null;
           updated_at?: string;
@@ -280,6 +350,7 @@ export type Database = {
           sla_due_at?: string | null;
           status?: string;
           status_changed_at?: string | null;
+          team_id?: string | null;
           tenant_id?: string;
           title?: string | null;
           updated_at?: string;
@@ -307,7 +378,82 @@ export type Database = {
             referencedColumns: ['id'];
           },
           {
+            foreignKeyName: 'pings_team_id_fkey';
+            columns: ['team_id'];
+            isOneToOne: false;
+            referencedRelation: 'agent_teams';
+            referencedColumns: ['id'];
+          },
+          {
             foreignKeyName: 'pings_tenant_id_fkey';
+            columns: ['tenant_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      routing_rules: {
+        Row: {
+          category_id: string;
+          created_at: string;
+          destination_agent_id: string | null;
+          destination_team_id: string | null;
+          id: string;
+          is_active: boolean;
+          priority: number;
+          rule_type: string;
+          tenant_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          category_id: string;
+          created_at?: string;
+          destination_agent_id?: string | null;
+          destination_team_id?: string | null;
+          id?: string;
+          is_active?: boolean;
+          priority?: number;
+          rule_type?: string;
+          tenant_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          category_id?: string;
+          created_at?: string;
+          destination_agent_id?: string | null;
+          destination_team_id?: string | null;
+          id?: string;
+          is_active?: boolean;
+          priority?: number;
+          rule_type?: string;
+          tenant_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'routing_rules_category_id_fkey';
+            columns: ['category_id'];
+            isOneToOne: false;
+            referencedRelation: 'categories';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'routing_rules_destination_agent_id_fkey';
+            columns: ['destination_agent_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'routing_rules_destination_team_id_fkey';
+            columns: ['destination_team_id'];
+            isOneToOne: false;
+            referencedRelation: 'agent_teams';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'routing_rules_tenant_id_fkey';
             columns: ['tenant_id'];
             isOneToOne: false;
             referencedRelation: 'organizations';

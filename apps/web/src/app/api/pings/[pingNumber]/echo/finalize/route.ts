@@ -21,6 +21,7 @@ import {
   generateProblemStatement,
   type ConversationMessage,
 } from '@/lib/services/echo-conversation-service';
+import { createRoutingService } from '@/lib/services/routing-service';
 
 export async function POST(
   request: NextRequest,
@@ -211,7 +212,12 @@ export async function POST(
     // Generate title
     const title = await generateTitle(problemStatement, categoryConfig);
 
-    // Update ping to finalize it
+    // Apply automatic routing based on category
+    const routingService = createRoutingService(supabaseAdmin, tenantId);
+    const routingResult = await routingService.routePing(matchedCategory.id);
+    const routingUpdates = routingService.applyRoutingToUpdate(routingResult);
+
+    // Update ping to finalize it with routing
     const { error: updateError } = await supabaseAdmin
       .from('pings')
       .update({
@@ -220,6 +226,7 @@ export async function POST(
         category_id: matchedCategory.id,
         category_confidence: categoryResult.confidence,
         problem_statement_confirmed: true,
+        ...routingUpdates,
       })
       .eq('id', ping.id);
 
@@ -246,6 +253,21 @@ export async function POST(
       message_type: 'system',
     });
 
+    // Send routing system message if routing was applied
+    if (routingResult.routed && routingResult.routedTo) {
+      const routingMessage =
+        routingResult.routedTo.type === 'team'
+          ? `Automatically routed to ${routingResult.routedTo.name} team`
+          : `Automatically assigned to ${routingResult.routedTo.name}`;
+
+      await supabaseAdmin.from('ping_messages').insert({
+        ping_id: ping.id,
+        sender_id: null, // System message
+        content: routingMessage,
+        message_type: 'system',
+      });
+    }
+
     // Send confirmation to user (different message for escalation)
     const confirmationMessage = escalated
       ? `No problem - I'm connecting you with a human agent right now. I've categorized this as ${categoryResult.category} to help route it to the right person. Someone will be with you shortly!`
@@ -265,6 +287,12 @@ export async function POST(
       category: categoryResult.category,
       confidence: categoryResult.confidence,
       problemStatement,
+      routing: routingResult.routed
+        ? {
+            type: routingResult.routedTo?.type,
+            name: routingResult.routedTo?.name,
+          }
+        : null,
     });
   } catch (error) {
     console.error('Error in Echo finalize:', error);

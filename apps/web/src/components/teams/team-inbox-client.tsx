@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
 import {
   Send,
   Sparkles,
@@ -12,6 +11,12 @@ import {
   Pause,
   ChevronDown,
   ChevronUp,
+  Users,
+  UserPlus,
+  X,
+  Loader2,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import {
   Ping,
@@ -28,20 +33,11 @@ import { FileAttachmentInput } from '@/components/pings/file-attachment-input';
 import { FilePreviewList } from '@/components/pings/file-preview-list';
 import { PingMessage as PingMessageComponent } from '@/components/pings/ping-message';
 import { useTabTitle } from '@/hooks/use-tab-title';
-import { playNotificationSound } from '@/lib/notification-sound';
 import { ConnectionStatusIndicator } from '@/components/inbox/connection-status-indicator';
 import { PingDetailHeader } from '@/components/pings/ping-detail-header';
-
-// Filter configuration for dynamic titles
-const FILTER_CONFIG = {
-  all: { title: 'All Pings', description: 'View all pings in the inbox' },
-  assigned: { title: 'Assigned to Me', description: 'Pings assigned to you' },
-  unassigned: { title: 'Unassigned', description: 'Pings awaiting assignment' },
-  urgent: { title: 'Urgent Pings', description: 'High priority pings' },
-  closed: { title: 'Closed', description: 'Your resolved and closed pings' },
-} as const;
-
-type FilterType = keyof typeof FILTER_CONFIG;
+import { TeamDeleteDialog } from '@/components/teams/team-delete-dialog';
+import { useTeamsSafe } from '@/contexts/teams-context';
+import { useRouter } from 'next/navigation';
 
 // Extended Ping type with related data
 interface PingWithRelations {
@@ -54,7 +50,7 @@ interface PingWithRelations {
   created_at: string;
   updated_at: string;
   sla_due_at: string | null;
-  team_id?: string | null;
+  team_id: string | null;
   created_by: Pick<User, 'id' | 'full_name' | 'email' | 'avatar_url'>;
   assigned_to: Pick<User, 'id' | 'full_name' | 'avatar_url'> | null;
   category: { id: string; name: string; color: string } | null;
@@ -69,18 +65,35 @@ interface PingWithRelations {
   unread_count?: number;
 }
 
-interface InboxClientProps {
+interface TeamMember {
+  id: string;
+  full_name: string;
+  email: string;
+  avatar_url: string | null;
+  role: string;
+  added_at: string;
+}
+
+interface Team {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+}
+
+interface TeamInboxClientProps {
+  team: Team;
+  members: TeamMember[];
   pings: PingWithRelations[];
   currentUser: Pick<
     User,
     'id' | 'full_name' | 'avatar_url' | 'role' | 'tenant_id'
   >;
+  isManagerOrOwner: boolean;
 }
 
 // SLA Timer Component
 function SLATimer({ ping }: { ping: PingWithRelations }) {
-  // TODO: Calculate SLA from ping.sla_due_at
-  // For now, show simplified status
   if (ping.status === 'waiting_on_user') {
     return (
       <div className="flex items-center gap-1.5 text-xs">
@@ -90,7 +103,6 @@ function SLATimer({ ping }: { ping: PingWithRelations }) {
     );
   }
 
-  // Calculate time remaining from sla_due_at
   const now = new Date();
   const dueAt = ping.sla_due_at ? new Date(ping.sla_due_at) : null;
 
@@ -218,31 +230,21 @@ function formatPingAge(createdAt: string): string {
   return `${diffDays} days ago`;
 }
 
-export function InboxClient({
+export function TeamInboxClient({
+  team,
+  members,
   pings: initialPings,
   currentUser,
-}: InboxClientProps) {
-  const searchParams = useSearchParams();
+  isManagerOrOwner,
+}: TeamInboxClientProps) {
   const [pings, setPings] = useState<PingWithRelations[]>(initialPings);
   const [selectedPing, setSelectedPing] = useState<PingWithRelations | null>(
     pings[0] || null
   );
   const [replyMessage, setReplyMessage] = useState('');
   const [showEcho, setShowEcho] = useState(true);
+  const [filter, setFilter] = useState<'all' | 'unclaimed' | 'mine'>('all');
   const [sortBy, setSortBy] = useState<'recent' | 'priority'>('recent');
-
-  // Read filter from URL params (default to 'all' when no filter specified)
-  const urlFilter = searchParams.get('filter');
-  const filter: FilterType =
-    urlFilter === 'assigned' ||
-    urlFilter === 'unassigned' ||
-    urlFilter === 'urgent' ||
-    urlFilter === 'closed'
-      ? urlFilter
-      : 'all';
-
-  // Get dynamic title based on current filter
-  const filterConfig = FILTER_CONFIG[filter];
   const [suggestedResponse, setSuggestedResponse] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -255,29 +257,38 @@ export function InboxClient({
     userName: string;
   } | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-  const [agents, setAgents] = useState<
+  const [isUpdatingPriority, setIsUpdatingPriority] = useState(false);
+  const [isClaiming, setIsClaiming] = useState(false);
+  const [availableCategories, setAvailableCategories] = useState<
+    Array<{ id: string; name: string; color: string }>
+  >([]);
+  const [isUpdatingCategory, setIsUpdatingCategory] = useState(false);
+  const [isUpdatingAssignment, setIsUpdatingAssignment] = useState(false);
+  const [availableTeams, setAvailableTeams] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  const [isUpdatingTeam, setIsUpdatingTeam] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [isSummaryCollapsed, setIsSummaryCollapsed] = useState(false);
+  const [showMemberList, setShowMemberList] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(members);
+  const [availableAgents, setAvailableAgents] = useState<
     Array<{
       id: string;
       full_name: string;
+      email: string;
       avatar_url: string | null;
       role: string;
     }>
   >([]);
   const [isLoadingAgents, setIsLoadingAgents] = useState(false);
-  const [isUpdatingAssignment, setIsUpdatingAssignment] = useState(false);
-  const [isUpdatingPriority, setIsUpdatingPriority] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
-  const [isReconnecting, setIsReconnecting] = useState(false);
-  const [soundEnabled, _setSoundEnabled] = useState(true);
-  const [availableCategories, setAvailableCategories] = useState<
-    Array<{ id: string; name: string; color: string }>
-  >([]);
-  const [isUpdatingCategory, setIsUpdatingCategory] = useState(false);
-  const [availableTeams, setAvailableTeams] = useState<
-    Array<{ id: string; name: string }>
-  >([]);
-  const [isUpdatingTeam, setIsUpdatingTeam] = useState(false);
-  const [isSummaryCollapsed, setIsSummaryCollapsed] = useState(false);
+  const [showAgentSelector, setShowAgentSelector] = useState(false);
+  const [isAddingMember, setIsAddingMember] = useState(false);
+  const [isRemovingMember, setIsRemovingMember] = useState<string | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const router = useRouter();
+  const teamsContext = useTeamsSafe();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const replyingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -297,6 +308,54 @@ export function InboxClient({
   // Scroll to bottom of message thread
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // Claim ping (assign to current user)
+  const handleClaimPing = async () => {
+    if (!selectedPing) return;
+
+    setIsClaiming(true);
+    try {
+      const response = await fetch(
+        `/api/pings/${selectedPing.ping_number}/assign`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assignedTo: currentUser.id }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to claim ping');
+      }
+
+      // Update local ping state
+      const assignedToData = {
+        id: currentUser.id,
+        full_name: currentUser.full_name,
+        avatar_url: currentUser.avatar_url,
+      };
+
+      setSelectedPing((prev) =>
+        prev ? { ...prev, assigned_to: assignedToData } : null
+      );
+
+      setPings((prevPings) =>
+        prevPings.map((p) =>
+          p.id === selectedPing.id ? { ...p, assigned_to: assignedToData } : p
+        )
+      );
+
+      toast.success('Ping claimed successfully');
+    } catch (error) {
+      console.error('Error claiming ping:', error);
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to claim ping'
+      );
+    } finally {
+      setIsClaiming(false);
+    }
   };
 
   // Handle status change
@@ -321,12 +380,10 @@ export function InboxClient({
 
       const { ping } = await response.json();
 
-      // Update local ping state
       setSelectedPing((prev) =>
         prev ? { ...prev, status: ping.status } : null
       );
 
-      // Update ping in the list
       setPings((prevPings) =>
         prevPings.map((p) =>
           p.id === selectedPing.id ? { ...p, status: ping.status } : p
@@ -341,72 +398,6 @@ export function InboxClient({
       );
     } finally {
       setIsUpdatingStatus(false);
-    }
-  };
-
-  // Handle assignment change
-  const handleAssignmentChange = async (newAssignedTo: string | null) => {
-    if (!selectedPing) return;
-
-    // Check if already assigned to this agent
-    if (newAssignedTo === selectedPing.assigned_to?.id) return;
-
-    setIsUpdatingAssignment(true);
-    try {
-      const response = await fetch(
-        `/api/pings/${selectedPing.ping_number}/assign`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            assignedTo: newAssignedTo === '' ? null : newAssignedTo,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update assignment');
-      }
-
-      const { ping } = await response.json();
-
-      // Fetch assignee details for local state update
-      let assignedToData = null;
-      if (ping.assigned_to) {
-        const agent = agents.find((a) => a.id === ping.assigned_to);
-        if (agent) {
-          assignedToData = {
-            id: agent.id,
-            full_name: agent.full_name,
-            avatar_url: agent.avatar_url,
-          };
-        }
-      }
-
-      // Update local ping state
-      setSelectedPing((prev) =>
-        prev ? { ...prev, assigned_to: assignedToData } : null
-      );
-
-      // Update ping in the list
-      setPings((prevPings) =>
-        prevPings.map((p) =>
-          p.id === selectedPing.id ? { ...p, assigned_to: assignedToData } : p
-        )
-      );
-
-      const assigneeName = assignedToData
-        ? assignedToData.full_name
-        : 'Unassigned';
-      toast.success(`Ping assigned to ${assigneeName}`);
-    } catch (error) {
-      console.error('Error updating assignment:', error);
-      toast.error(
-        error instanceof Error ? error.message : 'Failed to update assignment'
-      );
-    } finally {
-      setIsUpdatingAssignment(false);
     }
   };
 
@@ -434,19 +425,16 @@ export function InboxClient({
 
       const { ping } = await response.json();
 
-      // Update local ping state
       setSelectedPing((prev) =>
         prev ? { ...prev, priority: ping.priority } : null
       );
 
-      // Update ping in the list
       setPings((prevPings) =>
         prevPings.map((p) =>
           p.id === selectedPing.id ? { ...p, priority: ping.priority } : p
         )
       );
 
-      // Capitalize first letter for display
       const priorityLabel =
         newPriority.charAt(0).toUpperCase() + newPriority.slice(1);
       toast.success(`Priority updated to ${priorityLabel}`);
@@ -503,6 +491,63 @@ export function InboxClient({
     }
   };
 
+  // Handle assignment change
+  const handleAssignmentChange = async (agentId: string | null) => {
+    if (!selectedPing) return;
+
+    setIsUpdatingAssignment(true);
+    try {
+      const response = await fetch(
+        `/api/pings/${selectedPing.ping_number}/assign`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assignedTo: agentId }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update assignment');
+      }
+
+      // Find the agent data if assigning, or set to null if unassigning
+      const assignedToData = agentId
+        ? availableAgents.find((a) => a.id === agentId)
+          ? {
+              id: agentId,
+              full_name:
+                availableAgents.find((a) => a.id === agentId)?.full_name || '',
+              avatar_url:
+                availableAgents.find((a) => a.id === agentId)?.avatar_url ||
+                null,
+            }
+          : selectedPing.assigned_to
+        : null;
+
+      setSelectedPing((prev) =>
+        prev ? { ...prev, assigned_to: assignedToData } : null
+      );
+
+      setPings((prevPings) =>
+        prevPings.map((p) =>
+          p.id === selectedPing.id ? { ...p, assigned_to: assignedToData } : p
+        )
+      );
+
+      toast.success(
+        agentId ? 'Ping assigned successfully' : 'Ping unassigned successfully'
+      );
+    } catch (error) {
+      console.error('Error updating assignment:', error);
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to update assignment'
+      );
+    } finally {
+      setIsUpdatingAssignment(false);
+    }
+  };
+
   // Handle team change
   const handleTeamChange = async (newTeamId: string | null) => {
     if (!selectedPing) return;
@@ -554,86 +599,83 @@ export function InboxClient({
     }
   };
 
-  // Handle claim ping (assign to current user)
-  const handleClaimPing = async () => {
-    if (!selectedPing) return;
+  // Fetch available agents for adding to team
+  const fetchAvailableAgents = async () => {
+    setIsLoadingAgents(true);
+    try {
+      const response = await fetch('/api/agents');
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableAgents(data.agents || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch agents:', error);
+    } finally {
+      setIsLoadingAgents(false);
+    }
+  };
 
-    setIsUpdatingAssignment(true);
+  // Add member to team
+  const handleAddMember = async (agentId: string) => {
+    setIsAddingMember(true);
+    try {
+      const response = await fetch(`/api/teams/${team.id}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: agentId }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to add member');
+      }
+
+      const member = await response.json();
+      setTeamMembers((prev) => [...prev, member]);
+      setShowAgentSelector(false);
+      toast.success('Member added successfully');
+    } catch (error) {
+      console.error('Error adding member:', error);
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to add member'
+      );
+    } finally {
+      setIsAddingMember(false);
+    }
+  };
+
+  // Remove member from team
+  const handleRemoveMember = async (userId: string) => {
+    setIsRemovingMember(userId);
     try {
       const response = await fetch(
-        `/api/pings/${selectedPing.ping_number}/assign`,
+        `/api/teams/${team.id}/members?user_id=${userId}`,
         {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ assignedTo: currentUser.id }),
+          method: 'DELETE',
         }
       );
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to claim ping');
+        throw new Error(error.error || 'Failed to remove member');
       }
 
-      // Update local ping state with current user
-      const assignedToData = {
-        id: currentUser.id,
-        full_name: currentUser.full_name,
-        avatar_url: currentUser.avatar_url,
-      };
-
-      setSelectedPing((prev) =>
-        prev ? { ...prev, assigned_to: assignedToData } : null
-      );
-
-      setPings((prevPings) =>
-        prevPings.map((p) =>
-          p.id === selectedPing.id ? { ...p, assigned_to: assignedToData } : p
-        )
-      );
-
-      toast.success('Ping claimed successfully');
+      setTeamMembers((prev) => prev.filter((m) => m.id !== userId));
+      toast.success('Member removed successfully');
     } catch (error) {
-      console.error('Error claiming ping:', error);
+      console.error('Error removing member:', error);
       toast.error(
-        error instanceof Error ? error.message : 'Failed to claim ping'
+        error instanceof Error ? error.message : 'Failed to remove member'
       );
     } finally {
-      setIsUpdatingAssignment(false);
+      setIsRemovingMember(null);
     }
   };
 
-  // Scroll to bottom when selectedPing changes
-  useEffect(() => {
-    // Use longer timeout to ensure images and attachments are rendered
-    setTimeout(scrollToBottom, 300);
-  }, [selectedPing]);
-
-  // Auto-scroll when replying indicator appears/disappears
-  useEffect(() => {
-    if (isReplying) {
-      setTimeout(scrollToBottom, 100);
-    }
-  }, [isReplying]);
-
-  // Fetch agents for assignment dropdown
-  useEffect(() => {
-    const fetchAgents = async () => {
-      setIsLoadingAgents(true);
-      try {
-        const response = await fetch('/api/agents');
-        if (response.ok) {
-          const { agents } = await response.json();
-          setAgents(agents);
-        }
-      } catch (error) {
-        console.error('Error fetching agents:', error);
-      } finally {
-        setIsLoadingAgents(false);
-      }
-    };
-
-    fetchAgents();
-  }, []);
+  // Filter agents who aren't already team members
+  const filteredAgents = availableAgents.filter(
+    (agent) => !teamMembers.find((m) => m.id === agent.id)
+  );
 
   // Fetch available categories for the category selector
   useEffect(() => {
@@ -657,6 +699,11 @@ export function InboxClient({
     fetchCategories();
   }, []);
 
+  // Fetch agents on mount for assignment dropdown
+  useEffect(() => {
+    fetchAvailableAgents();
+  }, []);
+
   // Fetch available teams for the team selector
   useEffect(() => {
     const fetchTeams = async () => {
@@ -678,15 +725,25 @@ export function InboxClient({
     fetchTeams();
   }, []);
 
-  // Subscribe to realtime message updates
+  // Scroll to bottom when selectedPing changes
   useEffect(() => {
-    if (!selectedPing) {
-      return;
+    setTimeout(scrollToBottom, 300);
+  }, [selectedPing]);
+
+  // Auto-scroll when replying indicator appears/disappears
+  useEffect(() => {
+    if (isReplying) {
+      setTimeout(scrollToBottom, 100);
     }
+  }, [isReplying]);
+
+  // Subscribe to realtime updates
+  useEffect(() => {
+    if (!selectedPing) return;
 
     const supabase = createClient();
     const channel = supabase
-      .channel(`inbox-ping-messages:${selectedPing.id}`)
+      .channel(`team-inbox-ping:${selectedPing.id}`)
       .on(
         'postgres_changes',
         {
@@ -696,361 +753,14 @@ export function InboxClient({
           filter: `ping_id=eq.${selectedPing.id}`,
         },
         async (payload) => {
-          // Fetch message without join to avoid RLS issues
-          const { data: newMessage, error: messageError } = await supabase
+          const { data: newMessage } = await supabase
             .from('ping_messages')
             .select('*')
             .eq('id', payload.new.id)
             .single();
 
-          if (messageError || !newMessage) {
-            return;
-          }
+          if (!newMessage) return;
 
-          // Fetch sender separately using their ID
-          const { data: sender, error: senderError } = await supabase
-            .from('users')
-            .select('id, full_name, avatar_url, role')
-            .eq('id', newMessage.sender_id)
-            .single();
-
-          if (senderError || !sender) {
-            return;
-          }
-
-          // Fetch attachments separately via API (to ensure proper tenant context)
-          // Note: There's a race condition where the message is created before attachments
-          // So we retry once after a short delay if no attachments are found
-          let attachments: PingAttachment[] = [];
-          try {
-            const fetchAttachments = async () => {
-              const attachmentsResponse = await fetch(
-                `/api/pings/messages/${newMessage.id}/attachments`
-              );
-              if (attachmentsResponse.ok) {
-                const { attachments: fetchedAttachments } =
-                  await attachmentsResponse.json();
-                return fetchedAttachments || [];
-              }
-              return [];
-            };
-
-            // First attempt
-            attachments = await fetchAttachments();
-
-            // If no attachments found, wait 500ms and retry once
-            // (handles race condition where attachments are created after message)
-            if (attachments.length === 0) {
-              await new Promise((resolve) => setTimeout(resolve, 500));
-              attachments = await fetchAttachments();
-            }
-          } catch (_attachmentsError) {
-            // Silently handle attachment fetch errors
-          }
-
-          const transformedMessage = {
-            id: newMessage.id,
-            content: newMessage.content,
-            message_type: newMessage.message_type,
-            created_at: newMessage.created_at,
-            sender: sender as Pick<User, 'id' | 'full_name' | 'avatar_url'>,
-            attachments: (attachments || []) as PingAttachment[],
-          };
-
-          // Only add if not already in state (avoid duplicate from optimistic update)
-          setSelectedPing((prev) => {
-            if (!prev) {
-              return prev;
-            }
-            const exists = prev.messages.some(
-              (m) => m.id === transformedMessage.id
-            );
-            if (exists) {
-              return prev;
-            }
-            return {
-              ...prev,
-              messages: [...prev.messages, transformedMessage],
-              updated_at: new Date().toISOString(), // Update timestamp for sort order
-            };
-          });
-
-          // Also update the message in the pings array so it persists when switching pings
-          setPings((prevPings) =>
-            prevPings.map((p) => {
-              if (p.id === selectedPing.id) {
-                // Check if message already exists in this ping
-                const exists = p.messages.some(
-                  (m) => m.id === transformedMessage.id
-                );
-                if (exists) {
-                  return p;
-                }
-                // Add new message to this ping's messages and update timestamp
-                return {
-                  ...p,
-                  messages: [...p.messages, transformedMessage],
-                  updated_at: new Date().toISOString(), // Update timestamp for sort order
-                };
-              }
-              return p;
-            })
-          );
-
-          // Scroll to bottom
-          setTimeout(scrollToBottom, 100);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'pings',
-          filter: `id=eq.${selectedPing.id}`,
-        },
-        async () => {
-          // Fetch updated ping with assigned_to relation
-          const { data: updatedPing } = await supabase
-            .from('pings')
-            .select(
-              '*, assigned_to:users!pings_assigned_to_fkey(id, full_name, avatar_url)'
-            )
-            .eq('id', selectedPing.id)
-            .single();
-
-          if (updatedPing) {
-            const assignedTo = updatedPing.assigned_to
-              ? Array.isArray(updatedPing.assigned_to)
-                ? updatedPing.assigned_to[0]
-                : updatedPing.assigned_to
-              : null;
-
-            // Update selected ping
-            setSelectedPing((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    status: updatedPing.status,
-                    priority: updatedPing.priority,
-                    assigned_to: assignedTo,
-                  }
-                : null
-            );
-
-            // Update ping in list
-            setPings((prevPings) =>
-              prevPings.map((p) =>
-                p.id === selectedPing.id
-                  ? {
-                      ...p,
-                      status: updatedPing.status,
-                      priority: updatedPing.priority,
-                      assigned_to: assignedTo,
-                    }
-                  : p
-              )
-            );
-          }
-        }
-      )
-      .subscribe((status) => {
-        // Set connection state based on subscription status (authoritative source)
-        if (status === 'SUBSCRIBED') {
-          setIsConnected(true);
-          setIsReconnecting(false);
-        } else if (status === 'CHANNEL_ERROR') {
-          setIsConnected(false);
-          setIsReconnecting(true);
-        } else if (status === 'TIMED_OUT') {
-          setIsConnected(false);
-          setIsReconnecting(true);
-        } else if (status === 'CLOSED') {
-          setIsConnected(false);
-          setIsReconnecting(false);
-        }
-      });
-
-    // Cleanup subscription on unmount
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [selectedPing?.id, currentUser.id, soundEnabled]);
-
-  // Subscribe to new pings appearing in the inbox
-  useEffect(() => {
-    const supabase = createClient();
-
-    const handleNewPing = async (payload: any) => {
-      // Fetch the full ping with all relations using split-query pattern
-      const { data: newPing, error: pingError } = await supabase
-        .from('pings')
-        .select('*')
-        .eq('id', payload.new.id)
-        .single();
-
-      if (pingError || !newPing) {
-        return;
-      }
-
-      // Skip draft pings (they're still in Echo conversation)
-      if (newPing.status === 'draft') {
-        return;
-      }
-
-      // Fetch creator
-      const { data: creator } = await supabase
-        .from('users')
-        .select('id, full_name, email, avatar_url')
-        .eq('id', newPing.created_by)
-        .single();
-
-      // Fetch category if exists
-      let category = null;
-      if (newPing.category_id) {
-        const { data: cat } = await supabase
-          .from('categories')
-          .select('id, name, color, icon')
-          .eq('id', newPing.category_id)
-          .single();
-        category = cat;
-      }
-
-      // Fetch assigned user if exists
-      let assigned = null;
-      if (newPing.assigned_to) {
-        const { data: assignee } = await supabase
-          .from('users')
-          .select('id, full_name, avatar_url')
-          .eq('id', newPing.assigned_to)
-          .single();
-        assigned = assignee;
-      }
-
-      // Fetch initial messages
-      const { data: messages } = await supabase
-        .from('ping_messages')
-        .select('*')
-        .eq('ping_id', newPing.id)
-        .order('created_at', { ascending: true });
-
-      // Fetch senders for messages
-      const messagesWithSenders = await Promise.all(
-        (messages || []).map(async (msg) => {
-          const { data: sender } = await supabase
-            .from('users')
-            .select('id, full_name, avatar_url, role')
-            .eq('id', msg.sender_id)
-            .single();
-          return { ...msg, sender };
-        })
-      );
-
-      const transformedPing = {
-        ...newPing,
-        created_by: creator,
-        assigned_to: assigned,
-        category,
-        messages: messagesWithSenders,
-      };
-
-      // Add new ping to the list (agents see all pings for their tenant)
-      setPings((prev: PingWithRelations[]) => {
-        // Check if already exists
-        const exists = prev.some(
-          (p: PingWithRelations) => p.id === transformedPing.id
-        );
-        if (exists) return prev;
-        // Add to top of list
-        return [transformedPing as PingWithRelations, ...prev];
-      });
-
-      // Show toast notification
-      toast.info(
-        `New ping #PING-${String(newPing.ping_number).padStart(3, '0')} from ${creator?.full_name || 'Unknown'}`
-      );
-    };
-
-    const channel = supabase
-      .channel('inbox-pings')
-      // Listen for newly created pings
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'pings',
-          filter: `tenant_id=eq.${currentUser.tenant_id}`,
-        },
-        handleNewPing
-      )
-      // Listen for pings transitioning from draft to non-draft (Echo finalization)
-      // Note: payload.old only contains primary key (replica identity default), not full row
-      // So we check if the ping exists in our current list to determine if it's new
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'pings',
-          filter: `tenant_id=eq.${currentUser.tenant_id}`,
-        },
-        async (payload) => {
-          const newStatus = (payload.new as any).status;
-          const pingId = (payload.new as any).id;
-
-          // Handle ping finalization (status changed to non-draft)
-          // If status is not draft and we don't have this ping in our list, add it
-          if (newStatus !== 'draft') {
-            // Use a ref or callback to get current pings state to avoid stale closure
-            setPings((currentPings) => {
-              const existsInList = currentPings.some((p) => p.id === pingId);
-              if (!existsInList) {
-                // Trigger the async handler but return current state
-                // The handleNewPing will update state separately
-                handleNewPing(payload);
-              }
-              return currentPings;
-            });
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentUser.id, currentUser.tenant_id]);
-
-  // Subscribe to ALL ping messages for pings in the inbox (to update unread counts and play sounds)
-  useEffect(() => {
-    const supabase = createClient();
-
-    // Get all ping IDs that we're tracking
-    const pingIds = pings.map((p) => p.id);
-
-    if (pingIds.length === 0) {
-      return;
-    }
-
-    const channel = supabase
-      .channel('inbox-all-messages')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'ping_messages',
-        },
-        async (payload) => {
-          const newMessage = payload.new as any;
-
-          // Only process if this message is for one of our tracked pings
-          if (!pingIds.includes(newMessage.ping_id)) {
-            return;
-          }
-
-          // Fetch sender info
           const { data: sender } = await supabase
             .from('users')
             .select('id, full_name, avatar_url')
@@ -1059,74 +769,65 @@ export function InboxClient({
 
           if (!sender) return;
 
-          // Check if this message is for the currently selected ping
-          const isCurrentlyViewingPing =
-            selectedPing?.id === newMessage.ping_id;
+          const transformedMessage = {
+            id: newMessage.id,
+            content: newMessage.content,
+            message_type: newMessage.message_type,
+            created_at: newMessage.created_at,
+            sender: sender as Pick<User, 'id' | 'full_name' | 'avatar_url'>,
+            attachments: [],
+          };
 
-          // If user is currently viewing this ping, mark it as read FIRST (before updating state)
-          // This ensures the badge count hook doesn't see the new message as unread
-          if (isCurrentlyViewingPing && sender.id !== currentUser.id) {
-            await supabase.from('ping_reads').upsert({
-              ping_id: newMessage.ping_id,
-              user_id: currentUser.id,
-              last_read_message_id: newMessage.id,
-              last_read_at: newMessage.created_at, // Use message timestamp, not current time
-            });
-          }
+          setSelectedPing((prev) => {
+            if (!prev) return prev;
+            const exists = prev.messages.some(
+              (m) => m.id === transformedMessage.id
+            );
+            if (exists) return prev;
+            return {
+              ...prev,
+              messages: [...prev.messages, transformedMessage],
+              updated_at: new Date().toISOString(),
+            };
+          });
 
-          // Update the ping in the list
           setPings((prevPings) =>
             prevPings.map((p) => {
-              if (p.id === newMessage.ping_id) {
-                const updatedMessages = [
-                  ...p.messages,
-                  {
-                    id: newMessage.id,
-                    content: newMessage.content,
-                    message_type: newMessage.message_type,
-                    created_at: newMessage.created_at,
-                    sender,
-                    attachments: [],
-                  },
-                ];
-
-                // Don't increment unread count if:
-                // 1. Message is from current user, OR
-                // 2. User is currently viewing this ping
-                const shouldIncrementUnread =
-                  sender.id !== currentUser.id && !isCurrentlyViewingPing;
-
-                const updatedUnreadCount = shouldIncrementUnread
-                  ? (p.unread_count || 0) + 1
-                  : p.unread_count || 0;
-
+              if (p.id === selectedPing.id) {
+                const exists = p.messages.some(
+                  (m) => m.id === transformedMessage.id
+                );
+                if (exists) return p;
                 return {
                   ...p,
-                  messages: updatedMessages,
-                  unread_count: updatedUnreadCount,
-                  updated_at: newMessage.created_at,
+                  messages: [...p.messages, transformedMessage],
+                  updated_at: new Date().toISOString(),
                 };
               }
               return p;
             })
           );
 
-          // Play notification sound only if message is from another user AND not currently viewing this ping
-          if (
-            sender.id !== currentUser.id &&
-            !isCurrentlyViewingPing &&
-            soundEnabled
-          ) {
-            playNotificationSound();
-          }
+          setTimeout(scrollToBottom, 100);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setIsConnected(true);
+          setIsReconnecting(false);
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          setIsConnected(false);
+          setIsReconnecting(true);
+        } else if (status === 'CLOSED') {
+          setIsConnected(false);
+          setIsReconnecting(false);
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [pings.length, currentUser.id, soundEnabled, selectedPing]);
+  }, [selectedPing?.id]);
 
   // Subscribe to presence for replying indicators
   useEffect(() => {
@@ -1135,17 +836,13 @@ export function InboxClient({
     const supabase = createClient();
     const channel = supabase.channel(`ping-replying:${selectedPing.id}`, {
       config: {
-        presence: {
-          key: currentUser.id,
-        },
+        presence: { key: currentUser.id },
         broadcast: { self: true },
       },
     });
 
-    // Store channel ref for use in handleMessageChange
     presenceChannelRef.current = channel;
 
-    // Track replying state
     channel
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState();
@@ -1161,7 +858,6 @@ export function InboxClient({
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          // Initialize presence as not replying
           await channel.track({
             id: currentUser.id,
             userName: currentUser.full_name,
@@ -1176,54 +872,34 @@ export function InboxClient({
     };
   }, [selectedPing?.id, currentUser.id, currentUser.full_name]);
 
-  // Filter pings based on selected filter
+  // Filter pings
   const filteredPings = pings
     .filter((ping) => {
-      if (filter === 'assigned') {
-        // Show only active pings assigned to me (exclude resolved/closed)
-        return (
-          ping.assigned_to?.id === currentUser.id &&
-          ping.status !== 'resolved' &&
-          ping.status !== 'closed'
-        );
-      }
-      if (filter === 'unassigned') {
+      if (filter === 'unclaimed') {
         return ping.assigned_to === null;
       }
-      if (filter === 'urgent') {
-        return ping.priority === 'urgent';
+      if (filter === 'mine') {
+        return ping.assigned_to?.id === currentUser.id;
       }
-      if (filter === 'closed') {
-        // Show only resolved/closed pings assigned to me
-        return (
-          ping.assigned_to?.id === currentUser.id &&
-          (ping.status === 'resolved' || ping.status === 'closed')
-        );
-      }
-      return true; // 'all'
+      return true;
     })
     .sort((a, b) => {
       if (sortBy === 'priority') {
-        // Priority sorting: urgent > high > normal > low
         const priorityOrder = { urgent: 1, high: 2, normal: 3, low: 4 };
         return priorityOrder[a.priority] - priorityOrder[b.priority];
       }
-      // Default: recent activity (sort by updated_at descending - most recent first)
       return (
         new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
     });
 
-  // Auto-select first ping when filter or sort changes
+  // Auto-select first ping when filter/sort changes
   useEffect(() => {
     if (filteredPings.length > 0) {
       const firstPing = filteredPings[0];
-
-      // Always select the first ping when filter/sort changes
       setSelectedPing(firstPing);
       markPingAsRead(firstPing);
     } else {
-      // No pings in filtered list, clear selection
       setSelectedPing(null);
     }
   }, [filter, sortBy]);
@@ -1240,7 +916,6 @@ export function InboxClient({
     for (const file of files) {
       const filePath = `${userId}/${Date.now()}-${file.name}`;
 
-      // Upload to Supabase Storage
       const { data, error } = await supabase.storage
         .from('ping-attachments')
         .upload(filePath, file, {
@@ -1252,7 +927,6 @@ export function InboxClient({
         throw new Error(`Failed to upload ${file.name}: ${error.message}`);
       }
 
-      // Track upload progress (simplified - mark as complete)
       setUploadProgress((prev) => ({ ...prev, [file.name]: 100 }));
 
       uploadedFiles.push({
@@ -1266,7 +940,6 @@ export function InboxClient({
     return uploadedFiles;
   };
 
-  // Mark ping as read when user opens it
   const markPingAsRead = async (ping: PingWithRelations) => {
     if (!ping.messages.length) return;
 
@@ -1275,17 +948,14 @@ export function InboxClient({
       await fetch(`/api/pings/${ping.ping_number}/read`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lastReadMessageId: lastMessage.id,
-        }),
+        body: JSON.stringify({ lastReadMessageId: lastMessage.id }),
       });
 
-      // Optimistically clear unread count
       setPings((prevPings) =>
         prevPings.map((p) => (p.id === ping.id ? { ...p, unread_count: 0 } : p))
       );
     } catch (_error) {
-      // Silently handle mark as read errors
+      // Silently handle
     }
   };
 
@@ -1301,7 +971,6 @@ export function InboxClient({
     setIsUploadingFiles(true);
 
     try {
-      // 1. Upload files to Supabase Storage
       let uploadedFiles: Array<{
         name: string;
         path: string;
@@ -1313,7 +982,6 @@ export function InboxClient({
         uploadedFiles = await uploadFiles(selectedFiles, currentUser.id);
       }
 
-      // 2. Create message with content and attachments
       const response = await fetch(
         `/api/pings/${selectedPing.ping_number}/messages`,
         {
@@ -1339,7 +1007,6 @@ export function InboxClient({
 
       const { message } = await response.json();
 
-      // Optimistic UI update: Add message to selected ping
       setSelectedPing((prev) => {
         if (!prev) return prev;
         return {
@@ -1348,15 +1015,11 @@ export function InboxClient({
         };
       });
 
-      // Clear inputs
       setReplyMessage('');
       setSelectedFiles([]);
       setUploadProgress({});
 
-      // Scroll to bottom of thread
       setTimeout(scrollToBottom, 100);
-
-      // Re-focus the reply textarea so agent can continue typing
       setTimeout(() => replyTextareaRef.current?.focus(), 150);
     } catch (_error) {
       toast.error('Failed to send message. Please try again.');
@@ -1376,25 +1039,20 @@ export function InboxClient({
   const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setReplyMessage(e.target.value);
 
-    if (!selectedPing || !presenceChannelRef.current) {
-      return;
-    }
+    if (!selectedPing || !presenceChannelRef.current) return;
 
-    // Broadcast replying status (debounced)
     if (replyingTimeoutRef.current) {
       clearTimeout(replyingTimeoutRef.current);
     }
 
     const channel = presenceChannelRef.current;
 
-    // Track that user is replying
     channel.track({
       id: currentUser.id,
       userName: currentUser.full_name,
       isReplying: true,
     });
 
-    // Set timeout to clear replying status after 2 seconds of inactivity
     replyingTimeoutRef.current = setTimeout(() => {
       channel.track({
         id: currentUser.id,
@@ -1419,14 +1077,168 @@ export function InboxClient({
       <div className="flex h-screen bg-gradient-to-b from-slate-50 to-blue-50">
         {/* Ping List - Left Panel */}
         <div className="w-96 bg-white border-r border-slate-200 flex flex-col shadow-lg">
-          {/* Header */}
+          {/* Team Header */}
           <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-950 border-b border-slate-700 p-4">
-            <h2 className="text-xl font-bold text-white mb-1">
-              {filterConfig.title}
-            </h2>
-            <p className="text-xs text-slate-400 mb-3">
-              {filterConfig.description}
-            </p>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-orange-500" />
+                <h2 className="text-xl font-bold text-white">{team.name}</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowMemberList(!showMemberList)}
+                  className="text-slate-400 hover:text-white transition-colors"
+                  title={
+                    isManagerOrOwner
+                      ? 'Manage team members'
+                      : 'View team members'
+                  }
+                >
+                  {isManagerOrOwner ? (
+                    <UserPlus className="w-5 h-5" />
+                  ) : (
+                    <Users className="w-5 h-5" />
+                  )}
+                </button>
+                {isManagerOrOwner && (
+                  <button
+                    onClick={() => setShowDeleteDialog(true)}
+                    className="text-slate-400 hover:text-red-400 transition-colors"
+                    title="Delete team"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+            </div>
+            {team.description && (
+              <p className="text-sm text-slate-400 mb-3">{team.description}</p>
+            )}
+
+            {/* Member List (collapsible) */}
+            {showMemberList && (
+              <div className="mb-3 p-2 bg-slate-800/50 rounded-lg">
+                <h3 className="text-xs font-semibold text-slate-400 uppercase mb-2">
+                  Team Members ({teamMembers.length})
+                </h3>
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {teamMembers.map((member) => (
+                    <div
+                      key={member.id}
+                      className="flex items-center justify-between gap-2 text-sm group"
+                    >
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        {member.avatar_url ? (
+                          <img
+                            src={member.avatar_url}
+                            alt={member.full_name}
+                            className="w-5 h-5 rounded-full flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full bg-slate-600 flex items-center justify-center text-xs text-white flex-shrink-0">
+                            {member.full_name?.charAt(0).toUpperCase() || '?'}
+                          </div>
+                        )}
+                        <span className="text-slate-300 truncate">
+                          {member.full_name}
+                        </span>
+                      </div>
+                      {isManagerOrOwner && (
+                        <button
+                          onClick={() => handleRemoveMember(member.id)}
+                          disabled={isRemovingMember === member.id}
+                          className="p-1 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
+                          title="Remove from team"
+                        >
+                          {isRemovingMember === member.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <X className="w-3 h-3" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add Member Section - Only for managers/owners */}
+                {isManagerOrOwner && (
+                  <div className="mt-2 pt-2 border-t border-slate-700">
+                    {showAgentSelector ? (
+                      <div className="space-y-2">
+                        {isLoadingAgents ? (
+                          <div className="flex items-center justify-center py-2">
+                            <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                          </div>
+                        ) : filteredAgents.length === 0 ? (
+                          <p className="text-xs text-slate-500 text-center py-2">
+                            No available agents to add
+                          </p>
+                        ) : (
+                          <div className="max-h-32 overflow-y-auto space-y-1">
+                            {filteredAgents.map((agent) => (
+                              <button
+                                key={agent.id}
+                                onClick={() => handleAddMember(agent.id)}
+                                disabled={isAddingMember}
+                                className="w-full flex items-center gap-2 p-1.5 rounded hover:bg-slate-700 text-left transition-colors disabled:opacity-50"
+                              >
+                                {agent.avatar_url ? (
+                                  <img
+                                    src={agent.avatar_url}
+                                    alt={agent.full_name}
+                                    className="w-5 h-5 rounded-full"
+                                  />
+                                ) : (
+                                  <div className="w-5 h-5 rounded-full bg-slate-600 flex items-center justify-center text-xs text-white">
+                                    {agent.full_name?.charAt(0).toUpperCase() ||
+                                      '?'}
+                                  </div>
+                                )}
+                                <span className="text-sm text-slate-300 truncate">
+                                  {agent.full_name}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <button
+                          onClick={() => setShowAgentSelector(false)}
+                          className="w-full text-xs text-slate-500 hover:text-slate-300 py-1"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setShowAgentSelector(true);
+                          fetchAvailableAgents();
+                        }}
+                        className="flex items-center gap-1.5 text-xs text-orange-500 hover:text-orange-400 transition-colors"
+                      >
+                        <Plus className="w-3 h-3" />
+                        Add Member
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 mb-2">
+              <select
+                value={filter}
+                onChange={(e) =>
+                  setFilter(e.target.value as 'all' | 'unclaimed' | 'mine')
+                }
+                className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+              >
+                <option value="all">All Team Pings</option>
+                <option value="unclaimed">Unclaimed</option>
+                <option value="mine">Claimed by Me</option>
+              </select>
+            </div>
             <div className="flex items-center gap-2">
               <label className="text-xs text-slate-400">Sort by:</label>
               <select
@@ -1475,7 +1287,7 @@ export function InboxClient({
                             {ping.unread_count}
                           </span>
                         )}
-                    </div>{' '}
+                    </div>
                     <SLATimer ping={ping} />
                   </div>
                   <p className="text-sm font-medium text-slate-900 mb-2 line-clamp-1">
@@ -1519,8 +1331,8 @@ export function InboxClient({
                         </span>
                       </>
                     ) : (
-                      <span className="text-xs text-slate-500 italic">
-                        Unassigned
+                      <span className="text-xs text-orange-500 font-medium">
+                        Unclaimed
                       </span>
                     )}
                   </div>
@@ -1547,7 +1359,7 @@ export function InboxClient({
                 onPriorityChange={handlePriorityChange}
                 isUpdatingPriority={isUpdatingPriority}
                 onClaimPing={handleClaimPing}
-                isClaiming={isUpdatingAssignment}
+                isClaiming={isClaiming}
               />
 
               {/* Sticky Summary & Actions Section */}
@@ -1597,7 +1409,7 @@ export function InboxClient({
                           className="px-2 py-1 bg-white border border-slate-300 rounded text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <option value="">Unassigned</option>
-                          {agents.map((agent) => (
+                          {availableAgents.map((agent) => (
                             <option key={agent.id} value={agent.id}>
                               {agent.full_name}
                             </option>
@@ -1620,9 +1432,9 @@ export function InboxClient({
                             className="px-2 py-1 bg-white border border-slate-300 rounded text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <option value="">No Team</option>
-                            {availableTeams.map((team) => (
-                              <option key={team.id} value={team.id}>
-                                {team.name}
+                            {availableTeams.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
                               </option>
                             ))}
                           </select>
@@ -1660,7 +1472,7 @@ export function InboxClient({
               <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-white to-slate-50">
                 <div className="space-y-4 px-6">
                   {selectedPing.messages
-                    .filter((message) => message.sender) // Filter out messages with null sender
+                    .filter((message) => message.sender)
                     .map((message) => {
                       const isCurrentUser =
                         message.sender.id === currentUser.id;
@@ -1674,12 +1486,10 @@ export function InboxClient({
                       );
                     })}
 
-                  {/* Replying indicator */}
                   {isReplying && (
                     <ReplyingIndicator userName={isReplying.userName} />
                   )}
 
-                  {/* Scroll anchor */}
                   <div ref={messagesEndRef} />
                 </div>
               </div>
@@ -1751,7 +1561,6 @@ export function InboxClient({
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* Suggested Response */}
               <div className="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
                 <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-orange-500" />
@@ -1773,20 +1582,9 @@ export function InboxClient({
                 </button>
               </div>
 
-              {/* Suggested Articles */}
               <div className="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
                 <h4 className="text-sm font-semibold text-white mb-3">
                   Related KB Articles
-                </h4>
-                <div className="text-sm text-slate-400 italic">
-                  Will be populated in Epic 3
-                </div>
-              </div>
-
-              {/* Suggested Actions */}
-              <div className="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
-                <h4 className="text-sm font-semibold text-white mb-3">
-                  Suggested Actions
                 </h4>
                 <div className="text-sm text-slate-400 italic">
                   Will be populated in Epic 3
@@ -1796,7 +1594,6 @@ export function InboxClient({
           </div>
         )}
 
-        {/* Show Echo button when hidden */}
         {!showEcho && (
           <button
             onClick={() => setShowEcho(true)}
@@ -1806,6 +1603,22 @@ export function InboxClient({
           </button>
         )}
       </div>
+
+      {/* Delete Team Dialog */}
+      {isManagerOrOwner && (
+        <TeamDeleteDialog
+          open={showDeleteDialog}
+          onOpenChange={setShowDeleteDialog}
+          team={team}
+          memberCount={teamMembers.length}
+          pingCount={pings.length}
+          onSuccess={() => {
+            // Remove team from sidebar immediately via context
+            teamsContext?.removeTeam(team.id);
+            router.push('/inbox');
+          }}
+        />
+      )}
     </>
   );
 }

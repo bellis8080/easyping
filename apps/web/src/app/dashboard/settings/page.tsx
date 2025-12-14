@@ -16,6 +16,8 @@ import {
   Archive,
   ArchiveRestore,
   GripVertical,
+  Route,
+  Trash2,
 } from 'lucide-react';
 import UserManagementTable from './users/UserManagementTable';
 
@@ -26,6 +28,7 @@ type TabType =
   | 'users'
   | 'supportProfile'
   | 'categories'
+  | 'routing'
   | 'security';
 
 interface TabConfig {
@@ -41,6 +44,7 @@ const tabs: TabConfig[] = [
   { id: 'users', label: 'Users', icon: Users },
   { id: 'supportProfile', label: 'Support Profile', icon: Building2 },
   { id: 'categories', label: 'Categories', icon: FolderTree },
+  { id: 'routing', label: 'Routing Rules', icon: Route },
   { id: 'security', label: 'Security', icon: Shield },
 ];
 
@@ -73,8 +77,8 @@ export default function SettingsPage() {
     if (tab.id === 'ai' || tab.id === 'users' || tab.id === 'supportProfile') {
       return userRole === 'owner';
     }
-    // Show categories to managers and owners
-    if (tab.id === 'categories') {
+    // Show categories and routing to managers and owners
+    if (tab.id === 'categories' || tab.id === 'routing') {
       return userRole === 'owner' || userRole === 'manager';
     }
     return true;
@@ -142,6 +146,10 @@ export default function SettingsPage() {
               {activeTab === 'categories' &&
                 (userRole === 'owner' || userRole === 'manager') && (
                   <CategoriesTab />
+                )}
+              {activeTab === 'routing' &&
+                (userRole === 'owner' || userRole === 'manager') && (
+                  <RoutingTab />
                 )}
               {activeTab === 'security' && <SecurityTab />}
             </div>
@@ -1460,6 +1468,592 @@ function CategoriesTab() {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+interface Team {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
+interface RoutingRule {
+  id: string;
+  category_id: string;
+  rule_type: 'agent' | 'team';
+  destination_agent_id: string | null;
+  destination_team_id: string | null;
+  priority: number;
+  is_active: boolean;
+  category: {
+    id: string;
+    name: string;
+    color: string;
+    icon: string | null;
+  };
+  destination_agent: {
+    id: string;
+    full_name: string;
+    email: string;
+    avatar_url: string | null;
+  } | null;
+  destination_team: {
+    id: string;
+    name: string;
+    description: string | null;
+  } | null;
+}
+
+interface AvailableCategory {
+  id: string;
+  name: string;
+  color: string;
+}
+
+interface AvailableAgent {
+  id: string;
+  full_name: string;
+  email: string;
+  avatar_url: string | null;
+}
+
+function RoutingTab() {
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [routingRules, setRoutingRules] = useState<RoutingRule[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<
+    AvailableCategory[]
+  >([]);
+  const [availableAgents, setAvailableAgents] = useState<AvailableAgent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // Routing rule form state
+  const [isAddingRule, setIsAddingRule] = useState(false);
+  const [editingRule, setEditingRule] = useState<RoutingRule | null>(null);
+  const [ruleForm, setRuleForm] = useState({
+    category_id: '',
+    rule_type: 'team' as 'agent' | 'team',
+    destination_agent_id: '',
+    destination_team_id: '',
+  });
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [teamsRes, rulesRes, categoriesRes, agentsRes] = await Promise.all([
+        fetch('/api/teams'),
+        fetch('/api/routing-rules'),
+        fetch('/api/categories'),
+        fetch('/api/agents'),
+      ]);
+
+      if (teamsRes.ok) setTeams(await teamsRes.json());
+      if (rulesRes.ok) setRoutingRules(await rulesRes.json());
+      if (categoriesRes.ok) setAvailableCategories(await categoriesRes.json());
+      if (agentsRes.ok) setAvailableAgents(await agentsRes.json());
+    } catch (error) {
+      console.error('Failed to load data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Routing rules management
+  const handleAddRule = async () => {
+    if (!ruleForm.category_id) return;
+    if (ruleForm.rule_type === 'team' && !ruleForm.destination_team_id) return;
+    if (ruleForm.rule_type === 'agent' && !ruleForm.destination_agent_id)
+      return;
+
+    setSaving(true);
+    try {
+      const response = await fetch('/api/routing-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category_id: ruleForm.category_id,
+          rule_type: ruleForm.rule_type,
+          destination_agent_id:
+            ruleForm.rule_type === 'agent'
+              ? ruleForm.destination_agent_id
+              : null,
+          destination_team_id:
+            ruleForm.rule_type === 'team' ? ruleForm.destination_team_id : null,
+          is_active: true,
+        }),
+      });
+      if (response.ok) {
+        await loadData();
+        setRuleForm({
+          category_id: '',
+          rule_type: 'team',
+          destination_agent_id: '',
+          destination_team_id: '',
+        });
+        setIsAddingRule(false);
+      } else {
+        const error = await response.json();
+        alert(`Failed to create rule: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to create rule:', error);
+      alert('Failed to create rule');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdateRule = async () => {
+    if (!editingRule) return;
+    if (ruleForm.rule_type === 'team' && !ruleForm.destination_team_id) return;
+    if (ruleForm.rule_type === 'agent' && !ruleForm.destination_agent_id)
+      return;
+
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/routing-rules/${editingRule.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rule_type: ruleForm.rule_type,
+          destination_agent_id:
+            ruleForm.rule_type === 'agent'
+              ? ruleForm.destination_agent_id
+              : null,
+          destination_team_id:
+            ruleForm.rule_type === 'team' ? ruleForm.destination_team_id : null,
+        }),
+      });
+      if (response.ok) {
+        await loadData();
+        setEditingRule(null);
+        setRuleForm({
+          category_id: '',
+          rule_type: 'team',
+          destination_agent_id: '',
+          destination_team_id: '',
+        });
+      } else {
+        const error = await response.json();
+        alert(`Failed to update rule: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to update rule:', error);
+      alert('Failed to update rule');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteRule = async (ruleId: string) => {
+    if (!confirm('Are you sure you want to delete this routing rule?')) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/routing-rules/${ruleId}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        await loadData();
+      } else {
+        const error = await response.json();
+        alert(`Failed to delete rule: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to delete rule:', error);
+      alert('Failed to delete rule');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleRule = async (rule: RoutingRule) => {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/routing-rules/${rule.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !rule.is_active }),
+      });
+      if (response.ok) {
+        await loadData();
+      }
+    } catch (error) {
+      console.error('Failed to toggle rule:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Get categories that don't have rules yet
+  const categoriesWithoutRules = availableCategories.filter(
+    (cat) => !routingRules.some((rule) => rule.category_id === cat.id)
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Routing Rules Section */}
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 mb-1">
+            Routing Rules
+          </h2>
+          <p className="text-sm text-slate-600">
+            Automatically assign pings to teams or agents based on category
+          </p>
+        </div>
+
+        <div className="bg-white rounded-lg border-2 border-slate-200 p-6 shadow-lg space-y-4">
+          {routingRules.length === 0 && !isAddingRule ? (
+            <div className="text-center py-8">
+              <Route className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-slate-900 mb-2">
+                No Routing Rules
+              </h3>
+              <p className="text-sm text-slate-600 mb-4">
+                Create routing rules to automatically assign pings to the right
+                team or agent.
+              </p>
+              {categoriesWithoutRules.length > 0 && teams.length > 0 ? (
+                <button
+                  onClick={() => setIsAddingRule(true)}
+                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors"
+                >
+                  Create First Rule
+                </button>
+              ) : (
+                <p className="text-xs text-slate-500">
+                  {teams.length === 0
+                    ? 'Create a team first to set up routing.'
+                    : 'All categories already have routing rules.'}
+                </p>
+              )}
+            </div>
+          ) : (
+            <>
+              {routingRules.map((rule) => (
+                <div
+                  key={rule.id}
+                  className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${
+                    rule.is_active
+                      ? 'border-slate-200 hover:border-orange-300'
+                      : 'border-slate-200 bg-slate-50 opacity-60'
+                  }`}
+                >
+                  {editingRule?.id === rule.id ? (
+                    <div className="flex-1 flex items-center gap-4">
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-4 h-4 rounded"
+                            style={{ backgroundColor: rule.category.color }}
+                          />
+                          <span className="font-medium text-slate-700">
+                            {rule.category.name}
+                          </span>
+                          <span className="text-slate-400">→</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <select
+                            value={ruleForm.rule_type}
+                            onChange={(e) =>
+                              setRuleForm({
+                                ...ruleForm,
+                                rule_type: e.target.value as 'agent' | 'team',
+                              })
+                            }
+                            className="px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          >
+                            <option value="team">Team</option>
+                            <option value="agent">Agent</option>
+                          </select>
+                          {ruleForm.rule_type === 'team' ? (
+                            <select
+                              value={ruleForm.destination_team_id}
+                              onChange={(e) =>
+                                setRuleForm({
+                                  ...ruleForm,
+                                  destination_team_id: e.target.value,
+                                })
+                              }
+                              className="flex-1 px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            >
+                              <option value="">Select team...</option>
+                              {teams.map((team) => (
+                                <option key={team.id} value={team.id}>
+                                  {team.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <select
+                              value={ruleForm.destination_agent_id}
+                              onChange={(e) =>
+                                setRuleForm({
+                                  ...ruleForm,
+                                  destination_agent_id: e.target.value,
+                                })
+                              }
+                              className="flex-1 px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            >
+                              <option value="">Select agent...</option>
+                              {availableAgents.map((agent) => (
+                                <option key={agent.id} value={agent.id}>
+                                  {agent.full_name}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleUpdateRule}
+                          disabled={
+                            saving ||
+                            (ruleForm.rule_type === 'team'
+                              ? !ruleForm.destination_team_id
+                              : !ruleForm.destination_agent_id)
+                          }
+                          className="px-3 py-1.5 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded transition-colors disabled:opacity-50"
+                        >
+                          {saving ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            'Save'
+                          )}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingRule(null);
+                            setRuleForm({
+                              category_id: '',
+                              rule_type: 'team',
+                              destination_agent_id: '',
+                              destination_team_id: '',
+                            });
+                          }}
+                          className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-8 h-8 rounded flex items-center justify-center"
+                          style={{ backgroundColor: rule.category.color }}
+                        >
+                          <span className="text-white text-xs font-bold">
+                            {rule.category.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-slate-900">
+                            {rule.category.name}
+                          </span>
+                          <span className="text-slate-400">→</span>
+                          {rule.rule_type === 'team' &&
+                          rule.destination_team ? (
+                            <span className="text-slate-700 flex items-center gap-1">
+                              <Users className="w-4 h-4" />
+                              {rule.destination_team.name}
+                            </span>
+                          ) : rule.destination_agent ? (
+                            <span className="text-slate-700 flex items-center gap-1">
+                              <User className="w-4 h-4" />
+                              {rule.destination_agent.full_name}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">Unknown</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={rule.is_active}
+                            onChange={() => handleToggleRule(rule)}
+                            disabled={saving}
+                          />
+                          <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"></div>
+                        </label>
+                        <button
+                          onClick={() => {
+                            setEditingRule(rule);
+                            setRuleForm({
+                              category_id: rule.category_id,
+                              rule_type: rule.rule_type,
+                              destination_agent_id:
+                                rule.destination_agent_id || '',
+                              destination_team_id:
+                                rule.destination_team_id || '',
+                            });
+                          }}
+                          className="p-2 text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                          title="Edit"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteRule(rule.id)}
+                          disabled={saving}
+                          className="p-2 text-slate-600 hover:bg-red-50 hover:text-red-600 rounded transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+
+              {/* Add New Rule */}
+              {isAddingRule ? (
+                <div className="p-4 border-2 border-dashed border-orange-300 rounded-lg bg-orange-50">
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1 space-y-2">
+                      <select
+                        value={ruleForm.category_id}
+                        onChange={(e) =>
+                          setRuleForm({
+                            ...ruleForm,
+                            category_id: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      >
+                        <option value="">Select category...</option>
+                        {categoriesWithoutRules.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="flex gap-2">
+                        <select
+                          value={ruleForm.rule_type}
+                          onChange={(e) =>
+                            setRuleForm({
+                              ...ruleForm,
+                              rule_type: e.target.value as 'agent' | 'team',
+                            })
+                          }
+                          className="px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        >
+                          <option value="team">Route to Team</option>
+                          <option value="agent">Route to Agent</option>
+                        </select>
+                        {ruleForm.rule_type === 'team' ? (
+                          <select
+                            value={ruleForm.destination_team_id}
+                            onChange={(e) =>
+                              setRuleForm({
+                                ...ruleForm,
+                                destination_team_id: e.target.value,
+                              })
+                            }
+                            className="flex-1 px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          >
+                            <option value="">Select team...</option>
+                            {teams.map((team) => (
+                              <option key={team.id} value={team.id}>
+                                {team.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <select
+                            value={ruleForm.destination_agent_id}
+                            onChange={(e) =>
+                              setRuleForm({
+                                ...ruleForm,
+                                destination_agent_id: e.target.value,
+                              })
+                            }
+                            className="flex-1 px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          >
+                            <option value="">Select agent...</option>
+                            {availableAgents.map((agent) => (
+                              <option key={agent.id} value={agent.id}>
+                                {agent.full_name}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleAddRule}
+                        disabled={
+                          saving ||
+                          !ruleForm.category_id ||
+                          (ruleForm.rule_type === 'team'
+                            ? !ruleForm.destination_team_id
+                            : !ruleForm.destination_agent_id)
+                        }
+                        className="px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {saving ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Plus className="w-4 h-4" />
+                        )}
+                        Add
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsAddingRule(false);
+                          setRuleForm({
+                            category_id: '',
+                            rule_type: 'team',
+                            destination_agent_id: '',
+                            destination_team_id: '',
+                          });
+                        }}
+                        className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : categoriesWithoutRules.length > 0 &&
+                (teams.length > 0 || availableAgents.length > 0) ? (
+                <button
+                  onClick={() => setIsAddingRule(true)}
+                  className="w-full py-3 border-2 border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-orange-500 hover:text-orange-500 transition-colors font-medium flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Routing Rule
+                </button>
+              ) : categoriesWithoutRules.length === 0 &&
+                routingRules.length > 0 ? (
+                <p className="text-sm text-green-600 text-center py-2">
+                  ✓ All categories have routing rules configured
+                </p>
+              ) : null}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

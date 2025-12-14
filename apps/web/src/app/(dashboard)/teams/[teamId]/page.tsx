@@ -1,11 +1,25 @@
-import { Suspense } from 'react';
-import { redirect } from 'next/navigation';
+/**
+ * Team Inbox Page
+ * Story 3.5: Team Inboxes
+ *
+ * Displays pings assigned to a specific team.
+ * Agents can claim pings, managers can view all team pings.
+ */
+
+import { redirect, notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { InboxClient } from '@/components/inbox/inbox-client';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { TeamInboxClient } from '@/components/teams/team-inbox-client';
 import { PingAttachment } from '@easyping/types';
 
-export default async function AgentInboxPage() {
+interface TeamInboxPageProps {
+  params: Promise<{ teamId: string }>;
+}
+
+export default async function TeamInboxPage({ params }: TeamInboxPageProps) {
+  const { teamId } = await params;
   const supabase = await createClient();
+  const adminClient = createAdminClient();
 
   // Get authenticated user
   const {
@@ -28,14 +42,61 @@ export default async function AgentInboxPage() {
     redirect('/login');
   }
 
-  // Redirect end users to /pings (inbox is for agents only)
+  // Only agents, managers, and owners can view team inboxes
   if (userProfile.role === 'end_user') {
     redirect('/pings');
   }
 
-  // Fetch all pings in tenant (no assignment filter)
-  // Exclude draft pings (they're still in Echo conversation)
-  const { data: pings, error: pingsError } = await supabase
+  // Verify team exists and belongs to tenant
+  const { data: team, error: teamError } = await adminClient
+    .from('agent_teams')
+    .select('id, name, description, created_at')
+    .eq('id', teamId)
+    .eq('tenant_id', userProfile.tenant_id)
+    .single();
+
+  if (teamError || !team) {
+    notFound();
+  }
+
+  // Check access: agents must be members, managers/owners can access any team
+  const isManagerOrOwner =
+    userProfile.role === 'owner' || userProfile.role === 'manager';
+
+  if (!isManagerOrOwner) {
+    const { data: membership, error: memberError } = await adminClient
+      .from('agent_team_members')
+      .select('team_id')
+      .eq('team_id', teamId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (memberError || !membership) {
+      // Agent is not a member of this team
+      redirect('/inbox');
+    }
+  }
+
+  // Fetch team members
+  const { data: members } = await adminClient
+    .from('agent_team_members')
+    .select(
+      `
+      user_id,
+      added_at,
+      users(id, full_name, email, avatar_url, role)
+    `
+    )
+    .eq('team_id', teamId);
+
+  const teamMembers =
+    members?.map((m) => ({
+      ...(Array.isArray(m.users) ? m.users[0] : m.users),
+      added_at: m.added_at,
+    })) || [];
+
+  // Fetch pings assigned to this team
+  const { data: pings, error: pingsError } = await adminClient
     .from('pings')
     .select(
       `
@@ -61,41 +122,37 @@ export default async function AgentInboxPage() {
       )
     `
     )
-    .eq('tenant_id', userProfile.tenant_id)
+    .eq('team_id', teamId)
     .neq('status', 'draft')
     .order('updated_at', { ascending: false })
     .order('created_at', { foreignTable: 'ping_messages', ascending: true });
 
   if (pingsError) {
-    console.error('Error fetching pings:', pingsError);
-    // Return empty array on error rather than crashing
+    console.error('Error fetching team pings:', pingsError);
     return (
-      <Suspense
-        fallback={
-          <div className="flex h-screen bg-gradient-to-b from-slate-50 to-blue-50" />
-        }
-      >
-        <InboxClient
-          pings={[]}
-          currentUser={{
-            id: userProfile.id,
-            full_name: userProfile.full_name,
-            avatar_url: userProfile.avatar_url,
-            role: userProfile.role,
-            tenant_id: userProfile.tenant_id,
-          }}
-        />
-      </Suspense>
+      <TeamInboxClient
+        team={team}
+        members={teamMembers}
+        pings={[]}
+        currentUser={{
+          id: userProfile.id,
+          full_name: userProfile.full_name,
+          avatar_url: userProfile.avatar_url,
+          role: userProfile.role,
+          tenant_id: userProfile.tenant_id,
+        }}
+        isManagerOrOwner={isManagerOrOwner}
+      />
     );
   }
 
-  // Fetch all message IDs to get attachments (split-query pattern to avoid RLS issues)
+  // Fetch all message IDs to get attachments
   const allMessageIds =
     pings?.flatMap((ping) => ping.messages?.map((msg) => msg.id) || []) || [];
 
   let attachmentsByMessageId: Record<string, PingAttachment[]> = {};
   if (allMessageIds.length > 0) {
-    const { data: attachments } = await supabase
+    const { data: attachments } = await adminClient
       .from('ping_attachments')
       .select('*')
       .in('ping_message_id', allMessageIds);
@@ -159,7 +216,6 @@ export default async function AgentInboxPage() {
       unread_count: (() => {
         const lastReadAt = pingReadsMap.get(ping.id);
         if (!lastReadAt) {
-          // Never read - all messages are unread (excluding current user's own messages)
           return (ping.messages || []).filter((msg) => {
             const sender = Array.isArray(msg.sender)
               ? msg.sender[0]
@@ -167,7 +223,6 @@ export default async function AgentInboxPage() {
             return sender?.id !== userProfile.id;
           }).length;
         }
-        // Count messages created after last read time (excluding current user's own messages)
         return (ping.messages || []).filter((msg) => {
           const sender = Array.isArray(msg.sender) ? msg.sender[0] : msg.sender;
           return (
@@ -179,21 +234,18 @@ export default async function AgentInboxPage() {
     })) || [];
 
   return (
-    <Suspense
-      fallback={
-        <div className="flex h-screen bg-gradient-to-b from-slate-50 to-blue-50" />
-      }
-    >
-      <InboxClient
-        pings={transformedPings}
-        currentUser={{
-          id: userProfile.id,
-          full_name: userProfile.full_name,
-          avatar_url: userProfile.avatar_url,
-          role: userProfile.role,
-          tenant_id: userProfile.tenant_id,
-        }}
-      />
-    </Suspense>
+    <TeamInboxClient
+      team={team}
+      members={teamMembers}
+      pings={transformedPings}
+      currentUser={{
+        id: userProfile.id,
+        full_name: userProfile.full_name,
+        avatar_url: userProfile.avatar_url,
+        role: userProfile.role,
+        tenant_id: userProfile.tenant_id,
+      }}
+      isManagerOrOwner={isManagerOrOwner}
+    />
   );
 }

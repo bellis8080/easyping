@@ -15,6 +15,18 @@ export type {
   PingAttachment,
   PingMessageWithAttachments,
   PingWithMessages,
+  // Agent Teams
+  AgentTeam,
+  AgentTeamMember,
+  AgentTeamWithMembers,
+  PingWithTeam,
+  // Routing Rules
+  RoutingRuleType,
+  RoutingRule,
+  Category,
+  RoutingRuleWithDetails,
+  RoutingResult,
+  // Insert/Update types
   InsertOrganization,
   InsertUser,
   InsertPing,
@@ -23,6 +35,11 @@ export type {
   UpdateUser,
   UpdatePing,
   UpdatePingMessage,
+  InsertAgentTeam,
+  UpdateAgentTeam,
+  InsertAgentTeamMember,
+  InsertRoutingRule,
+  UpdateRoutingRule,
 } from './models';
 
 // Re-export enums and helpers

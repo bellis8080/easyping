@@ -56,6 +56,7 @@ export interface Ping {
   created_by: string; // UUID (User ID)
   assigned_to: string | null; // UUID (User ID)
   category_id: string | null; // UUID (Category ID)
+  team_id: string | null; // UUID (AgentTeam ID) - team this ping is routed to
   status: PingStatus;
   priority: PingPriority;
   title: string;
@@ -102,6 +103,106 @@ export interface PingMessageWithAttachments extends PingMessage {
 export interface PingWithMessages extends Ping {
   messages: PingMessage[];
 }
+
+// ============================================================================
+// Agent Teams
+// ============================================================================
+
+export interface AgentTeam {
+  id: string; // UUID
+  tenant_id: string; // UUID
+  name: string;
+  description: string | null;
+  created_at: string; // ISO timestamp
+  updated_at: string; // ISO timestamp
+}
+
+export interface AgentTeamMember {
+  team_id: string; // UUID
+  user_id: string; // UUID
+  added_at: string; // ISO timestamp
+}
+
+export interface AgentTeamWithMembers extends AgentTeam {
+  members: User[];
+  member_count: number;
+}
+
+// Extended ping type with team information
+export interface PingWithTeam extends Ping {
+  team?: AgentTeam | null;
+}
+
+// ============================================================================
+// Routing Rules
+// ============================================================================
+
+export type RoutingRuleType = 'agent' | 'team';
+
+export interface RoutingRule {
+  id: string; // UUID
+  tenant_id: string; // UUID
+  category_id: string; // UUID
+  rule_type: RoutingRuleType;
+  destination_agent_id: string | null; // UUID
+  destination_team_id: string | null; // UUID
+  priority: number;
+  is_active: boolean;
+  created_at: string; // ISO timestamp
+  updated_at: string; // ISO timestamp
+}
+
+// Category interface for use in RoutingRuleWithDetails
+export interface Category {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string | null;
+  color: string | null;
+  icon: string | null;
+  is_active: boolean;
+  is_default: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RoutingRuleWithDetails extends RoutingRule {
+  category?: Category;
+  destination_agent?: User;
+  destination_team?: AgentTeam;
+}
+
+// Routing result returned after applying a routing rule
+export interface RoutingResult {
+  routed: boolean;
+  routedTo: {
+    type: 'agent' | 'team';
+    id: string;
+    name: string;
+  } | null;
+  systemMessage: string;
+}
+
+// ============================================================================
+// Insert/Update helper types for new tables
+// ============================================================================
+
+export type InsertAgentTeam = Omit<
+  AgentTeam,
+  'id' | 'created_at' | 'updated_at'
+>;
+export type UpdateAgentTeam = Partial<Pick<AgentTeam, 'name' | 'description'>>;
+
+export type InsertAgentTeamMember = Omit<AgentTeamMember, 'added_at'>;
+
+export type InsertRoutingRule = Omit<
+  RoutingRule,
+  'id' | 'created_at' | 'updated_at'
+>;
+export type UpdateRoutingRule = Partial<
+  Omit<RoutingRule, 'id' | 'tenant_id' | 'created_at' | 'updated_at'>
+>;
 
 // Helper type for database insert operations
 export type InsertOrganization = Omit<Organization, 'id' | 'created_at'>;

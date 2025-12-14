@@ -21,6 +21,21 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminClient: vi.fn(),
+}));
+
+vi.mock('@/lib/services/routing-service', () => ({
+  createRoutingService: vi.fn(() => ({
+    routePing: vi.fn().mockResolvedValue({
+      routed: false,
+      routedTo: null,
+      systemMessage: 'No routing rule configured',
+    }),
+    applyRoutingToUpdate: vi.fn().mockReturnValue({}),
+  })),
+}));
+
 vi.mock('@/lib/utils', () => ({
   generatePingTitle: vi.fn((message: string, maxLength: number) => {
     const trimmed = message.trim();
@@ -30,9 +45,11 @@ vi.mock('@/lib/utils', () => ({
 }));
 
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 describe('POST /api/pings', () => {
   let mockSupabaseClient: any;
+  let mockAdminClient: any;
 
   beforeEach(() => {
     // Reset all mocks before each test
@@ -46,8 +63,15 @@ describe('POST /api/pings', () => {
       from: vi.fn(),
     };
 
+    // Create a fresh mock admin client for each test
+    mockAdminClient = {
+      from: vi.fn(),
+    };
+
     // Mock createClient to return our mock
     (createClient as any).mockResolvedValue(mockSupabaseClient);
+    // Mock createAdminClient to return our mock
+    (createAdminClient as any).mockReturnValue(mockAdminClient);
   });
 
   afterEach(() => {
@@ -87,30 +111,12 @@ describe('POST /api/pings', () => {
       error: null,
     });
 
-    // Mock user profile query
+    // Mock user profile query (via supabase client)
     const mockProfileQuery = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({
         data: mockUserProfile,
-        error: null,
-      }),
-    };
-
-    // Mock ping insert
-    const mockPingInsert = {
-      insert: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: mockPing,
-        error: null,
-      }),
-    };
-
-    // Mock message insert
-    const mockMessageInsert = {
-      insert: vi.fn().mockResolvedValue({
-        data: { id: 'message-789' },
         error: null,
       }),
     };
@@ -125,7 +131,7 @@ describe('POST /api/pings', () => {
       }),
     };
 
-    // Mock category lookup for "Needs Review"
+    // Mock category lookup for "Needs Review" (via supabase client)
     const mockCategoryQuery = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
@@ -135,13 +141,34 @@ describe('POST /api/pings', () => {
       }),
     };
 
-    // Setup mock return values
+    // Mock ping insert (via admin client)
+    const mockPingInsert = {
+      insert: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: mockPing,
+        error: null,
+      }),
+    };
+
+    // Mock message insert (via admin client)
+    const mockMessageInsert = {
+      insert: vi.fn().mockResolvedValue({
+        data: { id: 'message-789' },
+        error: null,
+      }),
+    };
+
+    // Setup mock return values for supabase client (auth operations + reads)
     mockSupabaseClient.from
       .mockReturnValueOnce(mockProfileQuery) // First call: users table
       .mockReturnValueOnce(mockOrgQuery) // Second call: organizations table (AI config)
-      .mockReturnValueOnce(mockCategoryQuery) // Third call: categories table
-      .mockReturnValueOnce(mockPingInsert) // Fourth call: pings table
-      .mockReturnValueOnce(mockMessageInsert); // Fifth call: ping_messages table
+      .mockReturnValueOnce(mockCategoryQuery); // Third call: categories table
+
+    // Setup mock return values for admin client (writes)
+    mockAdminClient.from
+      .mockReturnValueOnce(mockPingInsert) // First call: pings table insert
+      .mockReturnValueOnce(mockMessageInsert); // Second call: ping_messages table insert
 
     const request = createMockRequest({ message: 'Test message content' });
     const response = await POST(request);
@@ -157,8 +184,8 @@ describe('POST /api/pings', () => {
     expect(mockSupabaseClient.from).toHaveBeenCalledWith('users');
     expect(mockSupabaseClient.from).toHaveBeenCalledWith('organizations');
     expect(mockSupabaseClient.from).toHaveBeenCalledWith('categories');
-    expect(mockSupabaseClient.from).toHaveBeenCalledWith('pings');
-    expect(mockSupabaseClient.from).toHaveBeenCalledWith('ping_messages');
+    expect(mockAdminClient.from).toHaveBeenCalledWith('pings');
+    expect(mockAdminClient.from).toHaveBeenCalledWith('ping_messages');
 
     // Verify ping insert was called with correct data (fallback path includes category_id)
     expect(mockPingInsert.insert).toHaveBeenCalledWith({
@@ -322,22 +349,6 @@ describe('POST /api/pings', () => {
       }),
     };
 
-    const mockPingInsert = {
-      insert: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: mockPing,
-        error: null,
-      }),
-    };
-
-    const mockMessageInsert = {
-      insert: vi.fn().mockResolvedValue({
-        data: { id: 'message-789' },
-        error: null,
-      }),
-    };
-
     // Mock organization AI config check (no AI configured - fallback path)
     const mockOrgQuery = {
       select: vi.fn().mockReturnThis(),
@@ -358,10 +369,30 @@ describe('POST /api/pings', () => {
       }),
     };
 
+    const mockPingInsert = {
+      insert: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: mockPing,
+        error: null,
+      }),
+    };
+
+    const mockMessageInsert = {
+      insert: vi.fn().mockResolvedValue({
+        data: { id: 'message-789' },
+        error: null,
+      }),
+    };
+
+    // Setup mock return values for supabase client (auth operations + reads)
     mockSupabaseClient.from
       .mockReturnValueOnce(mockProfileQuery)
       .mockReturnValueOnce(mockOrgQuery)
-      .mockReturnValueOnce(mockCategoryQuery)
+      .mockReturnValueOnce(mockCategoryQuery);
+
+    // Setup mock return values for admin client (writes)
+    mockAdminClient.from
       .mockReturnValueOnce(mockPingInsert)
       .mockReturnValueOnce(mockMessageInsert);
 
@@ -416,22 +447,6 @@ describe('POST /api/pings', () => {
       }),
     };
 
-    const mockPingInsert = {
-      insert: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: mockPing,
-        error: null,
-      }),
-    };
-
-    const mockMessageInsert = {
-      insert: vi.fn().mockResolvedValue({
-        data: { id: 'message-789' },
-        error: null,
-      }),
-    };
-
     // Mock organization AI config check (no AI configured - fallback path)
     const mockOrgQuery = {
       select: vi.fn().mockReturnThis(),
@@ -452,10 +467,30 @@ describe('POST /api/pings', () => {
       }),
     };
 
+    const mockPingInsert = {
+      insert: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: mockPing,
+        error: null,
+      }),
+    };
+
+    const mockMessageInsert = {
+      insert: vi.fn().mockResolvedValue({
+        data: { id: 'message-789' },
+        error: null,
+      }),
+    };
+
+    // Setup mock return values for supabase client (auth operations + reads)
     mockSupabaseClient.from
       .mockReturnValueOnce(mockProfileQuery)
       .mockReturnValueOnce(mockOrgQuery)
-      .mockReturnValueOnce(mockCategoryQuery)
+      .mockReturnValueOnce(mockCategoryQuery);
+
+    // Setup mock return values for admin client (writes)
+    mockAdminClient.from
       .mockReturnValueOnce(mockPingInsert)
       .mockReturnValueOnce(mockMessageInsert);
 

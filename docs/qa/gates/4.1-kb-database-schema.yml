@@ -1,0 +1,57 @@
+schema: 1
+story: "4.1"
+story_title: "KB Database Schema & Article Management"
+gate: PASS
+status_reason: "All acceptance criteria met. Schema implementation is comprehensive with proper constraints, indexes, and TypeScript types."
+reviewer: "Quinn (Test Architect)"
+updated: "2025-12-15T12:00:00Z"
+
+waiver: { active: false }
+
+top_issues: []
+
+evidence:
+  ac_validation:
+    - ac: 1
+      status: PASS
+      notes: "kb_articles table created with all required columns, FK to categories table, proper constraints"
+    - ac: 2
+      status: PASS
+      notes: "Correctly skipped - reuses existing categories table as specified"
+    - ac: 3
+      status: PASS
+      notes: "kb_article_views table created with article_id, user_id, session_id, viewed_at"
+    - ac: 4
+      status: PASS
+      notes: "RLS correctly NOT enabled per project convention for Realtime compatibility"
+    - ac: 5
+      status: PASS
+      notes: "deleted_at column present for soft delete, indexes filter by deleted_at IS NULL"
+    - ac: 6
+      status: PASS
+      notes: "Full-text search with generated TSVECTOR column, GIN index, and search helper function"
+    - ac: 7
+      status: PASS
+      notes: "Correctly skipped - categories already exist from setup wizard"
+    - ac: 8
+      status: PASS
+      notes: "kb_glossary_terms table created with term, definition, category, case-insensitive uniqueness"
+
+validation_results:
+  lint: PASS
+  typecheck: PASS
+  tests: "365 passed"
+  build: PASS
+
+quality_highlights:
+  - "Comprehensive constraints: CHECK for status, slug format, non-empty title/content"
+  - "Denormalization trigger for helpful/not_helpful counts on feedback"
+  - "IVFFlat vector index (lists=100) ready for semantic search in Story 4.4"
+  - "Full-text search with weighted ranking (title=A, content=B)"
+  - "TypeScript types properly extended with Insert/Update helper types"
+  - "Proper FK relationships to organizations, users, categories, pings"
+
+observations:
+  - note: "view_count on kb_articles lacks auto-increment trigger"
+    severity: low
+    context: "Not specified in story tasks. Can be updated at API layer or via batch job."

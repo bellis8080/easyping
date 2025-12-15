@@ -119,4 +119,21 @@
 5. Category breakdown chart (articles by category)
 6. Export KB analytics to CSV
 
+## Story 4.8: KB Article Suggestions During Resolution
+
+**As an** agent,
+**I want** AI to suggest relevant KB articles while resolving pings,
+**so that** I can reference existing solutions and respond faster.
+
+**Acceptance Criteria:**
+
+1. Echo panel shows "Related KB Articles" section below response suggestions
+2. AI searches KB for articles matching ping content using semantic search (embeddings)
+3. Top 3 most relevant published articles displayed with title and preview snippet
+4. Clicking article opens in modal overlay with full content
+5. "Insert Link" button adds KB article reference to agent's response
+6. "No relevant articles found" message if KB empty or no matches above similarity threshold
+7. KB suggestions refresh when ping conversation is updated with new messages
+8. Only published articles shown (not drafts)
+
 ---

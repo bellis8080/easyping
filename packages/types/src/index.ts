@@ -40,6 +40,21 @@ export type {
   InsertAgentTeamMember,
   InsertRoutingRule,
   UpdateRoutingRule,
+  // Knowledge Base
+  KBArticleStatus,
+  KBArticle,
+  KBGlossaryTermCategory,
+  KBGlossaryTerm,
+  KBArticleView,
+  KBArticleFeedback,
+  KBArticleWithCategory,
+  KBArticleWithAuthor,
+  InsertKBArticle,
+  UpdateKBArticle,
+  InsertKBGlossaryTerm,
+  UpdateKBGlossaryTerm,
+  InsertKBArticleView,
+  InsertKBArticleFeedback,
 } from './models';
 
 // Re-export enums and helpers

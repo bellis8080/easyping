@@ -220,3 +220,101 @@ export type UpdateOrganization = Partial<InsertOrganization>;
 export type UpdateUser = Partial<InsertUser>;
 export type UpdatePing = Partial<InsertPing>;
 export type UpdatePingMessage = Partial<InsertPingMessage>;
+
+// ============================================================================
+// Knowledge Base
+// ============================================================================
+
+export type KBArticleStatus = 'draft' | 'published' | 'archived';
+
+export interface KBArticle {
+  id: string; // UUID
+  tenant_id: string; // UUID
+  title: string;
+  slug: string;
+  content: string; // Markdown
+  category_id: string | null; // UUID (Category ID)
+  status: KBArticleStatus;
+  source_ping_id: string | null; // UUID (Ping ID)
+  created_by: string; // UUID (User ID)
+  published_by: string | null; // UUID (User ID)
+  created_at: string; // ISO timestamp
+  updated_at: string; // ISO timestamp
+  published_at: string | null; // ISO timestamp
+  deleted_at: string | null; // ISO timestamp (soft delete)
+  embedding: number[] | null; // Vector(1536) for semantic search
+  view_count: number;
+  helpful_count: number;
+  not_helpful_count: number;
+}
+
+export type KBGlossaryTermCategory =
+  | 'acronym'
+  | 'industry'
+  | 'company'
+  | 'general';
+
+export interface KBGlossaryTerm {
+  id: string; // UUID
+  tenant_id: string; // UUID
+  term: string;
+  definition: string;
+  category: KBGlossaryTermCategory | null;
+  created_by: string; // UUID (User ID)
+  created_at: string; // ISO timestamp
+  updated_at: string; // ISO timestamp
+}
+
+export interface KBArticleView {
+  id: string; // UUID
+  article_id: string; // UUID
+  user_id: string | null; // UUID (nullable for anonymous)
+  session_id: string | null;
+  viewed_at: string; // ISO timestamp
+}
+
+export interface KBArticleFeedback {
+  id: string; // UUID
+  article_id: string; // UUID
+  user_id: string | null; // UUID (nullable)
+  is_helpful: boolean;
+  created_at: string; // ISO timestamp
+}
+
+// Extended types with relations
+export interface KBArticleWithCategory extends KBArticle {
+  category?: Category | null;
+}
+
+export interface KBArticleWithAuthor extends KBArticle {
+  author?: User;
+  publisher?: User | null;
+}
+
+// Insert/Update helper types for KB tables
+export type InsertKBArticle = Omit<
+  KBArticle,
+  | 'id'
+  | 'created_at'
+  | 'updated_at'
+  | 'view_count'
+  | 'helpful_count'
+  | 'not_helpful_count'
+>;
+export type UpdateKBArticle = Partial<
+  Omit<KBArticle, 'id' | 'tenant_id' | 'created_at' | 'created_by'>
+>;
+
+export type InsertKBGlossaryTerm = Omit<
+  KBGlossaryTerm,
+  'id' | 'created_at' | 'updated_at'
+>;
+export type UpdateKBGlossaryTerm = Partial<
+  Omit<KBGlossaryTerm, 'id' | 'tenant_id' | 'created_at' | 'created_by'>
+>;
+
+export type InsertKBArticleView = Omit<KBArticleView, 'id' | 'viewed_at'>;
+export type InsertKBArticleFeedback = Omit<
+  KBArticleFeedback,
+  'id' | 'created_at'
+>;

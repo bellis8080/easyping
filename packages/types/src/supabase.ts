@@ -149,6 +149,234 @@ export type Database = {
           },
         ];
       };
+      kb_article_feedback: {
+        Row: {
+          article_id: string;
+          created_at: string;
+          id: string;
+          is_helpful: boolean;
+          user_id: string | null;
+        };
+        Insert: {
+          article_id: string;
+          created_at?: string;
+          id?: string;
+          is_helpful: boolean;
+          user_id?: string | null;
+        };
+        Update: {
+          article_id?: string;
+          created_at?: string;
+          id?: string;
+          is_helpful?: boolean;
+          user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'kb_article_feedback_article_id_fkey';
+            columns: ['article_id'];
+            isOneToOne: false;
+            referencedRelation: 'kb_articles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'kb_article_feedback_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      kb_article_views: {
+        Row: {
+          article_id: string;
+          id: string;
+          session_id: string | null;
+          user_id: string | null;
+          viewed_at: string;
+        };
+        Insert: {
+          article_id: string;
+          id?: string;
+          session_id?: string | null;
+          user_id?: string | null;
+          viewed_at?: string;
+        };
+        Update: {
+          article_id?: string;
+          id?: string;
+          session_id?: string | null;
+          user_id?: string | null;
+          viewed_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'kb_article_views_article_id_fkey';
+            columns: ['article_id'];
+            isOneToOne: false;
+            referencedRelation: 'kb_articles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'kb_article_views_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      kb_articles: {
+        Row: {
+          category_id: string | null;
+          content: string;
+          created_at: string;
+          created_by: string;
+          deleted_at: string | null;
+          embedding: string | null;
+          helpful_count: number;
+          id: string;
+          not_helpful_count: number;
+          published_at: string | null;
+          published_by: string | null;
+          search_vector: unknown;
+          slug: string;
+          source_ping_id: string | null;
+          status: string;
+          tenant_id: string;
+          title: string;
+          updated_at: string;
+          view_count: number;
+        };
+        Insert: {
+          category_id?: string | null;
+          content: string;
+          created_at?: string;
+          created_by: string;
+          deleted_at?: string | null;
+          embedding?: string | null;
+          helpful_count?: number;
+          id?: string;
+          not_helpful_count?: number;
+          published_at?: string | null;
+          published_by?: string | null;
+          search_vector?: unknown;
+          slug: string;
+          source_ping_id?: string | null;
+          status?: string;
+          tenant_id: string;
+          title: string;
+          updated_at?: string;
+          view_count?: number;
+        };
+        Update: {
+          category_id?: string | null;
+          content?: string;
+          created_at?: string;
+          created_by?: string;
+          deleted_at?: string | null;
+          embedding?: string | null;
+          helpful_count?: number;
+          id?: string;
+          not_helpful_count?: number;
+          published_at?: string | null;
+          published_by?: string | null;
+          search_vector?: unknown;
+          slug?: string;
+          source_ping_id?: string | null;
+          status?: string;
+          tenant_id?: string;
+          title?: string;
+          updated_at?: string;
+          view_count?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'kb_articles_category_id_fkey';
+            columns: ['category_id'];
+            isOneToOne: false;
+            referencedRelation: 'categories';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'kb_articles_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'kb_articles_published_by_fkey';
+            columns: ['published_by'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'kb_articles_source_ping_id_fkey';
+            columns: ['source_ping_id'];
+            isOneToOne: false;
+            referencedRelation: 'pings';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'kb_articles_tenant_id_fkey';
+            columns: ['tenant_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      kb_glossary_terms: {
+        Row: {
+          category: string | null;
+          created_at: string;
+          created_by: string;
+          definition: string;
+          id: string;
+          tenant_id: string;
+          term: string;
+          updated_at: string;
+        };
+        Insert: {
+          category?: string | null;
+          created_at?: string;
+          created_by: string;
+          definition: string;
+          id?: string;
+          tenant_id: string;
+          term: string;
+          updated_at?: string;
+        };
+        Update: {
+          category?: string | null;
+          created_at?: string;
+          created_by?: string;
+          definition?: string;
+          id?: string;
+          tenant_id?: string;
+          term?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'kb_glossary_terms_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'kb_glossary_terms_tenant_id_fkey';
+            columns: ['tenant_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       organizations: {
         Row: {
           ai_config: Json | null;
@@ -530,6 +758,21 @@ export type Database = {
       };
       encrypt_data: { Args: { data: string; key: string }; Returns: string };
       get_echo_user: { Args: { org_id: string }; Returns: string };
+      search_kb_articles: {
+        Args: { p_limit?: number; p_query: string; p_tenant_id: string };
+        Returns: {
+          category_id: string;
+          content: string;
+          helpful_count: number;
+          id: string;
+          published_at: string;
+          rank: number;
+          slug: string;
+          status: string;
+          title: string;
+          view_count: number;
+        }[];
+      };
       set_tenant_context: { Args: { tenant_uuid: string }; Returns: undefined };
     };
     Enums: {

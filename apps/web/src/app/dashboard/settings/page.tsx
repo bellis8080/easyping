@@ -160,7 +160,113 @@ export default function SettingsPage() {
   );
 }
 
+interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  tenant_id: string;
+  avatar_url: string | null;
+  echo_enabled: boolean;
+}
+
 function ProfileTab() {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [fullName, setFullName] = useState('');
+  const [echoEnabled, setEchoEnabled] = useState(true);
+
+  // Fetch user profile on mount
+  useEffect(() => {
+    async function fetchProfile() {
+      try {
+        const response = await fetch('/api/user');
+        if (response.ok) {
+          const data = await response.json();
+          setProfile(data);
+          setFullName(data.full_name || '');
+          setEchoEnabled(data.echo_enabled ?? true);
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchProfile();
+  }, []);
+
+  const handleSave = async () => {
+    if (!profile) return;
+
+    setSaving(true);
+    try {
+      const response = await fetch('/api/user', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: fullName,
+          echo_enabled: echoEnabled,
+        }),
+      });
+
+      if (response.ok) {
+        const updatedProfile = await response.json();
+        setProfile(updatedProfile);
+        // Show success toast (would need to import toast from sonner)
+      }
+    } catch (error) {
+      console.error('Error saving profile:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'owner':
+        return 'Owner';
+      case 'manager':
+        return 'Manager';
+      case 'agent':
+        return 'Support Agent';
+      case 'user':
+        return 'End User';
+      default:
+        return role;
+    }
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  // Check if user is an agent/manager/owner (can use Echo)
+  const canUseEcho =
+    profile?.role && ['agent', 'manager', 'owner'].includes(profile.role);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="text-center py-12 text-slate-500">
+        Failed to load profile
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -168,7 +274,7 @@ function ProfileTab() {
           Profile Information
         </h2>
         <p className="text-sm text-slate-600">
-          Update your personal information and avatar
+          Update your personal information and preferences
         </p>
       </div>
 
@@ -176,7 +282,7 @@ function ProfileTab() {
         {/* Avatar */}
         <div className="flex items-center gap-6">
           <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-2xl">
-            JD
+            {getInitials(profile.full_name || 'U')}
           </div>
           <div>
             <button className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors">
@@ -196,7 +302,8 @@ function ProfileTab() {
             </label>
             <input
               type="text"
-              defaultValue="John Doe"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
               className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             />
           </div>
@@ -207,8 +314,9 @@ function ProfileTab() {
             </label>
             <input
               type="email"
-              defaultValue="john.doe@company.com"
-              className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              value={profile.email}
+              disabled
+              className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg bg-slate-50 text-slate-500"
             />
           </div>
 
@@ -218,7 +326,7 @@ function ProfileTab() {
             </label>
             <input
               type="text"
-              defaultValue="Support Agent"
+              value={getRoleLabel(profile.role)}
               disabled
               className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg bg-slate-50 text-slate-500"
             />
@@ -237,10 +345,48 @@ function ProfileTab() {
           </div>
         </div>
 
+        {/* Echo Settings - Only for agents/managers/owners */}
+        {canUseEcho && (
+          <div className="pt-4 border-t border-slate-200">
+            <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-orange-500" />
+              AI Assistant Settings
+            </h3>
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+              <div>
+                <p className="font-medium text-slate-900">Enable Echo</p>
+                <p className="text-sm text-slate-600">
+                  Show AI-suggested responses in the inbox sidebar
+                </p>
+              </div>
+              <button
+                onClick={() => setEchoEnabled(!echoEnabled)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  echoEnabled ? 'bg-orange-500' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    echoEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-end pt-4 border-t border-slate-200">
-          <button className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg shadow-orange-500/30 hover:shadow-xl hover:shadow-orange-500/40 transform hover:scale-105">
-            <Save className="w-4 h-4" />
-            Save Changes
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg shadow-orange-500/30 hover:shadow-xl hover:shadow-orange-500/40 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+          >
+            {saving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
       </div>

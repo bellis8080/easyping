@@ -45,6 +45,7 @@ describe('AI Config API Routes', () => {
         avatar_url: null,
         created_at: '2024-01-01',
         last_seen_at: '2024-01-01',
+        echo_enabled: true,
       });
 
       const response = await GET();
@@ -64,6 +65,7 @@ describe('AI Config API Routes', () => {
         avatar_url: null,
         created_at: '2024-01-01',
         last_seen_at: '2024-01-01',
+        echo_enabled: true,
       });
 
       const mockAdminClient = {
@@ -106,6 +108,7 @@ describe('AI Config API Routes', () => {
         avatar_url: null,
         created_at: '2024-01-01',
         last_seen_at: '2024-01-01',
+        echo_enabled: true,
       });
 
       const mockAdminClient = {
@@ -181,6 +184,7 @@ describe('AI Config API Routes', () => {
         avatar_url: null,
         created_at: '2024-01-01',
         last_seen_at: '2024-01-01',
+        echo_enabled: true,
       });
 
       const request = new NextRequest('http://localhost/api/ai-config', {
@@ -210,6 +214,7 @@ describe('AI Config API Routes', () => {
         avatar_url: null,
         created_at: '2024-01-01',
         last_seen_at: '2024-01-01',
+        echo_enabled: true,
       });
 
       const request = new NextRequest('http://localhost/api/ai-config', {
@@ -238,6 +243,7 @@ describe('AI Config API Routes', () => {
         avatar_url: null,
         created_at: '2024-01-01',
         last_seen_at: '2024-01-01',
+        echo_enabled: true,
       });
 
       const mockAdminClient = {

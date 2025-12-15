@@ -47,6 +47,7 @@ export interface User {
   role: UserRole;
   created_at: string; // ISO timestamp
   last_seen_at: string | null; // ISO timestamp
+  echo_enabled: boolean; // Whether Echo AI response suggestions are enabled
 }
 
 export interface Ping {

@@ -246,6 +246,8 @@ export function InboxClient({
   // Get dynamic title based on current filter
   const filterConfig = FILTER_CONFIG[filter];
   const [suggestedResponse, setSuggestedResponse] = useState('');
+  const [isLoadingSuggestion, setIsLoadingSuggestion] = useState(false);
+  const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>(
@@ -1497,6 +1499,61 @@ export function InboxClient({
     setReplyMessage(suggestedResponse);
   };
 
+  // Fetch Echo response suggestion from API
+  const fetchSuggestion = async (alternative = false) => {
+    if (!selectedPing || selectedPing.status === 'draft') {
+      return;
+    }
+
+    setIsLoadingSuggestion(true);
+    setSuggestionError(null);
+
+    try {
+      const response = await fetch(
+        `/api/pings/${selectedPing.ping_number}/echo/suggest`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ alternative }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to generate suggestion');
+      }
+
+      const data = await response.json();
+      setSuggestedResponse(data.suggestion);
+    } catch (err) {
+      console.error('[Echo] Failed to fetch suggestion:', err);
+      setSuggestionError(
+        err instanceof Error ? err.message : 'Failed to generate suggestion'
+      );
+    } finally {
+      setIsLoadingSuggestion(false);
+    }
+  };
+
+  // Clear suggestion when ping changes (agent must manually request new suggestions)
+  useEffect(() => {
+    setSuggestedResponse('');
+    setSuggestionError(null);
+  }, [selectedPing?.id]);
+
+  // Keyboard shortcut: Cmd+Shift+E to toggle Echo panel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'e') {
+        e.preventDefault();
+        setShowEcho((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   return (
     <>
       {selectedPing && (
@@ -1865,21 +1922,96 @@ export function InboxClient({
                 <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-orange-500" />
                   Suggested Response
+                  {isLoadingSuggestion && (
+                    <Loader2 className="w-3 h-3 animate-spin text-orange-400" />
+                  )}
                 </h4>
-                <textarea
-                  value={suggestedResponse}
-                  onChange={(e) => setSuggestedResponse(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded text-sm text-slate-100 mb-3 leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  rows={6}
-                  placeholder="AI suggestions will appear here in Epic 3..."
-                />
-                <button
-                  onClick={handleUseSuggestedResponse}
-                  disabled={!suggestedResponse.trim()}
-                  className="w-full px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
-                >
-                  Use This Response
-                </button>
+
+                {/* Loading State */}
+                {isLoadingSuggestion && !suggestedResponse && (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-center">
+                      <Loader2 className="w-8 h-8 animate-spin text-orange-500 mx-auto mb-2" />
+                      <p className="text-sm text-slate-400">
+                        Generating suggestion...
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Error State */}
+                {suggestionError && !isLoadingSuggestion && (
+                  <div className="bg-red-900/30 border border-red-700 rounded p-3 mb-3">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm text-red-300">
+                          {suggestionError}
+                        </p>
+                        <button
+                          onClick={() => fetchSuggestion()}
+                          className="text-xs text-orange-400 hover:text-orange-300 mt-1 underline"
+                        >
+                          Try again
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty State - Call to Action */}
+                {!isLoadingSuggestion &&
+                  !suggestionError &&
+                  !suggestedResponse && (
+                    <div className="text-center py-6">
+                      <p className="text-sm text-slate-400 mb-4">
+                        {selectedPing?.status === 'draft'
+                          ? 'Suggestions available after ping is submitted'
+                          : 'Let Echo help you craft a response'}
+                      </p>
+                      <button
+                        onClick={() => fetchSuggestion()}
+                        disabled={selectedPing?.status === 'draft'}
+                        className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        Generate Suggestion
+                      </button>
+                    </div>
+                  )}
+
+                {/* Textarea and Buttons - shown after suggestion generated */}
+                {!isLoadingSuggestion && suggestedResponse && (
+                  <>
+                    <textarea
+                      value={suggestedResponse}
+                      onChange={(e) => setSuggestedResponse(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded text-sm text-slate-100 mb-3 leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      rows={6}
+                      placeholder="Edit the suggestion as needed..."
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleUseSuggestedResponse}
+                        disabled={!suggestedResponse.trim()}
+                        className="flex-1 px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
+                      >
+                        Use This Response
+                      </button>
+                      <button
+                        onClick={() => fetchSuggestion(true)}
+                        disabled={
+                          isLoadingSuggestion ||
+                          selectedPing?.status === 'draft'
+                        }
+                        className="px-3 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg text-sm font-medium transition-colors disabled:bg-slate-700 disabled:cursor-not-allowed flex items-center gap-1"
+                        title="Generate another suggestion"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Suggested Articles */}

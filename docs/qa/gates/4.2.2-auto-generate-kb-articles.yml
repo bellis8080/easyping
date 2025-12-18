@@ -1,0 +1,55 @@
+# Quality Gate: Story 4.2.2
+# Auto-Generate KB Articles from Resolved Pings
+schema: 1
+story: "4.2.2"
+story_title: "Auto-Generate KB Articles from Resolved Pings"
+gate: PASS
+status_reason: "All acceptance criteria met, all 28 tests passing, production functionality verified via manual testing."
+reviewer: "Quinn (Test Architect)"
+updated: "2025-12-16T13:10:00Z"
+
+waiver: { active: false }
+
+top_issues:
+  - id: "TEST-001"
+    severity: medium
+    finding: "Test mock was using {id, slug} but route uses {id, name} after category fix"
+    suggested_action: "RESOLVED - Updated test mock at generate-kb.test.ts:542"
+  - id: "DOC-001"
+    severity: low
+    finding: "Redirect to /kb/[slug]/edit results in 404 - edit page not yet implemented (Story 4.3)"
+    suggested_action: "Workaround in place (redirects to /kb). No action needed until Story 4.3 is implemented."
+
+evidence:
+  tests_reviewed: 28
+  tests_passed: 28
+  tests_failed: 0
+  manual_verification: true
+  ac_coverage:
+    covered: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    gaps: []
+
+recommendations:
+  immediate: []
+  future: []
+
+history:
+  - at: "2025-12-16T13:05:00Z"
+    gate: CONCERNS
+    note: "Initial review - test mock mismatch for categories"
+  - at: "2025-12-16T13:10:00Z"
+    gate: PASS
+    note: "TEST-001 resolved - all tests passing"
+
+# Files reviewed
+files_reviewed:
+  - apps/web/src/app/api/pings/[pingNumber]/generate-kb/route.ts
+  - apps/web/src/lib/services/kb-article-generation-service.ts
+  - apps/web/src/lib/utils/slug.ts
+  - apps/web/src/lib/utils/kb-article-filter.ts
+  - apps/web/src/components/pings/resolution-notes-dialog.tsx
+  - apps/web/src/components/inbox/inbox-client.tsx
+  - apps/web/src/components/teams/team-inbox-client.tsx
+  - apps/web/tests/unit/api/generate-kb.test.ts
+  - apps/web/tests/unit/lib/utils/kb-article-filter.test.ts
+  - supabase/migrations/20251216000001_add_kb_agent_content.sql

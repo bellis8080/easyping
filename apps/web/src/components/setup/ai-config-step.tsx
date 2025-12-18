@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { UseFormReturn } from 'react-hook-form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
+import { LegacySelect as Select } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { AIConfigData } from '@/lib/schemas/setup';

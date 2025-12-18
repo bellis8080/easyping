@@ -8,7 +8,12 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { PingMessage } from '@easyping/types';
-import { MessageType, PingStatus, PingPriority } from '@easyping/types';
+import {
+  MessageType,
+  MessageVisibility,
+  PingStatus,
+  PingPriority,
+} from '@easyping/types';
 
 describe('Echo Response Service', () => {
   let generateResponseSuggestion: typeof import('./echo-response-service').generateResponseSuggestion;
@@ -31,6 +36,7 @@ describe('Echo Response Service', () => {
     sender_id: 'sender-123',
     content,
     message_type: messageType,
+    visibility: MessageVisibility.PUBLIC,
     created_at: new Date().toISOString(),
     edited_at: null,
   });

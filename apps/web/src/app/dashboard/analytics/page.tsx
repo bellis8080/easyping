@@ -162,11 +162,16 @@ export default function AnalyticsPage() {
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-slate-800 via-slate-900 to-slate-950 border-b border-slate-700 shadow-xl px-6 py-5">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-white mb-1">Analytics</h1>
-              <p className="text-sm text-slate-400">
-                Performance insights and metrics
-              </p>
+            <div className="flex items-center gap-3">
+              <BarChart3 className="w-8 h-8 text-orange-500" />
+              <div>
+                <h1 className="text-2xl font-bold text-white mb-1">
+                  Analytics
+                </h1>
+                <p className="text-sm text-slate-400">
+                  Performance insights and metrics
+                </p>
+              </div>
             </div>
             <select
               value={dateRange}

@@ -23,6 +23,7 @@ export default async function MyPingsPage() {
   const tenantId = userProfile.tenant_id;
 
   // Fetch all pings for the current user
+  // Story 4.2.1: Include visibility to filter out private messages for end users
   const { data: pings, error } = await supabase
     .from('pings')
     .select(
@@ -36,6 +37,7 @@ export default async function MyPingsPage() {
         id,
         content,
         message_type,
+        visibility,
         created_at,
         sender:users!ping_messages_sender_id_fkey(
           id,
@@ -56,6 +58,7 @@ export default async function MyPingsPage() {
   }
 
   // Calculate unread counts for each ping
+  // Story 4.2.1: Filter out private messages from counts and message lists for end users
   const pingsWithUnread = await Promise.all(
     (pings || []).map(async (ping) => {
       // Get the last read timestamp for this ping
@@ -69,28 +72,38 @@ export default async function MyPingsPage() {
       let unreadCount = 0;
 
       if (!pingRead) {
-        // Never read - count all messages not from this user
-        const { count } = await supabase
-          .from('ping_messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('ping_id', ping.id)
-          .neq('sender_id', user.id);
-
-        unreadCount = count || 0;
-      } else {
-        // Count messages after last read that aren't from this user
+        // Never read - count all PUBLIC messages not from this user
+        // Story 4.2.1: Exclude private messages from unread count
         const { count } = await supabase
           .from('ping_messages')
           .select('*', { count: 'exact', head: true })
           .eq('ping_id', ping.id)
           .neq('sender_id', user.id)
+          .neq('visibility', 'private');
+
+        unreadCount = count || 0;
+      } else {
+        // Count PUBLIC messages after last read that aren't from this user
+        // Story 4.2.1: Exclude private messages from unread count
+        const { count } = await supabase
+          .from('ping_messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('ping_id', ping.id)
+          .neq('sender_id', user.id)
+          .neq('visibility', 'private')
           .gt('created_at', pingRead.last_read_at);
 
         unreadCount = count || 0;
       }
 
+      // Story 4.2.1: Filter out private messages from the messages array
+      const publicMessages = (ping.messages || []).filter(
+        (msg: any) => msg.visibility !== 'private'
+      );
+
       return {
         ...ping,
+        messages: publicMessages,
         unread_count: unreadCount,
       };
     })

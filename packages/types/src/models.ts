@@ -1,7 +1,13 @@
 // Data model interfaces matching database schema
 // These provide a cleaner interface for application code
 
-import { UserRole, PingStatus, PingPriority, MessageType } from './enums';
+import {
+  UserRole,
+  PingStatus,
+  PingPriority,
+  MessageType,
+  MessageVisibility,
+} from './enums';
 
 export interface AIConfig {
   provider?: 'openai' | 'anthropic' | 'azure';
@@ -80,6 +86,7 @@ export interface PingMessage {
   sender_id: string; // UUID (User ID)
   content: string;
   message_type: MessageType;
+  visibility: MessageVisibility; // 'public' (default) or 'private' (agent notes)
   created_at: string; // ISO timestamp
   edited_at: string | null; // ISO timestamp
   sender?: User; // Optional joined relation
@@ -232,7 +239,8 @@ export interface KBArticle {
   tenant_id: string; // UUID
   title: string;
   slug: string;
-  content: string; // Markdown
+  content: string; // Markdown - public user-facing content
+  agent_content: string | null; // Markdown - internal agent-only resolution steps (NEVER expose to end users)
   category_id: string | null; // UUID (Category ID)
   status: KBArticleStatus;
   source_ping_id: string | null; // UUID (Ping ID)

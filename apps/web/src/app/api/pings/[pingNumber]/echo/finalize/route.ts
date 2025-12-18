@@ -251,6 +251,7 @@ export async function POST(
       sender_id: null, // System message
       content: systemMessage,
       message_type: 'system',
+      visibility: 'public',
     });
 
     // Send routing system message if routing was applied
@@ -265,6 +266,7 @@ export async function POST(
         sender_id: null, // System message
         content: routingMessage,
         message_type: 'system',
+        visibility: 'public',
       });
     }
 
@@ -278,6 +280,7 @@ export async function POST(
       sender_id: echoUserId,
       content: confirmationMessage,
       message_type: 'agent',
+      visibility: 'public',
     });
 
     return NextResponse.json({

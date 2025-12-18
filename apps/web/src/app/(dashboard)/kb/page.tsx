@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { Search, BookOpen, Filter, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { Search, BookOpen, Filter, X, Settings } from 'lucide-react';
+import { UserRole, canViewPrivateMessages } from '@easyping/types';
 
 // Mock KB article type
 interface KBArticle {
@@ -139,6 +141,25 @@ export default function KnowledgeBasePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [showFilters, setShowFilters] = useState(false);
+  const [canManageKB, setCanManageKB] = useState(false);
+
+  // Fetch user profile to check role
+  useEffect(() => {
+    async function checkPermissions() {
+      try {
+        const res = await fetch('/api/user');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.role) {
+            setCanManageKB(canViewPrivateMessages(data.role as UserRole));
+          }
+        }
+      } catch {
+        // Silently fail - button won't show
+      }
+    }
+    checkPermissions();
+  }, []);
 
   // Filter articles based on search and category
   const filteredArticles = mockArticles.filter((article) => {
@@ -160,9 +181,23 @@ export default function KnowledgeBasePage() {
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-slate-800 via-slate-900 to-slate-950 border-b border-slate-700 shadow-xl px-6 py-6">
           <div className="max-w-4xl mx-auto">
-            <h1 className="text-2xl font-bold text-white mb-4">
-              Knowledge Base
-            </h1>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <BookOpen className="w-8 h-8 text-orange-500" />
+                <h1 className="text-2xl font-bold text-white">
+                  Knowledge Base
+                </h1>
+              </div>
+              {canManageKB && (
+                <Link
+                  href="/kb/manage"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-orange-500/30"
+                >
+                  <Settings className="w-4 h-4" />
+                  Manage
+                </Link>
+              )}
+            </div>
 
             {/* Search bar */}
             <div className="relative">

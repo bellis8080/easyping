@@ -113,3 +113,39 @@ export enum MessageType {
   AGENT = 'agent',
   SYSTEM = 'system',
 }
+
+/**
+ * Message visibility enumeration
+ *
+ * Controls who can see a message in a ping conversation.
+ */
+export enum MessageVisibility {
+  /**
+   * PUBLIC - Visible to all users (end users, agents, managers, owners)
+   *
+   * This is the default visibility for all messages.
+   */
+  PUBLIC = 'public',
+
+  /**
+   * PRIVATE - Only visible to agents, managers, and owners
+   *
+   * Used for internal notes that should not be seen by end users.
+   * End users are completely unaware that private messages exist.
+   */
+  PRIVATE = 'private',
+}
+
+/**
+ * Type guard to check if a string is a valid MessageVisibility
+ */
+export function isMessageVisibility(value: string): value is MessageVisibility {
+  return Object.values(MessageVisibility).includes(value as MessageVisibility);
+}
+
+/**
+ * Check if a user role can view private messages
+ */
+export function canViewPrivateMessages(role: UserRole): boolean {
+  return role !== UserRole.END_USER;
+}

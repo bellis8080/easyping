@@ -127,12 +127,13 @@ export async function PATCH(
       );
     }
 
-    // Create system message
+    // Create system message (always public)
     await supabaseAdmin.from('ping_messages').insert({
       ping_id: ping.id,
       sender_id: user.id,
       content: validation.systemMessageContent,
       message_type: 'system',
+      visibility: 'public',
     });
 
     // Story 3.6: Trigger summary regeneration on status change (fire and forget)

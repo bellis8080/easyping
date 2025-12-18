@@ -1,0 +1,79 @@
+# Quality Gate: Story 4.3.0
+# KB Article Editor for Agents
+schema: 1
+story: "4.3.0"
+story_title: "KB Article Editor for Agents"
+gate: PASS
+status_reason: "All 10 acceptance criteria met, all 14 tasks complete, 454 unit tests passing. All 5 bugs resolved. Minor UX polish (loading indicator) added post-review."
+reviewer: "Quinn (Test Architect)"
+updated: "2025-12-18T14:30:00Z"
+
+waiver: { active: false }
+
+top_issues:
+  - id: "BUG-001"
+    severity: medium
+    finding: "Archived articles not showing correct buttons - isArchived checked status field instead of deletedAt timestamp"
+    suggested_action: "RESOLVED - Fixed isArchived check to use deletedAt !== null in kb/manage/[articleId]/page.tsx"
+  - id: "BUG-002"
+    severity: low
+    finding: "Delete button styling was red/destructive, but action is soft-delete (archive)"
+    suggested_action: "RESOLVED - Changed button text to 'Archive' with gray styling, added 'Delete Permanently' for archived articles"
+  - id: "BUG-003"
+    severity: high
+    finding: "Archived tab infinite loop - inline onCountChange callbacks caused re-render loop"
+    suggested_action: "RESOLVED - Memoized callbacks with useCallback in kb/manage/page.tsx"
+  - id: "BUG-004"
+    severity: medium
+    finding: "Source ping link navigated to wrong route - used UUID instead of ping number"
+    suggested_action: "RESOLVED - Changed href from sourcePingId to sourcePingNumber in ArticleCard component"
+  - id: "API-001"
+    severity: low
+    finding: "API not returning deletedAt field needed for frontend archived detection"
+    suggested_action: "RESOLVED - Added deletedAt to GET /api/kb/articles/[articleId] response"
+
+evidence:
+  tests_reviewed: 454
+  tests_passed: 454
+  tests_failed: 0
+  manual_verification: true
+  ac_coverage:
+    covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    gaps: []
+
+recommendations:
+  immediate: []
+  future:
+    - "Consider adding E2E tests for KB editor publish flow in future sprint"
+    - "Story 4.2.3 comparison flow can now be tested since publishing is available"
+
+history:
+  - at: "2025-12-18T10:00:00Z"
+    gate: CONCERNS
+    note: "Initial testing - discovered archived articles display issues"
+  - at: "2025-12-18T11:00:00Z"
+    gate: CONCERNS
+    note: "BUG-001, BUG-002 fixed, discovered infinite loop issue BUG-003"
+  - at: "2025-12-18T11:30:00Z"
+    gate: CONCERNS
+    note: "BUG-003 fixed, discovered source ping link issue BUG-004"
+  - at: "2025-12-18T12:00:00Z"
+    gate: PASS
+    note: "All bugs resolved - full functionality verified"
+  - at: "2025-12-18T14:30:00Z"
+    gate: PASS
+    note: "Re-verification - TypeScript clean, UX polish (animated loading indicator with Radio icon) added, no regression"
+
+# Files reviewed
+files_reviewed:
+  - apps/web/src/app/(dashboard)/kb/manage/page.tsx
+  - apps/web/src/app/(dashboard)/kb/manage/[articleId]/page.tsx
+  - apps/web/src/app/api/kb/articles/route.ts
+  - apps/web/src/app/api/kb/articles/[articleId]/route.ts
+  - apps/web/src/app/api/kb/categories/route.ts
+  - apps/web/src/components/kb/kb-article-list.tsx
+  - apps/web/src/components/kb/kb-editor.tsx
+  - apps/web/src/components/kb/kb-metadata-form.tsx
+  - apps/web/src/components/layout/dashboard-layout-client.tsx
+  - apps/web/tests/unit/api/kb/kb-articles.test.ts
+  - apps/web/tests/unit/api/kb/kb-categories.test.ts

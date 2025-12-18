@@ -10,6 +10,7 @@ import {
   ChevronUp,
   RefreshCw,
   Loader2,
+  Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PingMessage } from './ping-message';
@@ -22,7 +23,9 @@ import type {
   Ping,
   PingMessage as PingMessageType,
   User,
+  UserRole,
 } from '@easyping/types';
+import { canViewPrivateMessages, MessageVisibility } from '@easyping/types';
 
 /**
  * Extended Ping type with nested relations for detailed view
@@ -47,7 +50,8 @@ interface PingWithRelations
 
 interface PingDetailProps {
   ping: PingWithRelations;
-  currentUser: Pick<User, 'id' | 'email' | 'full_name'>;
+  // Story 4.2.1: Include role for visibility filtering
+  currentUser: Pick<User, 'id' | 'email' | 'full_name' | 'role'>;
 }
 
 export function PingDetail({
@@ -70,6 +74,9 @@ export function PingDetail({
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [isSummaryCollapsed, setIsSummaryCollapsed] = useState(false);
   const [isRefreshingSummary, setIsRefreshingSummary] = useState(false);
+  // Story 4.2.1: Split send button dropdown state
+  const [isSendDropdownOpen, setIsSendDropdownOpen] = useState(false);
+  const sendDropdownRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const replyingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -216,6 +223,26 @@ export function PingDetail({
     }
   }, [isReplying]);
 
+  // Story 4.2.1: Close send dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        sendDropdownRef.current &&
+        !sendDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsSendDropdownOpen(false);
+      }
+    };
+
+    if (isSendDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isSendDropdownOpen]);
+
   // Mark ping as read when component mounts
   useEffect(() => {
     const markAsRead = async () => {
@@ -320,6 +347,7 @@ export function PingDetail({
             ping_id: newMessage.ping_id,
             content: newMessage.content,
             message_type: newMessage.message_type,
+            visibility: newMessage.visibility || 'public',
             created_at: newMessage.created_at,
             edited_at: newMessage.edited_at,
             sender: sender as Pick<
@@ -328,6 +356,18 @@ export function PingDetail({
             >,
             attachments: attachments || [],
           };
+
+          // Story 4.2.1: Filter private messages for end users in realtime
+          const canSeePrivate = canViewPrivateMessages(
+            currentUser.role as UserRole
+          );
+          const isPrivate =
+            transformedMessage.visibility === 'private' ||
+            transformedMessage.visibility === MessageVisibility.PRIVATE;
+          if (isPrivate && !canSeePrivate) {
+            // End user should not see private messages
+            return;
+          }
 
           // Only add if not already in state (avoid duplicate from optimistic update)
           setMessages((prev) => {
@@ -366,7 +406,7 @@ export function PingDetail({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [initialPing.id, currentUser.id]);
+  }, [initialPing.id, currentUser.id, currentUser.role]);
 
   // Subscribe to realtime ping updates (status, assigned_to, etc.)
   useEffect(() => {
@@ -553,10 +593,14 @@ export function PingDetail({
     };
   }, [initialPing.id, currentUser.id, currentUser.full_name]);
 
-  const handleSendReply = async () => {
+  // Story 4.2.1: Updated to accept visibility parameter for private notes
+  const handleSendReply = async (
+    visibility: 'public' | 'private' = 'public'
+  ) => {
     if (!replyMessage.trim() && selectedFiles.length === 0) return;
 
     setIsSending(true);
+    setIsSendDropdownOpen(false); // Close dropdown when sending
     try {
       let attachments: Array<{
         file_name: string;
@@ -598,6 +642,7 @@ export function PingDetail({
         body: JSON.stringify({
           content: replyMessage,
           attachments,
+          visibility, // Story 4.2.1: Include visibility for private notes
         }),
       });
 
@@ -634,7 +679,7 @@ export function PingDetail({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSendReply();
+      handleSendReply('public'); // Story 4.2.1: Default Enter to public message
     }
   };
 
@@ -798,6 +843,10 @@ export function PingDetail({
                   message={message}
                   isCurrentUser={message.sender.id === currentUser.id}
                   attachments={message.attachments}
+                  // Story 4.2.1: Show private badge for agents
+                  showPrivateBadge={canViewPrivateMessages(
+                    currentUser.role as UserRole
+                  )}
                 />
               ))
           ) : (
@@ -856,17 +905,73 @@ export function PingDetail({
               rows={3}
               disabled={isSending || isUploadingFiles}
             />
-            <button
-              onClick={handleSendReply}
-              disabled={
-                (!replyMessage.trim() && selectedFiles.length === 0) ||
-                isSending ||
-                isUploadingFiles
-              }
-              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 disabled:shadow-none transform hover:scale-105 disabled:transform-none"
-            >
-              <Send className="w-5 h-5" />
-            </button>
+            {/* Story 4.2.1: Split send button for agents with private note option */}
+            {canViewPrivateMessages(currentUser.role as UserRole) ? (
+              <div className="relative self-stretch" ref={sendDropdownRef}>
+                <div className="flex h-full">
+                  {/* Main send button */}
+                  <button
+                    onClick={() => handleSendReply('public')}
+                    disabled={
+                      (!replyMessage.trim() && selectedFiles.length === 0) ||
+                      isSending ||
+                      isUploadingFiles
+                    }
+                    className="px-5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-l-lg font-semibold hover:from-blue-600 hover:to-blue-700 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 disabled:shadow-none"
+                    title="Send public reply"
+                  >
+                    <Send className="w-5 h-5" />
+                  </button>
+                  {/* Dropdown toggle */}
+                  <button
+                    onClick={() => setIsSendDropdownOpen(!isSendDropdownOpen)}
+                    disabled={
+                      (!replyMessage.trim() && selectedFiles.length === 0) ||
+                      isSending ||
+                      isUploadingFiles
+                    }
+                    className="px-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-r-lg font-semibold hover:from-blue-700 hover:to-blue-800 disabled:from-slate-400 disabled:to-slate-500 disabled:cursor-not-allowed transition-all border-l border-blue-400"
+                    title="More options"
+                  >
+                    <ChevronDown
+                      className={`w-4 h-4 transition-transform ${isSendDropdownOpen ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                </div>
+                {/* Dropdown menu */}
+                {isSendDropdownOpen && (
+                  <div className="absolute bottom-full right-0 mb-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 overflow-hidden z-50">
+                    <button
+                      onClick={() => handleSendReply('public')}
+                      className="w-full px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                    >
+                      <Send className="w-4 h-4" />
+                      Send Reply
+                    </button>
+                    <button
+                      onClick={() => handleSendReply('private')}
+                      className="w-full px-4 py-3 text-left text-sm text-amber-700 hover:bg-amber-50 flex items-center gap-2 border-t border-slate-100"
+                    >
+                      <Lock className="w-4 h-4" />
+                      Add Private Note
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* End users only see simple send button */
+              <button
+                onClick={() => handleSendReply('public')}
+                disabled={
+                  (!replyMessage.trim() && selectedFiles.length === 0) ||
+                  isSending ||
+                  isUploadingFiles
+                }
+                className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 disabled:shadow-none transform hover:scale-105 disabled:transform-none"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -140,6 +140,16 @@ function DashboardLayoutInner({
     if (href === '/pings') {
       return pathname === '/pings' || pathname?.startsWith('/pings/');
     }
+    // Handle KB routes specially - /kb should not be active when on /kb/manage
+    if (href === '/kb') {
+      return (
+        pathname === '/kb' ||
+        (pathname?.startsWith('/kb/') && !pathname?.startsWith('/kb/manage'))
+      );
+    }
+    if (href === '/kb/manage') {
+      return pathname === '/kb/manage' || pathname?.startsWith('/kb/manage/');
+    }
     return pathname === href || pathname?.startsWith(href + '/');
   };
 

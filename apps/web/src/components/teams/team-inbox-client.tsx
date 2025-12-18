@@ -18,6 +18,7 @@ import {
   Plus,
   Trash2,
   RefreshCw,
+  Lock,
 } from 'lucide-react';
 import {
   Ping,
@@ -36,6 +37,10 @@ import { PingMessage as PingMessageComponent } from '@/components/pings/ping-mes
 import { useTabTitle } from '@/hooks/use-tab-title';
 import { ConnectionStatusIndicator } from '@/components/inbox/connection-status-indicator';
 import { PingDetailHeader } from '@/components/pings/ping-detail-header';
+import {
+  ResolutionNotesDialog,
+  KBAction,
+} from '@/components/pings/resolution-notes-dialog';
 import { TeamDeleteDialog } from '@/components/teams/team-delete-dialog';
 import { useTeamsSafe } from '@/contexts/teams-context';
 import { useRouter } from 'next/navigation';
@@ -59,6 +64,7 @@ interface PingWithRelations {
     id: string;
     content: string;
     message_type: PingMessage['message_type'];
+    visibility?: 'public' | 'private'; // Story 4.2.1: Message visibility for private notes
     created_at: string;
     sender: Pick<User, 'id' | 'full_name' | 'avatar_url'>;
     attachments?: PingAttachment[];
@@ -255,11 +261,15 @@ export function TeamInboxClient({
     {}
   );
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
+  // Story 4.2.1: Split send button dropdown state
+  const [isSendDropdownOpen, setIsSendDropdownOpen] = useState(false);
   const [isReplying, setIsReplying] = useState<{
     userId: string;
     userName: string;
   } | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  // Story 4.2.1: Resolution notes dialog state
+  const [showResolutionDialog, setShowResolutionDialog] = useState(false);
   const [isUpdatingPriority, setIsUpdatingPriority] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
   const [availableCategories, setAvailableCategories] = useState<
@@ -295,6 +305,8 @@ export function TeamInboxClient({
   const teamsContext = useTeamsSafe();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
+  // Story 4.2.1: Ref for send dropdown click-outside detection
+  const sendDropdownRef = useRef<HTMLDivElement>(null);
   const replyingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const presenceChannelRef = useRef<ReturnType<
     ReturnType<typeof createClient>['channel']
@@ -366,8 +378,44 @@ export function TeamInboxClient({
   const handleStatusChange = async (newStatus: PingStatus) => {
     if (!selectedPing || newStatus === selectedPing.status) return;
 
+    // Story 4.2.1: Show resolution notes dialog when resolving
+    if (newStatus === 'resolved') {
+      setShowResolutionDialog(true);
+      return;
+    }
+
+    await performStatusChange(newStatus);
+  };
+
+  // Story 4.2.1: Perform the actual status change with optional resolution notes
+  const performStatusChange = async (
+    newStatus: PingStatus,
+    resolutionNotes?: string | null
+  ) => {
+    if (!selectedPing) return;
+
     setIsUpdatingStatus(true);
     try {
+      // If resolution notes provided, add as private note first
+      if (resolutionNotes) {
+        const noteResponse = await fetch(
+          `/api/pings/${selectedPing.ping_number}/messages`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: `**Resolution Notes:**\n${resolutionNotes}`,
+              visibility: 'private',
+            }),
+          }
+        );
+
+        if (!noteResponse.ok) {
+          console.error('Failed to add resolution notes');
+          // Continue with status change even if notes fail
+        }
+      }
+
       const response = await fetch(
         `/api/pings/${selectedPing.ping_number}/status`,
         {
@@ -402,6 +450,71 @@ export function TeamInboxClient({
       );
     } finally {
       setIsUpdatingStatus(false);
+    }
+  };
+
+  // Story 4.2.1: Handle resolution dialog confirmation
+  // Story 4.2.2: Added generateKB parameter for KB article generation
+  // Story 4.2.3: Added kbAction parameter for KB enhancement
+  const handleResolutionConfirm = async (
+    notes: string | null,
+    generateKB: boolean,
+    kbAction?: { action: KBAction; articleId?: string }
+  ) => {
+    setShowResolutionDialog(false);
+    await performStatusChange('resolved' as PingStatus, notes);
+
+    // Story 4.2.3: Handle KB enhancement
+    if (kbAction?.action === 'enhance' && kbAction.articleId && selectedPing) {
+      fetch(`/api/kb/articles/${kbAction.articleId}/enhance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pingId: selectedPing.id }),
+      })
+        .then(async (res) => {
+          const data = await res.json();
+          if (res.ok && data.success) {
+            toast.success(
+              `KB article enhancement draft created! ${data.article.changesSummary}`
+            );
+            // Redirect to KB listing page
+            setTimeout(() => {
+              window.location.href = `/kb`;
+            }, 1500);
+          } else {
+            toast.error(data.error || 'Failed to enhance KB article');
+          }
+        })
+        .catch((err) => {
+          console.error('Error enhancing KB article:', err);
+          toast.error('Failed to enhance KB article');
+        });
+    }
+    // Story 4.2.2: Generate new KB article if requested (fire and forget)
+    else if ((generateKB || kbAction?.action === 'generate') && selectedPing) {
+      fetch(`/api/pings/${selectedPing.ping_number}/generate-kb`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ generateKB: true }),
+      })
+        .then(async (res) => {
+          const data = await res.json();
+          if (res.ok && data.success) {
+            toast.success(
+              `KB article draft "${data.article.title}" created! View it in the Knowledge Base.`
+            );
+            // Redirect to KB listing page (edit page will be Story 4.3)
+            setTimeout(() => {
+              window.location.href = `/kb`;
+            }, 1500);
+          } else {
+            toast.error(data.error || 'Failed to generate KB article');
+          }
+        })
+        .catch((err) => {
+          console.error('Error generating KB article:', err);
+          toast.error('Failed to generate KB article');
+        });
     }
   };
 
@@ -815,6 +928,7 @@ export function TeamInboxClient({
             id: newMessage.id,
             content: newMessage.content,
             message_type: newMessage.message_type,
+            visibility: newMessage.visibility as 'public' | 'private', // Story 4.2.1: Include visibility for private note styling
             created_at: newMessage.created_at,
             sender: sender as Pick<User, 'id' | 'full_name' | 'avatar_url'>,
             attachments: [],
@@ -1235,7 +1349,10 @@ export function TeamInboxClient({
     }
   };
 
-  const handleSendReply = async () => {
+  // Story 4.2.1: Updated to accept visibility parameter for private notes
+  const handleSendReply = async (
+    visibility: 'public' | 'private' = 'public'
+  ) => {
     if (!replyMessage.trim() && selectedFiles.length === 0) {
       toast.error('Message or attachments required');
       return;
@@ -1245,6 +1362,7 @@ export function TeamInboxClient({
 
     setIsSending(true);
     setIsUploadingFiles(true);
+    setIsSendDropdownOpen(false); // Close dropdown when sending
 
     try {
       let uploadedFiles: Array<{
@@ -1271,6 +1389,7 @@ export function TeamInboxClient({
               file_size: f.size,
               mime_type: f.type,
             })),
+            visibility, // Story 4.2.1: Include visibility for private notes
           }),
         }
       );
@@ -1308,7 +1427,7 @@ export function TeamInboxClient({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSendReply();
+      handleSendReply('public'); // Story 4.2.1: Default Enter to public message
     }
   };
 
@@ -1396,6 +1515,26 @@ export function TeamInboxClient({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  // Story 4.2.1: Close send dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        sendDropdownRef.current &&
+        !sendDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsSendDropdownOpen(false);
+      }
+    };
+
+    if (isSendDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isSendDropdownOpen]);
 
   return (
     <>
@@ -1833,6 +1972,8 @@ export function TeamInboxClient({
                           message={message}
                           isCurrentUser={isCurrentUser}
                           attachments={message.attachments}
+                          // Story 4.2.1: Team inbox is agent-only, always show private badge
+                          showPrivateBadge={true}
                         />
                       );
                     })}
@@ -1864,16 +2005,63 @@ export function TeamInboxClient({
                       rows={3}
                       disabled={isSending}
                     />
-                    <button
-                      onClick={handleSendReply}
-                      disabled={
-                        (!replyMessage.trim() && selectedFiles.length === 0) ||
-                        isSending
-                      }
-                      className="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-orange-700 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed transition-all shadow-lg shadow-orange-500/30 hover:shadow-xl hover:shadow-orange-500/40 disabled:shadow-none transform hover:scale-105 disabled:transform-none"
+                    {/* Story 4.2.1: Split send button with private note option */}
+                    <div
+                      className="relative self-stretch"
+                      ref={sendDropdownRef}
                     >
-                      <Send className="w-5 h-5" />
-                    </button>
+                      <div className="flex h-full">
+                        {/* Main send button */}
+                        <button
+                          onClick={() => handleSendReply('public')}
+                          disabled={
+                            (!replyMessage.trim() &&
+                              selectedFiles.length === 0) ||
+                            isSending
+                          }
+                          className="px-5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-l-lg font-semibold hover:from-orange-600 hover:to-orange-700 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed transition-all shadow-lg shadow-orange-500/30 hover:shadow-xl hover:shadow-orange-500/40 disabled:shadow-none"
+                          title="Send public reply"
+                        >
+                          <Send className="w-5 h-5" />
+                        </button>
+                        {/* Dropdown toggle */}
+                        <button
+                          onClick={() =>
+                            setIsSendDropdownOpen(!isSendDropdownOpen)
+                          }
+                          disabled={
+                            (!replyMessage.trim() &&
+                              selectedFiles.length === 0) ||
+                            isSending
+                          }
+                          className="px-2 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-r-lg font-semibold hover:from-orange-700 hover:to-orange-800 disabled:from-slate-400 disabled:to-slate-500 disabled:cursor-not-allowed transition-all border-l border-orange-400"
+                          title="More options"
+                        >
+                          <ChevronDown
+                            className={`w-4 h-4 transition-transform ${isSendDropdownOpen ? 'rotate-180' : ''}`}
+                          />
+                        </button>
+                      </div>
+                      {/* Dropdown menu */}
+                      {isSendDropdownOpen && (
+                        <div className="absolute bottom-full right-0 mb-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 overflow-hidden z-50">
+                          <button
+                            onClick={() => handleSendReply('public')}
+                            className="w-full px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                          >
+                            <Send className="w-4 h-4" />
+                            Send Reply
+                          </button>
+                          <button
+                            onClick={() => handleSendReply('private')}
+                            className="w-full px-4 py-3 text-left text-sm text-amber-700 hover:bg-amber-50 flex items-center gap-2 border-t border-slate-100"
+                          >
+                            <Lock className="w-4 h-4" />
+                            Add Private Note
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   {selectedFiles.length > 0 && (
                     <FilePreviewList
@@ -2047,6 +2235,16 @@ export function TeamInboxClient({
           }}
         />
       )}
+
+      {/* Story 4.2.1 & 4.2.3: Resolution Notes Dialog */}
+      <ResolutionNotesDialog
+        isOpen={showResolutionDialog}
+        onClose={() => setShowResolutionDialog(false)}
+        onConfirm={handleResolutionConfirm}
+        pingTitle={selectedPing?.title || 'Untitled'}
+        pingNumber={selectedPing?.ping_number || 0}
+        isLoading={isUpdatingStatus}
+      />
     </>
   );
 }

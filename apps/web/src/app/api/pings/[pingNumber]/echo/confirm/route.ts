@@ -166,6 +166,7 @@ export async function POST(
         sender_id: echoUserId,
         content: clarificationMessage,
         message_type: 'agent',
+        visibility: 'public',
       });
 
       // Clear the problem statement confirmation flag and increment clarification count
@@ -223,6 +224,7 @@ export async function POST(
           sender_id: echoUserId,
           content: confirmationMessage,
           message_type: 'agent',
+          visibility: 'public',
         });
 
       if (confirmError) {
@@ -254,6 +256,7 @@ export async function POST(
         sender_id: echoUserId,
         content: followUpMessage,
         message_type: 'agent',
+        visibility: 'public',
       });
 
       return NextResponse.json({

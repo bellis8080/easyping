@@ -97,7 +97,7 @@ export async function PATCH(
       );
     }
 
-    // Create system message
+    // Create system message (always public)
     const systemMessage = `Priority changed to ${priority}`;
 
     await supabaseAdmin.from('ping_messages').insert({
@@ -105,6 +105,7 @@ export async function PATCH(
       sender_id: user.id,
       content: systemMessage,
       message_type: 'system',
+      visibility: 'public',
     });
 
     return NextResponse.json({ ping: updatedPing }, { status: 200 });

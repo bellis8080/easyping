@@ -2,7 +2,12 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { MessageType, PingStatus } from '@easyping/types';
+import {
+  MessageType,
+  PingStatus,
+  canViewPrivateMessages,
+  UserRole,
+} from '@easyping/types';
 import { calculateStatusTransition } from '@/lib/ping-status-transitions';
 import {
   shouldRegenerateSummary,
@@ -16,6 +21,7 @@ const sendMessageSchema = z
       .min(1, 'Message cannot be empty')
       .max(5000, 'Message too long')
       .optional(),
+    visibility: z.enum(['public', 'private']).optional().default('public'),
     attachments: z
       .array(
         z.object({
@@ -82,6 +88,18 @@ export async function POST(
     );
   }
 
+  // Story 4.2.1: Validate visibility - only agents/managers/owners can create private notes
+  const requestedVisibility = validation.data.visibility || 'public';
+  if (
+    requestedVisibility === 'private' &&
+    !canViewPrivateMessages(userProfile.role as UserRole)
+  ) {
+    return NextResponse.json(
+      { error: 'Only agents can create private notes' },
+      { status: 403 }
+    );
+  }
+
   // Fetch ping by ping_number - using admin client to get creator info
   const supabaseAdmin = createAdminClient();
   const { data: ping, error: pingError } = await supabaseAdmin
@@ -102,6 +120,7 @@ export async function POST(
     userProfile.role === 'end_user' ? MessageType.USER : MessageType.AGENT;
 
   // Create message
+  // Story 4.2.1: Include visibility field for agent private notes
   const { data: message, error } = await supabase
     .from('ping_messages')
     .insert({
@@ -109,6 +128,7 @@ export async function POST(
       sender_id: user.id,
       content: validation.data.content || '(attachment)',
       message_type: messageType,
+      visibility: requestedVisibility,
     })
     .select('*')
     .single();
@@ -323,6 +343,7 @@ export async function POST(
     }
 
     // Create system message if needed
+    // System messages are always public (status transitions visible to all)
     if (
       transition.shouldCreateSystemMessage &&
       transition.systemMessageContent
@@ -332,6 +353,7 @@ export async function POST(
         sender_id: user.id,
         content: transition.systemMessageContent,
         message_type: 'system',
+        visibility: 'public',
       });
     }
   } else {

@@ -169,6 +169,7 @@ export async function POST(
           sender_id: echoUserId,
           content: confirmationMessage,
           message_type: 'agent',
+          visibility: 'public',
         });
 
       if (confirmError) {
@@ -220,6 +221,7 @@ export async function POST(
           sender_id: echoUserId,
           content: escalationMessage,
           message_type: 'agent',
+          visibility: 'public',
         });
 
       if (escalateError) {
@@ -260,6 +262,7 @@ export async function POST(
           sender_id: echoUserId,
           content: outOfScopeMessage,
           message_type: 'agent',
+          visibility: 'public',
         });
 
       if (scopeError) {
@@ -290,6 +293,7 @@ export async function POST(
           sender_id: echoUserId,
           content: nextQuestion,
           message_type: 'agent',
+          visibility: 'public',
         });
 
       if (questionError) {

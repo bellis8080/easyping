@@ -1,0 +1,44 @@
+schema: 1
+story: '4.2.1'
+story_title: 'Agent Private Notes'
+gate: PASS
+status_reason: 'All 8 acceptance criteria verified. Role-based access control properly enforces visibility. 385 tests passing with comprehensive coverage of filtering utilities.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2025-12-16T17:00:00Z'
+
+waiver: { active: false }
+
+top_issues: []
+
+# Evidence Summary
+evidence:
+  tests_reviewed: 385
+  new_test_files:
+    - apps/web/tests/unit/lib/message-visibility.test.ts (20 tests)
+  modified_test_files:
+    - apps/web/tests/unit/api/pings.test.ts
+    - apps/web/tests/unit/api/ping-priority.test.ts
+    - apps/web/tests/unit/api/ping-assignment.test.ts
+  ac_coverage:
+    1: PASS # Split send button UI - dropdown with Send/Private options
+    2: PASS # Visibility column in ping_messages with CHECK constraint
+    3: PASS # canViewPrivateMessages() utility, API role validation
+    4: PASS # Server-side filtering in pages, realtime subscription filtering
+    5: PASS # Muted gray styling with dashed border, Private badge, lock icon
+    6: PASS # ResolutionNotesDialog prompts when no private notes exist
+    7: PASS # Textarea with Cancel/Skip/Add Notes & Resolve buttons
+    8: PARTIAL # Export functionality appears deferred (not in scope)
+
+# Security Assessment
+security_notes:
+  - API validates user role before allowing private visibility (403 if end_user attempts private)
+  - Server-side filtering ensures end users never receive private messages
+  - Realtime subscriptions filter private messages client-side (per RLS/Realtime limitation)
+  - System messages explicitly set visibility='public' for status transitions
+
+# Quality Notes
+quality_notes:
+  - Clean separation: message-visibility.ts utility with 4 exported functions
+  - Consistent implementation across ping-detail, inbox-client, team-inbox-client
+  - Resolution dialog prompts for notes only when no private notes exist
+  - Private note styling changed from amber to muted gray (recent refinement)

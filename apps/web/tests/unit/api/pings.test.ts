@@ -198,11 +198,13 @@ describe('POST /api/pings', () => {
     });
 
     // Verify message insert was called with correct data
+    // Story 4.2.1: Include visibility field
     expect(mockMessageInsert.insert).toHaveBeenCalledWith({
       ping_id: 'ping-456',
       sender_id: 'user-123',
       content: 'Test message content',
       message_type: 'user',
+      visibility: 'public',
     });
   });
 

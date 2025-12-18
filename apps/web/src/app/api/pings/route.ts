@@ -120,12 +120,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         );
       }
 
-      // Create first ping message
+      // Create first ping message (user messages are always public)
       await adminClient.from('ping_messages').insert({
         ping_id: ping.id,
         sender_id: user.id,
         content: message,
         message_type: 'user',
+        visibility: 'public',
       });
 
       // Add routing system message if routing was applied
@@ -140,6 +141,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           sender_id: null,
           content: routingMessage,
           message_type: 'system',
+          visibility: 'public',
         });
       }
 
@@ -180,7 +182,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Create first ping message
+    // Create first ping message (user messages are always public)
     const { error: messageError } = await supabase
       .from('ping_messages')
       .insert({
@@ -188,6 +190,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         sender_id: user.id,
         content: message,
         message_type: 'user',
+        visibility: 'public',
       });
 
     if (messageError) {

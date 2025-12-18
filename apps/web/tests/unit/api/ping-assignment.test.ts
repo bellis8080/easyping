@@ -170,11 +170,13 @@ describe('PATCH /api/pings/[pingNumber]/assign', () => {
     expect(data.ping.assigned_to).toBe(AGENT_ID);
 
     // Verify system message was created
+    // Story 4.2.1: Include visibility field
     expect(mockMessageInsert.insert).toHaveBeenCalledWith({
       ping_id: PING_ID,
       sender_id: USER_ID,
       content: 'Ping assigned to Agent Two',
       message_type: 'system',
+      visibility: 'public',
     });
   });
 
@@ -482,11 +484,13 @@ describe('PATCH /api/pings/[pingNumber]/assign', () => {
     await PATCH(request, { params });
 
     // Verify system message was created with correct content
+    // Story 4.2.1: Include visibility field
     expect(mockMessageInsert.insert).toHaveBeenCalledWith({
       ping_id: PING_ID,
       sender_id: USER_ID,
       content: 'Ping assigned to Alice Agent',
       message_type: 'system',
+      visibility: 'public',
     });
   });
 
@@ -565,11 +569,13 @@ describe('PATCH /api/pings/[pingNumber]/assign', () => {
     expect(data.ping.assigned_to).toBeNull();
 
     // Verify system message says "Ping unassigned"
+    // Story 4.2.1: Include visibility field
     expect(mockMessageInsert.insert).toHaveBeenCalledWith({
       ping_id: PING_ID,
       sender_id: USER_ID,
       content: 'Ping unassigned',
       message_type: 'system',
+      visibility: 'public',
     });
   });
 

@@ -300,6 +300,12 @@ export function MyPingsClient({
             return;
           }
 
+          // Story 4.2.1: Skip private messages for end users
+          // End users should never see private notes in their ping list
+          if (newMessage.visibility === 'private') {
+            return;
+          }
+
           // Fetch sender info
           const { data: sender } = await supabase
             .from('users')
@@ -419,7 +425,8 @@ export function MyPingsClient({
       <div className="flex-shrink-0 bg-gradient-to-r from-slate-800 via-slate-900 to-slate-950 border-b border-slate-700 shadow-xl">
         <div className="px-6 py-5">
           <div className="flex items-center justify-between mb-4">
-            <div>
+            <div className="flex items-center gap-3">
+              <Radio className="w-8 h-8 text-orange-500" />
               <h1 className="text-2xl font-bold text-white">My Pings</h1>
             </div>
             <Link

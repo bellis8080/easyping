@@ -63,6 +63,9 @@ export {
   PingStatus,
   PingPriority,
   MessageType,
+  MessageVisibility,
   isUserRole,
   getAllUserRoles,
+  isMessageVisibility,
+  canViewPrivateMessages,
 } from './enums';

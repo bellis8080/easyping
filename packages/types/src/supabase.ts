@@ -229,12 +229,14 @@ export type Database = {
       };
       kb_articles: {
         Row: {
+          agent_content: string | null;
           category_id: string | null;
           content: string;
           created_at: string;
           created_by: string;
           deleted_at: string | null;
           embedding: string | null;
+          enhances_article_id: string | null;
           helpful_count: number;
           id: string;
           not_helpful_count: number;
@@ -250,12 +252,14 @@ export type Database = {
           view_count: number;
         };
         Insert: {
+          agent_content?: string | null;
           category_id?: string | null;
           content: string;
           created_at?: string;
           created_by: string;
           deleted_at?: string | null;
           embedding?: string | null;
+          enhances_article_id?: string | null;
           helpful_count?: number;
           id?: string;
           not_helpful_count?: number;
@@ -271,12 +275,14 @@ export type Database = {
           view_count?: number;
         };
         Update: {
+          agent_content?: string | null;
           category_id?: string | null;
           content?: string;
           created_at?: string;
           created_by?: string;
           deleted_at?: string | null;
           embedding?: string | null;
+          enhances_article_id?: string | null;
           helpful_count?: number;
           id?: string;
           not_helpful_count?: number;
@@ -304,6 +310,13 @@ export type Database = {
             columns: ['created_by'];
             isOneToOne: false;
             referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'kb_articles_enhances_article_id_fkey';
+            columns: ['enhances_article_id'];
+            isOneToOne: false;
+            referencedRelation: 'kb_articles';
             referencedColumns: ['id'];
           },
           {
@@ -416,6 +429,7 @@ export type Database = {
           message_type: string;
           ping_id: string;
           sender_id: string;
+          visibility: string;
         };
         Insert: {
           content: string;
@@ -425,6 +439,7 @@ export type Database = {
           message_type?: string;
           ping_id: string;
           sender_id: string;
+          visibility?: string;
         };
         Update: {
           content?: string;
@@ -434,6 +449,7 @@ export type Database = {
           message_type?: string;
           ping_id?: string;
           sender_id?: string;
+          visibility?: string;
         };
         Relationships: [
           {
@@ -769,6 +785,25 @@ export type Database = {
           rank: number;
           slug: string;
           status: string;
+          title: string;
+          view_count: number;
+        }[];
+      };
+      search_similar_kb_articles: {
+        Args: {
+          p_category_id?: string;
+          p_limit?: number;
+          p_search_terms: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          category_id: string;
+          category_name: string;
+          content: string;
+          helpful_count: number;
+          id: string;
+          similarity_score: number;
+          slug: string;
           title: string;
           view_count: number;
         }[];

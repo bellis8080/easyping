@@ -116,7 +116,7 @@ export async function PATCH(
       );
     }
 
-    // Create system message
+    // Create system message (always public)
     let systemMessage = '';
     if (assignedTo) {
       systemMessage = `Ping assigned to ${assigneeName}`;
@@ -129,6 +129,7 @@ export async function PATCH(
       sender_id: user.id,
       content: systemMessage,
       message_type: 'system',
+      visibility: 'public',
     });
 
     return NextResponse.json({ ping: updatedPing }, { status: 200 });

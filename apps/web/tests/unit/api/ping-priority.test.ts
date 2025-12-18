@@ -166,11 +166,13 @@ describe('PATCH /api/pings/[pingNumber]/priority', () => {
     expect(response.status).toBe(200);
     expect(data.ping).toEqual(mockUpdatedPing);
     expect(mockUpdateQuery.update).toHaveBeenCalledWith({ priority: 'urgent' });
+    // Story 4.2.1: Include visibility field
     expect(mockMessageInsert.insert).toHaveBeenCalledWith({
       ping_id: PING_ID,
       sender_id: USER_ID,
       content: 'Priority changed to urgent',
       message_type: 'system',
+      visibility: 'public',
     });
   });
 

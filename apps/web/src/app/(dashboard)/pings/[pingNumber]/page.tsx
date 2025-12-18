@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import { PingDetail } from '@/components/pings/ping-detail';
-import { PingAttachment } from '@easyping/types';
+import { PingAttachment, UserRole, MessageVisibility } from '@easyping/types';
+import { canViewPrivateMessages } from '@easyping/types';
 
 export default async function PingDetailPage(props: {
   params: Promise<{ pingNumber: string }>;
@@ -16,9 +17,10 @@ export default async function PingDetailPage(props: {
   if (!user) notFound();
 
   // Get user's tenant_id and profile from users table
+  // Story 4.2.1: Include role for message visibility filtering
   const { data: userProfile } = await supabase
     .from('users')
-    .select('tenant_id, id, email, full_name')
+    .select('tenant_id, id, email, full_name, role')
     .eq('id', user.id)
     .single();
 
@@ -27,6 +29,7 @@ export default async function PingDetailPage(props: {
   const tenantId = userProfile.tenant_id;
 
   // Fetch ping with all related data using ping_number
+  // Story 4.2.1: Include visibility for message filtering
   const { data: ping, error } = await supabase
     .from('pings')
     .select(
@@ -39,6 +42,7 @@ export default async function PingDetailPage(props: {
         id,
         content,
         message_type,
+        visibility,
         created_at,
         sender:users(id, full_name, avatar_url, role)
       )
@@ -75,10 +79,23 @@ export default async function PingDetailPage(props: {
     }
   }
 
+  // Story 4.2.1: Filter messages based on user role
+  // End users should never see private messages
+  const userRole = userProfile.role as UserRole;
+  const canSeePrivate = canViewPrivateMessages(userRole);
+  const filteredMessages =
+    ping.messages?.filter((msg: any) => {
+      if (canSeePrivate) return true;
+      return (
+        msg.visibility === MessageVisibility.PUBLIC ||
+        msg.visibility === 'public'
+      );
+    }) || [];
+
   // Add attachments to messages
   const pingWithAttachments = {
     ...ping,
-    messages: ping.messages?.map((msg: any) => ({
+    messages: filteredMessages.map((msg: any) => ({
       ...msg,
       attachments: attachmentsByMessageId[msg.id] || [],
     })),

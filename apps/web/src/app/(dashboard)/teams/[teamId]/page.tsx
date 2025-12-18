@@ -117,6 +117,7 @@ export default async function TeamInboxPage({ params }: TeamInboxPageProps) {
         id,
         content,
         message_type,
+        visibility,
         created_at,
         sender:users(id, full_name, avatar_url)
       )
@@ -209,6 +210,7 @@ export default async function TeamInboxPage({ params }: TeamInboxPageProps) {
         id: msg.id,
         content: msg.content,
         message_type: msg.message_type,
+        visibility: msg.visibility as 'public' | 'private', // Story 4.2.1: Include visibility for private note styling
         created_at: msg.created_at,
         sender: Array.isArray(msg.sender) ? msg.sender[0] : msg.sender,
         attachments: attachmentsByMessageId[msg.id] || [],

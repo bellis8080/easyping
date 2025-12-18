@@ -1,8 +1,8 @@
 'use client';
 
 import { formatDistanceToNow } from 'date-fns';
-import { User } from 'lucide-react';
-import { PingAttachment } from '@easyping/types';
+import { User, Lock } from 'lucide-react';
+import { PingAttachment, MessageVisibility } from '@easyping/types';
 import { AttachmentDisplay } from './attachment-display';
 
 /**
@@ -26,12 +26,15 @@ interface PingMessageProps {
   message: any;
   isCurrentUser: boolean;
   attachments?: PingAttachment[];
+  // Story 4.2.1: Whether current viewer can see private notes (agents only)
+  showPrivateBadge?: boolean;
 }
 
 export function PingMessage({
   message,
   isCurrentUser,
   attachments = [],
+  showPrivateBadge = false,
 }: PingMessageProps) {
   const formatTimestamp = (timestamp: string): string => {
     return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
@@ -39,6 +42,10 @@ export function PingMessage({
 
   const isAgentMessage = message.message_type === 'agent';
   const isSystemMessage = message.message_type === 'system';
+  // Story 4.2.1: Check if message is a private note
+  const isPrivateNote =
+    message.visibility === 'private' ||
+    message.visibility === MessageVisibility.PRIVATE;
 
   // System messages are centered
   if (isSystemMessage) {
@@ -55,7 +62,20 @@ export function PingMessage({
   if (isCurrentUser) {
     return (
       <div className="flex justify-end">
-        <div className="max-w-2xl px-5 py-3 rounded-lg shadow-md bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+        <div
+          className={`max-w-2xl px-5 py-3 rounded-lg shadow-md ${
+            isPrivateNote
+              ? 'bg-slate-200 text-slate-700 border-2 border-slate-400 border-dashed'
+              : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+          }`}
+        >
+          {/* Story 4.2.1: Private note badge */}
+          {isPrivateNote && showPrivateBadge && (
+            <div className="flex items-center gap-1 mb-2 text-xs font-semibold text-slate-600">
+              <Lock className="w-3 h-3" />
+              <span>Private Note</span>
+            </div>
+          )}
           <p className="text-base leading-relaxed whitespace-pre-wrap">
             {renderMarkdown(message.content)}
           </p>
@@ -70,7 +90,10 @@ export function PingMessage({
               ))}
             </div>
           )}
-          <p className="text-xs mt-2 text-blue-100" suppressHydrationWarning>
+          <p
+            className={`text-xs mt-2 ${isPrivateNote ? 'text-slate-500' : 'text-blue-100'}`}
+            suppressHydrationWarning
+          >
             {new Date(message.created_at).toLocaleTimeString()}
           </p>
         </div>
@@ -87,15 +110,23 @@ export function PingMessage({
           <img
             src={message.sender.avatar_url}
             alt={message.sender.full_name}
-            className="w-10 h-10 rounded-full"
+            className={`w-10 h-10 rounded-full ${isPrivateNote ? 'ring-2 ring-slate-400' : ''}`}
           />
         ) : (
           <div
             className={`w-10 h-10 rounded-full flex items-center justify-center ${
-              isAgentMessage ? 'bg-orange-500' : 'bg-blue-500'
+              isPrivateNote
+                ? 'bg-slate-400'
+                : isAgentMessage
+                  ? 'bg-orange-500'
+                  : 'bg-blue-500'
             }`}
           >
-            <User className="w-5 h-5 text-white" />
+            {isPrivateNote ? (
+              <Lock className="w-5 h-5 text-white" />
+            ) : (
+              <User className="w-5 h-5 text-white" />
+            )}
           </div>
         )}
       </div>
@@ -106,15 +137,24 @@ export function PingMessage({
           <span className="text-sm font-semibold text-slate-900">
             {message.sender.full_name}
           </span>
+          {/* Story 4.2.1: Private note badge */}
+          {isPrivateNote && showPrivateBadge && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-200 text-slate-600 text-xs font-semibold rounded-full border border-slate-300">
+              <Lock className="w-3 h-3" />
+              Private
+            </span>
+          )}
           <span className="text-xs text-slate-500" suppressHydrationWarning>
             {formatTimestamp(message.created_at)}
           </span>
         </div>
         <div
           className={`px-4 py-3 rounded-lg ${
-            isAgentMessage
-              ? 'bg-orange-50 border border-orange-200'
-              : 'bg-blue-50 border border-blue-200'
+            isPrivateNote
+              ? 'bg-slate-100 border-2 border-slate-300 border-dashed'
+              : isAgentMessage
+                ? 'bg-orange-50 border border-orange-200'
+                : 'bg-blue-50 border border-blue-200'
           }`}
         >
           <p className="text-sm text-slate-900 whitespace-pre-wrap">

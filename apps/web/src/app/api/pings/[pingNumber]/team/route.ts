@@ -139,6 +139,7 @@ export async function PATCH(
         sender_id: user.id,
         content: systemMessage,
         message_type: 'system',
+        visibility: 'public',
       });
     }
 

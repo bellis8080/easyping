@@ -101,6 +101,7 @@ export async function POST(
           sender_id: echoUserId,
           content: ECHO_INTRODUCTION,
           message_type: 'agent',
+          visibility: 'public',
         });
 
       if (introError) {
@@ -192,6 +193,7 @@ export async function POST(
           sender_id: echoUserId,
           content: outOfScopeMessage,
           message_type: 'agent',
+          visibility: 'public',
         });
 
       if (scopeError) {
@@ -221,6 +223,7 @@ export async function POST(
         sender_id: echoUserId,
         content: firstQuestion,
         message_type: 'agent',
+        visibility: 'public',
       });
 
     if (questionError) {

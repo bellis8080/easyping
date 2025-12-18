@@ -150,6 +150,7 @@ export async function POST(
         sender_id: msg.sender_id || '',
         content: msg.content,
         message_type: msg.message_type,
+        visibility: msg.visibility || 'public',
         created_at: msg.created_at,
         edited_at: msg.edited_at || null,
       }));

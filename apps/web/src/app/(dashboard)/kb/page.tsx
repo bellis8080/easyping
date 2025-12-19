@@ -1,153 +1,178 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { Search, BookOpen, Filter, X, Settings } from 'lucide-react';
-import { UserRole, canViewPrivateMessages } from '@easyping/types';
+/**
+ * Knowledge Base Browse Page
+ * Story 4.3.5: KB Browse Page & Category Filtering
+ *
+ * Public-facing KB browse page for all authenticated users.
+ * Features: Search with debounce, category filtering, popular articles sidebar.
+ */
 
-// Mock KB article type
+import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import { Search, BookOpen, Filter, X, Settings, Loader2 } from 'lucide-react';
+import { UserRole, canViewPrivateMessages } from '@easyping/types';
+import { useDebounce } from '@/hooks/use-debounce';
+
+// Types matching API responses
 interface KBArticle {
   id: string;
   title: string;
-  content: string;
-  category: string;
-  views: number;
-  helpful: number;
-  notHelpful: number;
-  lastUpdated: string;
+  slug: string;
+  excerpt: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  viewCount: number;
+  helpfulCount: number;
+  notHelpfulCount: number;
+  updatedAt: string;
 }
 
-// Mock KB articles
-const mockArticles: KBArticle[] = [
-  {
-    id: '1',
-    title: 'How to reset your password',
-    content:
-      'If you forgot your password, click "Forgot Password" on the login page. Enter your email address and we\'ll send you a password reset link. The link expires in 24 hours for security...',
-    category: 'Account',
-    views: 1234,
-    helpful: 98,
-    notHelpful: 5,
-    lastUpdated: '2024-01-15',
-  },
-  {
-    id: '2',
-    title: 'Troubleshooting login issues',
-    content:
-      'Common login problems and their solutions: 1. Clear browser cookies and cache. 2. Check your email for verification. 3. Ensure Caps Lock is off. 4. Try resetting your password...',
-    category: 'Account',
-    views: 856,
-    helpful: 72,
-    notHelpful: 8,
-    lastUpdated: '2024-01-14',
-  },
-  {
-    id: '3',
-    title: 'Dashboard access permissions explained',
-    content:
-      'Learn about different user roles and what dashboards they can access. Admin users have full access, while regular users can only view their own pings. Managers can view team analytics...',
-    category: 'Access',
-    views: 542,
-    helpful: 45,
-    notHelpful: 3,
-    lastUpdated: '2024-01-13',
-  },
-  {
-    id: '4',
-    title: 'How to attach files to a ping',
-    content:
-      'You can attach files when creating a new ping by clicking the paperclip icon. Supported formats include PDF, images (PNG, JPG), and documents (DOC, DOCX). Maximum file size is 10MB...',
-    category: 'Pings',
-    views: 423,
-    helpful: 38,
-    notHelpful: 2,
-    lastUpdated: '2024-01-12',
-  },
-  {
-    id: '5',
-    title: 'Understanding SLA timers',
-    content:
-      'SLA (Service Level Agreement) timers show how much time is remaining before a response is due. Green means on track, orange means at risk, and red means the SLA has been breached...',
-    category: 'Support',
-    views: 678,
-    helpful: 56,
-    notHelpful: 4,
-    lastUpdated: '2024-01-11',
-  },
-  {
-    id: '6',
-    title: 'Setting up two-factor authentication',
-    content:
-      'Enable 2FA for enhanced security. Go to Settings > Security, click "Enable 2FA", and scan the QR code with your authenticator app. You\'ll need to enter a verification code each time you log in...',
-    category: 'Security',
-    views: 912,
-    helpful: 84,
-    notHelpful: 6,
-    lastUpdated: '2024-01-10',
-  },
-];
+interface KBCategory {
+  id: string;
+  name: string;
+  articleCount: number;
+}
 
-// Categories for filtering
-const categories = [
-  'All',
-  'Account',
-  'Access',
-  'Pings',
-  'Support',
-  'Security',
-  'Billing',
-  'Technical',
-];
+interface PopularArticle {
+  id: string;
+  title: string;
+  slug: string;
+  viewCount: number;
+}
 
-// KB Article Card component
-function ArticleCard({ article }: { article: KBArticle }) {
-  const helpfulPercentage = Math.round(
-    (article.helpful / (article.helpful + article.notHelpful)) * 100
-  );
-
+// Loading Skeleton Components
+function ArticleCardSkeleton() {
   return (
-    <div className="p-6 border-2 border-slate-600 rounded-lg hover:border-orange-500 hover:shadow-lg hover:shadow-orange-500/20 transition-all cursor-pointer bg-slate-800 group">
+    <div className="p-6 border-2 border-slate-600 rounded-lg bg-slate-800 animate-pulse">
       <div className="flex items-start gap-3 mb-3">
-        <BookOpen className="w-5 h-5 text-orange-500 mt-0.5 flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-bold text-white mb-2 group-hover:text-orange-400 transition-colors">
-            {article.title}
-          </h3>
-          <p className="text-sm text-slate-300 line-clamp-3 mb-3">
-            {article.content}
-          </p>
+        <div className="w-5 h-5 bg-slate-700 rounded flex-shrink-0" />
+        <div className="flex-1">
+          <div className="h-5 bg-slate-700 rounded w-3/4 mb-3" />
+          <div className="h-4 bg-slate-700 rounded w-full mb-2" />
+          <div className="h-4 bg-slate-700 rounded w-2/3" />
         </div>
       </div>
-
-      <div className="flex items-center justify-between text-xs">
-        <div className="flex items-center gap-4 text-slate-400">
-          <span className="px-2 py-1 bg-slate-700 rounded text-slate-300 font-medium">
-            {article.category}
-          </span>
-          <span>{article.views} views</span>
-          <span className="text-emerald-400 font-medium">
-            {helpfulPercentage}% helpful
-          </span>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="h-6 w-16 bg-slate-700 rounded" />
+          <div className="h-4 w-20 bg-slate-700 rounded" />
         </div>
-        <span className="text-slate-500">
-          Updated {new Date(article.lastUpdated).toLocaleDateString()}
-        </span>
+        <div className="h-4 w-24 bg-slate-700 rounded" />
       </div>
     </div>
   );
 }
 
+function CategorySidebarSkeleton() {
+  return (
+    <div className="p-4 space-y-2">
+      {[...Array(6)].map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center justify-between px-4 py-3 rounded-lg bg-slate-800 animate-pulse"
+        >
+          <div className="h-4 bg-slate-700 rounded w-20" />
+          <div className="h-5 w-8 bg-slate-700 rounded-full" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PopularArticlesSkeleton() {
+  return (
+    <div className="space-y-3">
+      {[...Array(3)].map((_, i) => (
+        <div key={i} className="p-3 bg-slate-800 rounded-lg animate-pulse">
+          <div className="flex items-start gap-2 mb-2">
+            <div className="w-3 h-3 bg-slate-700 rounded flex-shrink-0" />
+            <div className="h-4 bg-slate-700 rounded w-full" />
+          </div>
+          <div className="h-3 bg-slate-700 rounded w-16" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// KB Article Card component
+function ArticleCard({ article }: { article: KBArticle }) {
+  const totalFeedback = article.helpfulCount + article.notHelpfulCount;
+  const helpfulPercentage =
+    totalFeedback > 0
+      ? Math.round((article.helpfulCount / totalFeedback) * 100)
+      : null;
+
+  return (
+    <Link href={`/kb/article/${article.slug}`} className="block mb-6">
+      <div className="p-6 border-2 border-slate-600 rounded-lg hover:border-orange-500 hover:shadow-lg hover:shadow-orange-500/20 transition-all cursor-pointer bg-slate-800 group">
+        <div className="flex items-start gap-3 mb-3">
+          <BookOpen className="w-5 h-5 text-orange-500 mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg font-bold text-white mb-2 group-hover:text-orange-400 transition-colors">
+              {article.title}
+            </h3>
+            <p className="text-sm text-slate-300 line-clamp-3 mb-3">
+              {article.excerpt}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center gap-4 text-slate-400">
+            {article.categoryName && (
+              <span className="px-2 py-1 bg-slate-700 rounded text-slate-300 font-medium">
+                {article.categoryName}
+              </span>
+            )}
+            <span>{article.viewCount.toLocaleString()} views</span>
+            <span className="text-emerald-400 font-medium">
+              {helpfulPercentage !== null
+                ? `${helpfulPercentage}% helpful`
+                : 'No ratings yet'}
+            </span>
+          </div>
+          <span className="text-slate-500">
+            Updated {new Date(article.updatedAt).toLocaleDateString()}
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 export default function KnowledgeBasePage() {
+  // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const debouncedSearch = useDebounce(searchQuery, 300);
+
+  // Data state
+  const [articles, setArticles] = useState<KBArticle[]>([]);
+  const [categories, setCategories] = useState<KBCategory[]>([]);
+  const [totalArticles, setTotalArticles] = useState(0);
+  const [popularArticles, setPopularArticles] = useState<PopularArticle[]>([]);
+
+  // Loading states
+  const [isLoadingArticles, setIsLoadingArticles] = useState(true);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+  const [isLoadingPopular, setIsLoadingPopular] = useState(true);
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
+
+  // Permission state
   const [canManageKB, setCanManageKB] = useState(false);
 
-  // Fetch user profile to check role
+  // Fetch user permissions
   useEffect(() => {
     async function checkPermissions() {
       try {
-        const res = await fetch('/api/user');
+        const res = await fetch('/api/user', { credentials: 'include' });
         if (res.ok) {
           const data = await res.json();
           if (data.role) {
@@ -161,18 +186,107 @@ export default function KnowledgeBasePage() {
     checkPermissions();
   }, []);
 
-  // Filter articles based on search and category
-  const filteredArticles = mockArticles.filter((article) => {
-    const matchesSearch =
-      searchQuery.trim() === '' ||
-      article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      article.content.toLowerCase().includes(searchQuery.toLowerCase());
+  // Fetch categories
+  useEffect(() => {
+    async function fetchCategories() {
+      setIsLoadingCategories(true);
+      try {
+        const res = await fetch('/api/kb/public/categories', {
+          credentials: 'include',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setCategories(data.categories);
+            setTotalArticles(data.totalArticles);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      } finally {
+        setIsLoadingCategories(false);
+      }
+    }
+    fetchCategories();
+  }, []);
 
-    const matchesCategory =
-      selectedCategory === 'All' || article.category === selectedCategory;
+  // Fetch popular articles
+  useEffect(() => {
+    async function fetchPopularArticles() {
+      setIsLoadingPopular(true);
+      try {
+        const res = await fetch('/api/kb/public/popular?limit=5', {
+          credentials: 'include',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setPopularArticles(data.articles);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching popular articles:', error);
+      } finally {
+        setIsLoadingPopular(false);
+      }
+    }
+    fetchPopularArticles();
+  }, []);
 
-    return matchesSearch && matchesCategory;
-  });
+  // Fetch articles with search and filter
+  const fetchArticles = useCallback(async () => {
+    setIsLoadingArticles(true);
+    try {
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      if (selectedCategory) params.set('category', selectedCategory);
+      params.set('page', page.toString());
+      params.set('limit', '10');
+
+      const res = await fetch(`/api/kb/public/articles?${params.toString()}`, {
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setArticles(data.articles);
+          setHasMore(data.pagination.hasMore);
+          setTotal(data.pagination.total);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching articles:', error);
+    } finally {
+      setIsLoadingArticles(false);
+    }
+  }, [debouncedSearch, selectedCategory, page]);
+
+  // Fetch articles when search/filter/page changes
+  useEffect(() => {
+    fetchArticles();
+  }, [fetchArticles]);
+
+  // Reset to page 1 when search or category changes
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, selectedCategory]);
+
+  // Get selected category name for display
+  const selectedCategoryName = selectedCategory
+    ? categories.find((c) => c.id === selectedCategory)?.name
+    : null;
+
+  // Handle category selection
+  const handleCategorySelect = (categoryId: string | null) => {
+    setSelectedCategory(categoryId);
+    setShowFilters(false);
+  };
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchQuery('');
+    setSelectedCategory(null);
+  };
 
   return (
     <div className="flex h-screen bg-gradient-to-b from-slate-50 to-blue-50">
@@ -210,6 +324,9 @@ export default function KnowledgeBasePage() {
                 className="w-full pl-12 pr-4 py-3 bg-slate-800 border-2 border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
                 autoFocus
               />
+              {isLoadingArticles && debouncedSearch && (
+                <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 animate-spin" />
+              )}
             </div>
 
             {/* Mobile filter toggle */}
@@ -227,14 +344,14 @@ export default function KnowledgeBasePage() {
         <div className="flex-1 overflow-y-auto p-8">
           <div className="max-w-4xl mx-auto">
             {/* Active filters */}
-            {selectedCategory !== 'All' && (
+            {selectedCategoryName && (
               <div className="mb-6 flex items-center gap-2">
                 <span className="text-sm text-slate-600">Filtered by:</span>
                 <button
-                  onClick={() => setSelectedCategory('All')}
+                  onClick={() => setSelectedCategory(null)}
                   className="inline-flex items-center gap-2 px-3 py-1.5 bg-orange-100 border border-orange-300 rounded-lg text-orange-700 text-sm font-medium hover:bg-orange-200 transition-colors"
                 >
-                  {selectedCategory}
+                  {selectedCategoryName}
                   <X className="w-3 h-3" />
                 </button>
               </div>
@@ -243,40 +360,77 @@ export default function KnowledgeBasePage() {
             {/* Results count */}
             <div className="mb-4">
               <p className="text-sm text-slate-600">
-                {filteredArticles.length === 0
-                  ? 'No articles found'
-                  : filteredArticles.length === 1
-                    ? '1 article found'
-                    : `${filteredArticles.length} articles found`}
+                {isLoadingArticles
+                  ? 'Loading articles...'
+                  : total === 0
+                    ? 'No articles found'
+                    : total === 1
+                      ? '1 article found'
+                      : `${total} articles found`}
               </p>
             </div>
 
-            {/* Articles */}
-            {filteredArticles.length > 0 ? (
-              <div className="space-y-4">
-                {filteredArticles.map((article) => (
-                  <ArticleCard key={article.id} article={article} />
+            {/* Loading state */}
+            {isLoadingArticles ? (
+              <div className="space-y-8">
+                {[...Array(3)].map((_, i) => (
+                  <ArticleCardSkeleton key={i} />
                 ))}
               </div>
+            ) : articles.length > 0 ? (
+              <>
+                {/* Articles */}
+                <div>
+                  {articles.map((article) => (
+                    <ArticleCard key={article.id} article={article} />
+                  ))}
+                </div>
+
+                {/* Pagination */}
+                {(hasMore || page > 1) && (
+                  <div className="mt-8 flex justify-center gap-4">
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page === 1}
+                      className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg font-medium hover:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-4 py-2 text-slate-600">
+                      Page {page}
+                    </span>
+                    <button
+                      onClick={() => setPage((p) => p + 1)}
+                      disabled={!hasMore}
+                      className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg font-medium hover:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
               // Empty state
               <div className="text-center py-16">
                 <BookOpen className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                 <h3 className="text-xl font-bold text-slate-700 mb-2">
-                  No articles found
+                  {debouncedSearch || selectedCategory
+                    ? 'No articles found'
+                    : 'No articles yet'}
                 </h3>
                 <p className="text-slate-500 mb-6">
-                  Try adjusting your search or browse all articles
+                  {debouncedSearch || selectedCategory
+                    ? 'Try adjusting your search or browse all articles'
+                    : 'Knowledge base articles will appear here once published'}
                 </p>
-                <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setSelectedCategory('All');
-                  }}
-                  className="px-6 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg shadow-orange-500/30 hover:shadow-xl hover:shadow-orange-500/40 transform hover:scale-105"
-                >
-                  Clear filters
-                </button>
+                {(debouncedSearch || selectedCategory) && (
+                  <button
+                    onClick={clearFilters}
+                    className="px-6 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg shadow-orange-500/30 hover:shadow-xl hover:shadow-orange-500/40 transform hover:scale-105"
+                  >
+                    Clear filters
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -301,74 +455,97 @@ export default function KnowledgeBasePage() {
           </button>
         </div>
 
-        <nav className="p-4 space-y-1">
-          {categories.map((category) => {
-            const isActive = selectedCategory === category;
-            const count =
-              category === 'All'
-                ? mockArticles.length
-                : mockArticles.filter((a) => a.category === category).length;
+        {isLoadingCategories ? (
+          <CategorySidebarSkeleton />
+        ) : (
+          <nav className="p-4 space-y-1">
+            {/* All category */}
+            <button
+              onClick={() => handleCategorySelect(null)}
+              className={`
+                w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all text-left
+                ${
+                  selectedCategory === null
+                    ? 'bg-orange-500/10 text-orange-500 border-2 border-orange-500 shadow-lg shadow-orange-500/20'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white border-2 border-transparent'
+                }
+              `}
+            >
+              <span className="font-medium">All</span>
+              <span
+                className={`
+                  text-xs px-2 py-0.5 rounded-full
+                  ${
+                    selectedCategory === null
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-slate-700 text-slate-400'
+                  }
+                `}
+              >
+                {totalArticles}
+              </span>
+            </button>
 
-            return (
+            {/* Category list */}
+            {categories.map((category) => (
               <button
-                key={category}
-                onClick={() => {
-                  setSelectedCategory(category);
-                  setShowFilters(false);
-                }}
+                key={category.id}
+                onClick={() => handleCategorySelect(category.id)}
                 className={`
                   w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all text-left
                   ${
-                    isActive
+                    selectedCategory === category.id
                       ? 'bg-orange-500/10 text-orange-500 border-2 border-orange-500 shadow-lg shadow-orange-500/20'
                       : 'text-slate-300 hover:bg-slate-800 hover:text-white border-2 border-transparent'
                   }
                 `}
               >
-                <span className="font-medium">{category}</span>
+                <span className="font-medium">{category.name}</span>
                 <span
                   className={`
                     text-xs px-2 py-0.5 rounded-full
                     ${
-                      isActive
+                      selectedCategory === category.id
                         ? 'bg-orange-500 text-white'
                         : 'bg-slate-700 text-slate-400'
                     }
                   `}
                 >
-                  {count}
+                  {category.articleCount}
                 </span>
               </button>
-            );
-          })}
-        </nav>
+            ))}
+          </nav>
+        )}
 
         {/* Popular articles */}
         <div className="px-6 py-5 border-t border-slate-700">
           <h4 className="text-sm font-bold text-white mb-3">
             Popular Articles
           </h4>
-          <div className="space-y-3">
-            {mockArticles
-              .sort((a, b) => b.views - a.views)
-              .slice(0, 3)
-              .map((article) => (
-                <div
-                  key={article.id}
-                  className="p-3 bg-slate-800 rounded-lg hover:bg-slate-700 cursor-pointer transition-colors group"
-                >
-                  <div className="flex items-start gap-2 mb-2">
-                    <BookOpen className="w-3 h-3 text-orange-500 mt-0.5 flex-shrink-0" />
-                    <h5 className="text-xs font-medium text-white line-clamp-2 group-hover:text-orange-400 transition-colors">
-                      {article.title}
-                    </h5>
+          {isLoadingPopular ? (
+            <PopularArticlesSkeleton />
+          ) : popularArticles.length > 0 ? (
+            <div className="space-y-3">
+              {popularArticles.map((article) => (
+                <Link key={article.id} href={`/kb/article/${article.slug}`}>
+                  <div className="p-3 bg-slate-800 rounded-lg hover:bg-slate-700 cursor-pointer transition-colors group">
+                    <div className="flex items-start gap-2 mb-2">
+                      <BookOpen className="w-3 h-3 text-orange-500 mt-0.5 flex-shrink-0" />
+                      <h5 className="text-xs font-medium text-white line-clamp-2 group-hover:text-orange-400 transition-colors">
+                        {article.title}
+                      </h5>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      {article.viewCount.toLocaleString()} views
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-400">
-                    {article.views} views
-                  </p>
-                </div>
+                </Link>
               ))}
-          </div>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No popular articles yet</p>
+          )}
         </div>
       </aside>
 

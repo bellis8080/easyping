@@ -279,12 +279,17 @@ export async function POST(request: NextRequest) {
       }
 
       // Update organization with AI config
-      const aiConfig = {
+      const aiConfig: Record<string, unknown> = {
         provider: data.aiConfig.provider,
         encrypted_api_key: encryptedKey,
         model: data.aiConfig.model || getDefaultModel(data.aiConfig.provider),
         enabled: true,
       };
+
+      // Add embedding model for OpenAI provider
+      if (data.aiConfig.provider === 'openai' && data.aiConfig.embeddingModel) {
+        aiConfig.embedding_model = data.aiConfig.embeddingModel;
+      }
 
       const { error: updateError } = await supabase
         .from('organizations')

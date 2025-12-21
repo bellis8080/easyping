@@ -51,6 +51,25 @@ const MODEL_OPTIONS = {
   ],
 };
 
+// OpenAI embedding model options
+const EMBEDDING_MODEL_OPTIONS = [
+  {
+    value: 'text-embedding-3-small',
+    label: 'text-embedding-3-small (recommended)',
+    description: '1536 dimensions, best price/performance',
+  },
+  {
+    value: 'text-embedding-3-large',
+    label: 'text-embedding-3-large',
+    description: '3072 dimensions, higher quality',
+  },
+  {
+    value: 'text-embedding-ada-002',
+    label: 'text-embedding-ada-002 (legacy)',
+    description: '1536 dimensions, older model',
+  },
+];
+
 export function AIConfigStep({ form }: AIConfigStepProps) {
   const {
     register,
@@ -61,6 +80,7 @@ export function AIConfigStep({ form }: AIConfigStepProps) {
 
   const selectedProvider = watch('provider');
   const selectedModel = watch('model');
+  const selectedEmbeddingModel = watch('embeddingModel');
   const apiKey = watch('apiKey');
   const showApiKeyInput = selectedProvider && selectedProvider !== 'skip';
 
@@ -75,12 +95,23 @@ export function AIConfigStep({ form }: AIConfigStepProps) {
     const provider = e.target.value as keyof typeof DEFAULT_MODELS;
     setValue('provider', provider);
     setValue('model', DEFAULT_MODELS[provider]);
+    // Set default embedding model for OpenAI
+    if (provider === 'openai') {
+      setValue('embeddingModel', 'text-embedding-3-small');
+    }
     setTestResult(null); // Clear previous test results
   };
 
   // Handle model selection change
   const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setValue('model', e.target.value);
+  };
+
+  // Handle embedding model selection change
+  const handleEmbeddingModelChange = (
+    e: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    setValue('embeddingModel', e.target.value);
   };
 
   // Test API connection (optional during setup)
@@ -227,6 +258,34 @@ export function AIConfigStep({ form }: AIConfigStepProps) {
               </>
             )}
           </div>
+
+          {/* Embedding Model Selection (OpenAI only) */}
+          {selectedProvider === 'openai' && (
+            <div>
+              <Label htmlFor="embeddingModel" className="text-white">
+                Embedding Model
+              </Label>
+              <Select
+                id="embeddingModel"
+                value={selectedEmbeddingModel || 'text-embedding-3-small'}
+                onChange={handleEmbeddingModelChange}
+                className="mt-1"
+              >
+                {EMBEDDING_MODEL_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-gray-300 mt-1">
+                {EMBEDDING_MODEL_OPTIONS.find(
+                  (opt) =>
+                    opt.value ===
+                    (selectedEmbeddingModel || 'text-embedding-3-small')
+                )?.description || 'Used for semantic search in Knowledge Base'}
+              </p>
+            </div>
+          )}
 
           {/* Anthropic embeddings warning */}
           {selectedProvider === 'anthropic' && (

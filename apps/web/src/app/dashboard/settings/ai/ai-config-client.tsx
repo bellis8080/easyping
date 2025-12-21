@@ -46,6 +46,25 @@ const MODEL_OPTIONS = {
   ],
 };
 
+// OpenAI embedding model options
+const EMBEDDING_MODEL_OPTIONS = [
+  {
+    value: 'text-embedding-3-small',
+    label: 'text-embedding-3-small (recommended)',
+    description: '1536 dimensions, best price/performance',
+  },
+  {
+    value: 'text-embedding-3-large',
+    label: 'text-embedding-3-large',
+    description: '3072 dimensions, higher quality',
+  },
+  {
+    value: 'text-embedding-ada-002',
+    label: 'text-embedding-ada-002 (legacy)',
+    description: '1536 dimensions, older model',
+  },
+];
+
 interface ToastMessage {
   type: 'success' | 'error';
   message: string;
@@ -67,6 +86,9 @@ export function AIConfigClient() {
   const [provider, setProvider] = useState<string>('');
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('');
+  const [embeddingModel, setEmbeddingModel] = useState(
+    'text-embedding-3-small'
+  );
 
   // Load current configuration
   useEffect(() => {
@@ -84,6 +106,7 @@ export function AIConfigClient() {
         setProvider(data.provider || '');
         setApiKey(data.apiKey || '');
         setModel(data.model || '');
+        setEmbeddingModel(data.embeddingModel || 'text-embedding-3-small');
       } catch (error) {
         setToast({
           type: 'error',
@@ -207,6 +230,7 @@ export function AIConfigClient() {
               : provider === 'anthropic'
                 ? 'claude-3-haiku-20240307'
                 : ''),
+          embeddingModel: provider === 'openai' ? embeddingModel : undefined,
           enabled,
         }),
       });
@@ -382,6 +406,31 @@ export function AIConfigClient() {
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Enter your Azure OpenAI deployment name
+                </p>
+              </div>
+            )}
+
+            {/* Embedding Model Selection (OpenAI only) */}
+            {provider === 'openai' && (
+              <div>
+                <Label htmlFor="embeddingModel">Embedding Model</Label>
+                <Select
+                  id="embeddingModel"
+                  value={embeddingModel}
+                  onChange={(e) => setEmbeddingModel(e.target.value)}
+                  className="mt-1"
+                >
+                  {EMBEDDING_MODEL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  {EMBEDDING_MODEL_OPTIONS.find(
+                    (opt) => opt.value === embeddingModel
+                  )?.description ||
+                    'Used for semantic search in Knowledge Base'}
                 </p>
               </div>
             )}

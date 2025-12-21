@@ -500,6 +500,25 @@ function NotificationsTab() {
   );
 }
 
+// OpenAI embedding model options
+const EMBEDDING_MODEL_OPTIONS = [
+  {
+    value: 'text-embedding-3-small',
+    label: 'text-embedding-3-small (recommended)',
+    description: '1536 dimensions, best price/performance',
+  },
+  {
+    value: 'text-embedding-3-large',
+    label: 'text-embedding-3-large',
+    description: '3072 dimensions, higher quality',
+  },
+  {
+    value: 'text-embedding-ada-002',
+    label: 'text-embedding-ada-002 (legacy)',
+    description: '1536 dimensions, older model',
+  },
+];
+
 function AIConfigTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -507,6 +526,9 @@ function AIConfigTab() {
   const [provider, setProvider] = useState('openai');
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('gpt-4o-mini');
+  const [embeddingModel, setEmbeddingModel] = useState(
+    'text-embedding-3-small'
+  );
 
   // Load current configuration
   useEffect(() => {
@@ -518,6 +540,7 @@ function AIConfigTab() {
           if (data.provider) setProvider(data.provider);
           if (data.apiKey) setApiKey(data.apiKey);
           if (data.model) setModel(data.model);
+          if (data.embeddingModel) setEmbeddingModel(data.embeddingModel);
         }
       } catch (error) {
         console.error('Failed to load AI config:', error);
@@ -566,7 +589,13 @@ function AIConfigTab() {
       const response = await fetch('/api/ai-config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, apiKey, model, enabled: true }),
+        body: JSON.stringify({
+          provider,
+          apiKey,
+          model,
+          embeddingModel: provider === 'openai' ? embeddingModel : undefined,
+          enabled: true,
+        }),
       });
 
       if (response.ok) {
@@ -667,6 +696,31 @@ function AIConfigTab() {
               )}
             </select>
           </div>
+
+          {/* Embedding Model (OpenAI only) */}
+          {provider === 'openai' && (
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Embedding Model
+              </label>
+              <select
+                value={embeddingModel}
+                onChange={(e) => setEmbeddingModel(e.target.value)}
+                className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              >
+                {EMBEDDING_MODEL_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500 mt-2">
+                {EMBEDDING_MODEL_OPTIONS.find(
+                  (opt) => opt.value === embeddingModel
+                )?.description || 'Used for semantic search in Knowledge Base'}
+              </p>
+            </div>
+          )}
 
           <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <Sparkles className="w-5 h-5 text-blue-600 flex-shrink-0" />

@@ -19,6 +19,7 @@ import { createAIProviderError } from './base';
 export class OpenAIProvider implements AIProvider {
   private client: OpenAI;
   private model: string;
+  private embeddingModel: string;
   private maxTokens: number;
   private temperature: number;
 
@@ -40,6 +41,8 @@ export class OpenAIProvider implements AIProvider {
 
     // Default to GPT-4o mini (cost-optimized)
     this.model = config.model || 'gpt-4o-mini';
+    // Default to text-embedding-3-small for best price/performance
+    this.embeddingModel = config.embeddingModel || 'text-embedding-3-small';
     this.maxTokens = config.maxTokens || 1000;
     this.temperature =
       config.temperature !== undefined ? config.temperature : 0.7;
@@ -218,8 +221,9 @@ export class OpenAIProvider implements AIProvider {
 
   async generateEmbedding(text: string): Promise<number[]> {
     try {
+      // Use configured embedding model (default: text-embedding-3-small)
       const response = await this.client.embeddings.create({
-        model: 'text-embedding-ada-002',
+        model: this.embeddingModel,
         input: text,
       });
 

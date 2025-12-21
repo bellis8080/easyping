@@ -48,6 +48,7 @@ export const aiConfigSchema = z
     provider: z.enum(['openai', 'anthropic', 'azure', 'skip']),
     apiKey: z.string().optional(),
     model: z.string().optional(),
+    embeddingModel: z.string().optional(), // OpenAI embedding model for semantic search
   })
   .refine(
     (data) => {

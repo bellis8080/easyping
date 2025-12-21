@@ -67,6 +67,7 @@ export function SetupWizard() {
       provider: 'skip',
       apiKey: '',
       model: '',
+      embeddingModel: 'text-embedding-3-small',
     },
   });
 

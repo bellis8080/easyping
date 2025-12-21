@@ -9,6 +9,7 @@ const aiConfigSchema = z.object({
   provider: z.enum(['openai', 'anthropic', 'azure']),
   apiKey: z.string().min(1, 'API key is required'),
   model: z.string().min(1, 'Model is required'),
+  embeddingModel: z.string().optional(), // OpenAI embedding model for semantic search
   enabled: z.boolean().default(true),
   // Azure-specific fields (optional)
   endpoint: z.string().optional(),
@@ -92,6 +93,7 @@ export async function GET(): Promise<NextResponse> {
       provider: aiConfig.provider || null,
       apiKey: decryptedKey,
       model: aiConfig.model || null,
+      embeddingModel: aiConfig.embedding_model || 'text-embedding-3-small',
       enabled: aiConfig.enabled ?? false,
       endpoint: aiConfig.endpoint || null,
       deployment: aiConfig.deployment || null,
@@ -177,6 +179,11 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       model: data.model,
       enabled: data.enabled,
     };
+
+    // Add embedding model for OpenAI
+    if (data.provider === 'openai' && data.embeddingModel) {
+      aiConfig.embedding_model = data.embeddingModel;
+    }
 
     // Add Azure-specific fields if provider is Azure
     if (data.provider === 'azure') {

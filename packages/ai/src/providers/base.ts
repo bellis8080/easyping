@@ -51,6 +51,7 @@ export interface AIProviderError extends Error {
 export interface AIProviderConfig {
   apiKey: string;
   model: string;
+  embeddingModel?: string; // OpenAI embedding model for semantic search
   maxTokens?: number;
   temperature?: number;
   timeout?: number;

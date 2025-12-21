@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { canViewPrivateMessages } from '@easyping/types';
+import { triggerEmbeddingGeneration } from '@/lib/services/embedding-service';
 
 interface RouteParams {
   params: Promise<{ articleId: string }>;
@@ -264,9 +265,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (deletedAt !== undefined) updateData.deleted_at = deletedAt;
 
     // Handle status change to published
+    const isNewlyPublished =
+      status === 'published' && existingArticle.status !== 'published';
     if (status !== undefined) {
       updateData.status = status;
-      if (status === 'published' && existingArticle.status !== 'published') {
+      if (isNewlyPublished) {
         updateData.published_at = new Date().toISOString();
         updateData.published_by = profile.id;
       }
@@ -286,6 +289,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         { error: 'Failed to update article' },
         { status: 500 }
       );
+    }
+
+    // Trigger embedding generation async when article is newly published
+    // This is fire-and-forget - publish succeeds even if embedding fails
+    if (isNewlyPublished) {
+      triggerEmbeddingGeneration(articleId, profile.tenant_id).catch((err) => {
+        console.warn(
+          `[kb-articles] Embedding generation failed for article ${articleId}:`,
+          err
+        );
+      });
     }
 
     return NextResponse.json({

@@ -55,6 +55,11 @@ export type {
   UpdateKBGlossaryTerm,
   InsertKBArticleView,
   InsertKBArticleFeedback,
+  // Semantic Search (Story 4.4)
+  SearchType,
+  SemanticSearchResult,
+  SearchOptions,
+  KBSearchResponse,
 } from './models';
 
 // Re-export enums and helpers

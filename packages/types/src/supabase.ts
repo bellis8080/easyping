@@ -236,6 +236,7 @@ export type Database = {
           created_by: string;
           deleted_at: string | null;
           embedding: string | null;
+          embedding_generated_at: string | null;
           enhances_article_id: string | null;
           helpful_count: number;
           id: string;
@@ -259,6 +260,7 @@ export type Database = {
           created_by: string;
           deleted_at?: string | null;
           embedding?: string | null;
+          embedding_generated_at?: string | null;
           enhances_article_id?: string | null;
           helpful_count?: number;
           id?: string;
@@ -282,6 +284,7 @@ export type Database = {
           created_by?: string;
           deleted_at?: string | null;
           embedding?: string | null;
+          embedding_generated_at?: string | null;
           enhances_article_id?: string | null;
           helpful_count?: number;
           id?: string;

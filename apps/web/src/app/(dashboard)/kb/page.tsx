@@ -113,9 +113,10 @@ function ArticleCard({ article }: { article: KBArticle }) {
             <h3 className="text-lg font-bold text-white mb-2 group-hover:text-orange-400 transition-colors">
               {article.title}
             </h3>
-            <p className="text-sm text-slate-300 line-clamp-3 mb-3">
-              {article.excerpt}
-            </p>
+            <p
+              className="text-sm text-slate-300 line-clamp-3 mb-3 [&>mark]:bg-orange-500/30 [&>mark]:text-orange-200 [&>mark]:px-0.5 [&>mark]:rounded"
+              dangerouslySetInnerHTML={{ __html: article.excerpt }}
+            />
           </div>
         </div>
 
@@ -420,17 +421,25 @@ export default function KnowledgeBasePage() {
                 </h3>
                 <p className="text-slate-500 mb-6">
                   {debouncedSearch || selectedCategory
-                    ? 'Try adjusting your search or browse all articles'
-                    : 'Knowledge base articles will appear here once published'}
+                    ? 'Try different keywords or create a ping.'
+                    : 'Knowledge base articles will appear here once published.'}
                 </p>
-                {(debouncedSearch || selectedCategory) && (
-                  <button
-                    onClick={clearFilters}
+                <div className="flex items-center justify-center gap-4">
+                  {(debouncedSearch || selectedCategory) && (
+                    <button
+                      onClick={clearFilters}
+                      className="px-6 py-2.5 bg-slate-200 text-slate-700 rounded-lg font-semibold hover:bg-slate-300 transition-all"
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                  <Link
+                    href="/pings/new"
                     className="px-6 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg shadow-orange-500/30 hover:shadow-xl hover:shadow-orange-500/40 transform hover:scale-105"
                   >
-                    Clear filters
-                  </button>
-                )}
+                    Create a Ping
+                  </Link>
+                </div>
               </div>
             )}
           </div>

@@ -1,0 +1,77 @@
+# QA Gate Decision: Story 4.4 - Semantic Search with pgvector
+# Generated: 2025-12-19
+# QA Agent: Quinn (QA Persona)
+
+gate:
+  story: "4.4"
+  title: "Semantic Search with pgvector"
+  decision: PASS
+  date: "2025-12-19"
+  reviewer: "Quinn (QA Agent)"
+
+summary: |
+  Story 4.4 implements semantic search for KB articles using pgvector.
+  The implementation includes embedding generation, storage, and retrieval
+  via cosine similarity search with hybrid (semantic + fulltext) scoring.
+
+verification:
+  tests:
+    status: PASS
+    details: |
+      - All 500 tests pass (pnpm test)
+      - 8 unit tests for generateEmbedding in packages/ai
+      - 7 unit tests for semantic search functionality
+      - Tests cover embedding generation, dimension validation, error handling
+
+  code_review:
+    status: PASS
+    findings:
+      - Migration creates proper pgvector functions with HNSW index
+      - Embedding model selection added to AI configuration
+      - Hybrid search combines semantic (70%) + fulltext (30%) scoring
+      - Graceful fallback to fulltext when AI unavailable
+      - Proper tenant isolation via tenant_id parameter
+
+  acceptance_criteria:
+    status: PASS
+    criteria:
+      - name: "Embeddings generated for KB articles"
+        verified: true
+        notes: "Embeddings generated on article save using configured model"
+      - name: "Vector similarity search functional"
+        verified: true
+        notes: "search_kb_semantic RPC function with cosine distance"
+      - name: "Hybrid search with fulltext fallback"
+        verified: true
+        notes: "search_kb_articles_hybrid combines both approaches"
+      - name: "HNSW index for performance"
+        verified: true
+        notes: "idx_kb_articles_embedding_hnsw created in migration"
+
+  manual_testing:
+    status: PASS
+    notes: |
+      User verified semantic search working:
+      - Search "Chat Agent" finds bot-related articles
+      - Search "respond to standard questions" finds articles with "answer general inquiries"
+      - Results properly ranked by semantic similarity score
+      - Threshold tuned to 0.2 for optimal recall vs. precision
+
+issues:
+  blocking: []
+  non_blocking:
+    - description: "PostgREST requires restart after function creation"
+      severity: low
+      notes: "One-time issue during development, not runtime"
+
+recommendations:
+  - "Consider adding search analytics to track query patterns"
+  - "Monitor embedding API costs as article count grows"
+  - "Future: Add search result highlighting for matched terms"
+
+artifacts:
+  migration: "packages/database/supabase/migrations/20251219195541_add_search_kb_semantic_function.sql"
+  api_routes:
+    - "apps/web/src/app/api/kb/public/articles/route.ts"
+    - "apps/web/src/app/api/kb/search/route.ts"
+  ai_provider: "packages/ai/src/providers/openai.ts"

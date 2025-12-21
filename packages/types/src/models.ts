@@ -13,6 +13,7 @@ export interface AIConfig {
   provider?: 'openai' | 'anthropic' | 'azure';
   encrypted_api_key?: string;
   model?: string;
+  embedding_model?: string; // OpenAI embedding model for semantic search
   enabled?: boolean;
   // Azure-specific fields
   endpoint?: string;
@@ -326,3 +327,44 @@ export type InsertKBArticleFeedback = Omit<
   KBArticleFeedback,
   'id' | 'created_at'
 >;
+
+// ============================================================================
+// Semantic Search (Story 4.4)
+// ============================================================================
+
+export type SearchType = 'semantic' | 'fulltext' | 'none';
+
+export interface SemanticSearchResult {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  viewCount: number;
+  helpfulCount: number;
+  notHelpfulCount: number;
+  similarityScore: number;
+  searchType: 'semantic' | 'fulltext';
+}
+
+export interface SearchOptions {
+  query: string;
+  categoryId?: string | null;
+  limit?: number;
+  page?: number;
+  includeUnpublished?: boolean; // For admin searches
+}
+
+export interface KBSearchResponse {
+  articles: SemanticSearchResult[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    hasMore: boolean;
+  };
+  searchType: SearchType;
+  success: boolean;
+  error?: string;
+}

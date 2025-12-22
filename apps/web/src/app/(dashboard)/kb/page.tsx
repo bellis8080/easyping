@@ -10,6 +10,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Search, BookOpen, Filter, X, Settings, Loader2 } from 'lucide-react';
 import { UserRole, canViewPrivateMessages } from '@easyping/types';
 import { useDebounce } from '@/hooks/use-debounce';
@@ -144,11 +145,40 @@ function ArticleCard({ article }: { article: KBArticle }) {
 }
 
 export default function KnowledgeBasePage() {
+  // URL search params
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const initialQuery = searchParams.get('q') || '';
+
   // Search and filter state
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const debouncedSearch = useDebounce(searchQuery, 300);
+
+  // Sync state when URL param changes externally (browser back/forward)
+  useEffect(() => {
+    const urlQuery = searchParams.get('q') || '';
+    if (urlQuery !== searchQuery && urlQuery !== debouncedSearch) {
+      setSearchQuery(urlQuery);
+    }
+    // Only run when searchParams changes, not on searchQuery change
+  }, [searchParams, debouncedSearch]);
+
+  // Update URL when search changes (for shareability)
+  useEffect(() => {
+    const currentQ = searchParams.get('q') || '';
+    if (debouncedSearch !== currentQ) {
+      const params = new URLSearchParams(searchParams.toString());
+      if (debouncedSearch) {
+        params.set('q', debouncedSearch);
+      } else {
+        params.delete('q');
+      }
+      // Use replace to avoid cluttering browser history
+      router.replace(`/kb?${params.toString()}`, { scroll: false });
+    }
+  }, [debouncedSearch, router, searchParams]);
 
   // Data state
   const [articles, setArticles] = useState<KBArticle[]>([]);

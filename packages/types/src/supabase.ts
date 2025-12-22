@@ -234,6 +234,7 @@ export type Database = {
           content: string;
           created_at: string;
           created_by: string;
+          deflection_count: number;
           deleted_at: string | null;
           embedding: string | null;
           embedding_generated_at: string | null;
@@ -258,6 +259,7 @@ export type Database = {
           content: string;
           created_at?: string;
           created_by: string;
+          deflection_count?: number;
           deleted_at?: string | null;
           embedding?: string | null;
           embedding_generated_at?: string | null;
@@ -282,6 +284,7 @@ export type Database = {
           content?: string;
           created_at?: string;
           created_by?: string;
+          deflection_count?: number;
           deleted_at?: string | null;
           embedding?: string | null;
           embedding_generated_at?: string | null;
@@ -341,6 +344,55 @@ export type Database = {
             columns: ['tenant_id'];
             isOneToOne: false;
             referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      kb_deflections: {
+        Row: {
+          article_id: string;
+          created_at: string;
+          id: string;
+          query_text: string;
+          tenant_id: string;
+          user_id: string;
+        };
+        Insert: {
+          article_id: string;
+          created_at?: string;
+          id?: string;
+          query_text: string;
+          tenant_id: string;
+          user_id: string;
+        };
+        Update: {
+          article_id?: string;
+          created_at?: string;
+          id?: string;
+          query_text?: string;
+          tenant_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'kb_deflections_article_fk';
+            columns: ['article_id'];
+            isOneToOne: false;
+            referencedRelation: 'kb_articles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'kb_deflections_tenant_fk';
+            columns: ['tenant_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'kb_deflections_user_fk';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
             referencedColumns: ['id'];
           },
         ];
@@ -788,6 +840,48 @@ export type Database = {
           rank: number;
           slug: string;
           status: string;
+          title: string;
+          view_count: number;
+        }[];
+      };
+      search_kb_articles_hybrid: {
+        Args: {
+          p_limit?: number;
+          p_tenant_id: string;
+          query_embedding: string;
+          search_text: string;
+        };
+        Returns: {
+          category_id: string;
+          category_name: string;
+          combined_score: number;
+          content_excerpt: string;
+          fulltext_score: number;
+          helpful_count: number;
+          id: string;
+          not_helpful_count: number;
+          semantic_score: number;
+          slug: string;
+          title: string;
+          view_count: number;
+        }[];
+      };
+      search_kb_semantic: {
+        Args: {
+          p_limit?: number;
+          p_similarity_threshold?: number;
+          p_tenant_id: string;
+          query_embedding: string;
+        };
+        Returns: {
+          category_id: string;
+          category_name: string;
+          content: string;
+          helpful_count: number;
+          id: string;
+          not_helpful_count: number;
+          similarity: number;
+          slug: string;
           title: string;
           view_count: number;
         }[];

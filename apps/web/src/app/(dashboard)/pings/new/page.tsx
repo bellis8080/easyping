@@ -1,48 +1,41 @@
 'use client';
 
-import { useState } from 'react';
-import { ArrowLeft, Paperclip, Send, BookOpen, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import {
+  ArrowLeft,
+  Paperclip,
+  Send,
+  BookOpen,
+  X,
+  Loader2,
+  CheckCircle,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-
-// Mock KB article type
-interface KBArticle {
-  id: string;
-  title: string;
-  snippet: string;
-  category: string;
-}
-
-// Mock KB suggestions
-const mockKBSuggestions: KBArticle[] = [
-  {
-    id: '1',
-    title: 'How to reset your password',
-    snippet:
-      'If you forgot your password, click "Forgot Password" on the login page...',
-    category: 'Account',
-  },
-  {
-    id: '2',
-    title: 'Troubleshooting login issues',
-    snippet:
-      'Common login problems and their solutions: clear cookies, check email...',
-    category: 'Account',
-  },
-  {
-    id: '3',
-    title: 'Dashboard access permissions',
-    snippet:
-      'Learn about different user roles and what dashboards they can access...',
-    category: 'Access',
-  },
-];
+import { marked } from 'marked';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { useKBSuggestions, KBSuggestion } from '@/hooks/use-kb-suggestions';
 
 // KB Article Card component
-function KBArticleCard({ article }: { article: KBArticle }) {
+function KBArticleCard({
+  article,
+  onClick,
+}: {
+  article: KBSuggestion;
+  onClick: () => void;
+}) {
   return (
-    <div className="p-4 border border-slate-600 rounded-lg hover:border-orange-500 hover:shadow-lg hover:shadow-orange-500/20 transition-all cursor-pointer bg-slate-800">
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full text-left p-4 border border-slate-600 rounded-lg hover:border-orange-500 hover:shadow-lg hover:shadow-orange-500/20 transition-all cursor-pointer bg-slate-800"
+    >
       <div className="flex items-start gap-2 mb-2">
         <BookOpen className="w-4 h-4 text-orange-500 mt-0.5 flex-shrink-0" />
         <h4 className="text-sm font-medium text-white line-clamp-2">
@@ -50,13 +43,172 @@ function KBArticleCard({ article }: { article: KBArticle }) {
         </h4>
       </div>
       <p className="text-xs text-slate-400 line-clamp-2 mb-2">
-        {article.snippet}
+        {article.excerpt}
       </p>
       <div className="flex items-center justify-between">
         <span className="text-xs text-orange-500 font-medium">Read more →</span>
-        <span className="text-xs text-slate-500">{article.category}</span>
+        {article.categoryName && (
+          <span className="text-xs text-slate-500">{article.categoryName}</span>
+        )}
       </div>
+    </button>
+  );
+}
+
+// Loading skeleton for suggestions
+function SuggestionsSkeleton() {
+  return (
+    <div className="space-y-4">
+      {[1, 2, 3].map((i) => (
+        <div
+          key={i}
+          className="p-4 border border-slate-600 rounded-lg bg-slate-800 animate-pulse"
+        >
+          <div className="flex items-start gap-2 mb-2">
+            <div className="w-4 h-4 bg-slate-700 rounded" />
+            <div className="flex-1 h-4 bg-slate-700 rounded" />
+          </div>
+          <div className="h-3 bg-slate-700 rounded w-3/4 mb-2" />
+          <div className="h-3 bg-slate-700 rounded w-1/2" />
+        </div>
+      ))}
     </div>
+  );
+}
+
+// Article modal component
+interface ArticleModalProps {
+  articleSlug: string | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onSolved: () => void;
+  query: string;
+}
+
+function ArticleModal({
+  articleSlug,
+  isOpen,
+  onClose,
+  onSolved,
+  query,
+}: ArticleModalProps) {
+  const [article, setArticle] = useState<{
+    id: string;
+    title: string;
+    content: string;
+    categoryName: string | null;
+  } | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isRecordingDeflection, setIsRecordingDeflection] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !articleSlug) {
+      setArticle(null);
+      return;
+    }
+
+    async function fetchArticle() {
+      setIsLoading(true);
+      try {
+        const response = await fetch(`/api/kb/public/articles/${articleSlug}`, {
+          credentials: 'include',
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setArticle(data.article);
+        }
+      } catch (error) {
+        console.error('Failed to fetch article:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchArticle();
+  }, [isOpen, articleSlug]);
+
+  const handleSolvedClick = async () => {
+    if (!article) return;
+
+    setIsRecordingDeflection(true);
+    try {
+      await fetch('/api/kb/deflection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          articleId: article.id,
+          query: query,
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to record deflection:', error);
+    } finally {
+      setIsRecordingDeflection(false);
+      onSolved();
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open: boolean) => !open && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold pr-8">
+            {isLoading
+              ? 'Loading article...'
+              : article?.title || 'Article not found'}
+          </DialogTitle>
+          {article?.categoryName && (
+            <span className="text-sm text-orange-500 font-medium">
+              {article.categoryName}
+            </span>
+          )}
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+          </div>
+        ) : article ? (
+          <>
+            <div
+              className="prose prose-slate max-w-none mt-4"
+              dangerouslySetInnerHTML={{
+                __html: marked(article.content),
+              }}
+            />
+
+            <div className="flex items-center gap-3 mt-6 pt-6 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={handleSolvedClick}
+                disabled={isRecordingDeflection}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold hover:from-green-600 hover:to-green-700 disabled:opacity-50 transition-all shadow-lg"
+              >
+                {isRecordingDeflection ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <CheckCircle className="w-5 h-5" />
+                )}
+                This solved my issue
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-6 py-3 text-slate-700 hover:bg-slate-100 rounded-lg font-medium transition-colors"
+              >
+                Back to ping
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="py-12 text-center text-slate-500">
+            The article could not be loaded. Please try again.
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -66,13 +218,31 @@ export default function CreatePingPage() {
   const [attachments, setAttachments] = useState<File[]>([]);
   const [showKBSuggestions, setShowKBSuggestions] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedArticleSlug, setSelectedArticleSlug] = useState<string | null>(
+    null
+  );
+  const [isArticleModalOpen, setIsArticleModalOpen] = useState(false);
+
+  // Fetch KB suggestions with debouncing
+  const {
+    suggestions,
+    isLoading: isSuggestionsLoading,
+    totalCount,
+  } = useKBSuggestions(message);
+
+  // Auto-show sidebar when suggestions are available
+  useEffect(() => {
+    if (suggestions.length > 0 && message.trim().length >= 10) {
+      setShowKBSuggestions(true);
+    }
+  }, [suggestions, message]);
 
   const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     setMessage(value);
 
-    // Show KB suggestions when user types more than 3 characters
-    if (value.trim().length > 3) {
+    // Show KB suggestions when user types more than 10 characters
+    if (value.trim().length >= 10) {
       setShowKBSuggestions(true);
     } else {
       setShowKBSuggestions(false);
@@ -114,9 +284,10 @@ export default function CreatePingPage() {
       const { ping } = await response.json();
       toast.success(`Ping #${ping.ping_number} created!`);
 
-      // Clear form
+      // Clear form and any saved draft
       setMessage('');
       setAttachments([]);
+      localStorage.removeItem('ping_draft');
 
       // Redirect to ping detail page
       router.push(`/pings/${ping.ping_number}`);
@@ -126,6 +297,22 @@ export default function CreatePingPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleArticleClick = (article: KBSuggestion) => {
+    setSelectedArticleSlug(article.slug);
+    setIsArticleModalOpen(true);
+  };
+
+  const handleArticleSolved = () => {
+    setIsArticleModalOpen(false);
+    setSelectedArticleSlug(null);
+    // Clear draft
+    localStorage.removeItem('ping_draft');
+    // Show success toast
+    toast.success("Great! We're glad the article helped.");
+    // Redirect to KB
+    router.push('/kb');
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -283,6 +470,7 @@ export default function CreatePingPage() {
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-lg font-bold text-white">Related Articles</h3>
               <button
+                type="button"
                 onClick={() => setShowKBSuggestions(false)}
                 className="p-1.5 hover:bg-slate-700 rounded transition-colors"
               >
@@ -295,9 +483,43 @@ export default function CreatePingPage() {
           </div>
 
           <div className="p-6 space-y-4">
-            {mockKBSuggestions.map((article) => (
-              <KBArticleCard key={article.id} article={article} />
-            ))}
+            {isSuggestionsLoading ? (
+              <SuggestionsSkeleton />
+            ) : suggestions.length > 0 ? (
+              <>
+                {suggestions.map((article) => (
+                  <KBArticleCard
+                    key={article.id}
+                    article={article}
+                    onClick={() => handleArticleClick(article)}
+                  />
+                ))}
+
+                {totalCount > 3 && (
+                  <div className="pt-4">
+                    <Link
+                      href={`/kb?q=${encodeURIComponent(message.trim())}`}
+                      className="text-sm text-orange-500 hover:text-orange-400 font-medium inline-flex items-center gap-2 transition-colors"
+                    >
+                      View all {totalCount} results →
+                    </Link>
+                  </div>
+                )}
+              </>
+            ) : message.trim().length >= 10 ? (
+              <div className="text-center py-8">
+                <BookOpen className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+                <p className="text-sm text-slate-400">
+                  No related articles found
+                </p>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-sm text-slate-400">
+                  Keep typing to see suggestions...
+                </p>
+              </div>
+            )}
 
             <div className="pt-6 border-t border-slate-700">
               <Link
@@ -310,6 +532,18 @@ export default function CreatePingPage() {
           </div>
         </div>
       )}
+
+      {/* Article Modal */}
+      <ArticleModal
+        articleSlug={selectedArticleSlug}
+        isOpen={isArticleModalOpen}
+        onClose={() => {
+          setIsArticleModalOpen(false);
+          setSelectedArticleSlug(null);
+        }}
+        onSolved={handleArticleSolved}
+        query={message}
+      />
     </div>
   );
 }

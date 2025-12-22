@@ -1,0 +1,45 @@
+# Quality Gate: 4.8 KB Article Suggestions During Resolution
+schema: 1
+story: "4.8"
+story_title: "KB Article Suggestions During Resolution"
+gate: PASS
+status_reason: "All 8 acceptance criteria met. Bugs found during live testing were fixed including table join, markdown link rendering, URL paths, and link styling."
+reviewer: "Quinn (Test Architect)"
+updated: "2025-12-22T12:00:00Z"
+
+waiver: { active: false }
+
+top_issues: []
+
+# Testing notes
+evidence:
+  tests_reviewed: 8
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+
+# Bugs fixed during development (not blocking)
+resolved_issues:
+  - id: "BUG-001"
+    finding: "Wrong table name in Supabase join (kb_categories instead of categories)"
+    resolution: "Fixed table name in slug API route"
+  - id: "BUG-002"
+    finding: "Markdown links not rendering as clickable in ping messages"
+    resolution: "Extended renderMarkdown function to support link syntax"
+  - id: "BUG-003"
+    finding: "Link contrast issue on blue message bubbles"
+    resolution: "Added isOutgoing parameter for white links on blue backgrounds"
+  - id: "BUG-004"
+    finding: "Wrong URL path (/kb/slug instead of /kb/article/slug)"
+    resolution: "Fixed URL paths in inbox-client and kb-article-modal"
+  - id: "BUG-005"
+    finding: "KB links should open in new browser tab"
+    resolution: "Added target='_blank' for KB article links"
+
+# Build verification
+build_status:
+  typecheck: PASS
+  lint: PASS
+  build: PASS
+  tests: "Pre-existing failure in use-debounce.test.ts (unrelated to story)"

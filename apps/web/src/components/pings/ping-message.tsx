@@ -6,17 +6,44 @@ import { PingAttachment, MessageVisibility } from '@easyping/types';
 import { AttachmentDisplay } from './attachment-display';
 
 /**
- * Renders text with basic markdown support (bold **text**)
+ * Renders text with basic markdown support (bold **text** and links [text](url))
  * Preserves newlines with whitespace-pre-wrap
+ * @param content - The text content to render
+ * @param isOutgoing - Whether this is an outgoing message (affects link styling)
  */
-function renderMarkdown(content: string): React.ReactNode {
-  // Split by bold markers **text**
-  const parts = content.split(/(\*\*[^*]+\*\*)/g);
+function renderMarkdown(
+  content: string,
+  isOutgoing: boolean = false
+): React.ReactNode {
+  // Combined regex for both bold **text** and links [text](url)
+  const parts = content.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g);
 
   return parts.map((part, index) => {
+    // Bold text
     if (part.startsWith('**') && part.endsWith('**')) {
-      // Bold text - remove markers and wrap in <strong>
       return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    // Markdown link [text](url)
+    const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (linkMatch) {
+      const [, text, url] = linkMatch;
+      // Use white/light color for links in outgoing (blue) messages, blue for incoming
+      const linkClass = isOutgoing
+        ? 'text-white hover:text-blue-100 underline font-medium'
+        : 'text-blue-600 hover:text-blue-800 underline';
+      // KB article links and external links open in new tab
+      const isExternal = !url.startsWith('/') || url.startsWith('/kb/');
+      return (
+        <a
+          key={index}
+          href={url}
+          target={isExternal ? '_blank' : '_self'}
+          rel={isExternal ? 'noopener noreferrer' : undefined}
+          className={linkClass}
+        >
+          {text}
+        </a>
+      );
     }
     return part;
   });
@@ -77,7 +104,7 @@ export function PingMessage({
             </div>
           )}
           <p className="text-base leading-relaxed whitespace-pre-wrap">
-            {renderMarkdown(message.content)}
+            {renderMarkdown(message.content, !isPrivateNote)}
           </p>
           {attachments && attachments.length > 0 && (
             <div className="mt-3 space-y-2">

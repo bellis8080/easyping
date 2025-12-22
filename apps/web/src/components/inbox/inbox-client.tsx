@@ -39,6 +39,9 @@ import {
   ResolutionNotesDialog,
   KBAction,
 } from '@/components/pings/resolution-notes-dialog';
+import { useEchoKBSuggestions } from '@/hooks/use-echo-kb-suggestions';
+import { KBArticleModal } from '@/components/kb/kb-article-modal';
+import { BookOpen, ExternalLink } from 'lucide-react';
 
 // Filter configuration for dynamic titles
 const FILTER_CONFIG = {
@@ -294,6 +297,10 @@ export function InboxClient({
   const [isUpdatingTeam, setIsUpdatingTeam] = useState(false);
   const [isSummaryCollapsed, setIsSummaryCollapsed] = useState(false);
   const [isRefreshingSummary, setIsRefreshingSummary] = useState(false);
+  // Story 4.8: KB article modal state
+  const [selectedKBArticleSlug, setSelectedKBArticleSlug] = useState<
+    string | null
+  >(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
   // Story 4.2.1: Ref for send dropdown click-outside detection
@@ -311,6 +318,16 @@ export function InboxClient({
 
   // Update tab title with unread count
   useTabTitle(totalUnread);
+
+  // Story 4.8: KB suggestions for Echo panel
+  const {
+    suggestions: kbSuggestions,
+    isLoading: isLoadingKBSuggestions,
+    message: kbSuggestionsMessage,
+  } = useEchoKBSuggestions(
+    selectedPing?.ping_number?.toString() || null,
+    selectedPing?.ai_summary
+  );
 
   // Scroll to bottom of message thread
   const scrollToBottom = () => {
@@ -2207,14 +2224,73 @@ export function InboxClient({
                 )}
               </div>
 
-              {/* Suggested Articles */}
+              {/* Story 4.8: Related KB Articles */}
               <div className="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
-                <h4 className="text-sm font-semibold text-white mb-3">
+                <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-orange-500" />
                   Related KB Articles
                 </h4>
-                <div className="text-sm text-slate-400 italic">
-                  Will be populated in Epic 3
-                </div>
+
+                {/* Loading State */}
+                {isLoadingKBSuggestions && (
+                  <div className="space-y-2">
+                    {[1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className="animate-pulse bg-slate-600 rounded h-12"
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* Empty State / Message */}
+                {!isLoadingKBSuggestions &&
+                  kbSuggestions.length === 0 &&
+                  kbSuggestionsMessage && (
+                    <p className="text-sm text-slate-400 italic">
+                      {kbSuggestionsMessage}
+                    </p>
+                  )}
+
+                {/* No AI Summary Yet */}
+                {!isLoadingKBSuggestions &&
+                  kbSuggestions.length === 0 &&
+                  !kbSuggestionsMessage &&
+                  !selectedPing?.ai_summary && (
+                    <p className="text-sm text-slate-400 italic">
+                      Waiting for AI summary...
+                    </p>
+                  )}
+
+                {/* KB Suggestions List */}
+                {!isLoadingKBSuggestions && kbSuggestions.length > 0 && (
+                  <div className="space-y-2">
+                    {kbSuggestions.map((article) => (
+                      <button
+                        key={article.id}
+                        onClick={() => setSelectedKBArticleSlug(article.slug)}
+                        className="w-full text-left p-2 rounded bg-slate-600/50 hover:bg-slate-600 transition-colors group"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-orange-400 group-hover:text-orange-300 truncate">
+                              {article.title}
+                            </p>
+                            <p className="text-xs text-slate-400 line-clamp-2 mt-1">
+                              {article.excerpt}
+                            </p>
+                          </div>
+                          <ExternalLink className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-400 flex-shrink-0 mt-0.5" />
+                        </div>
+                        {article.categoryName && (
+                          <span className="inline-block mt-1.5 px-1.5 py-0.5 bg-slate-700 rounded text-xs text-slate-400">
+                            {article.categoryName}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Suggested Actions */}
@@ -2249,6 +2325,20 @@ export function InboxClient({
         pingTitle={selectedPing?.title || 'Untitled'}
         pingNumber={selectedPing?.ping_number || 0}
         isLoading={isUpdatingStatus}
+      />
+
+      {/* Story 4.8: KB Article Preview Modal */}
+      <KBArticleModal
+        slug={selectedKBArticleSlug}
+        isOpen={!!selectedKBArticleSlug}
+        onClose={() => setSelectedKBArticleSlug(null)}
+        onInsertLink={(title, slug) => {
+          // Insert KB link at cursor position or append to message
+          const linkText = `[${title}](/kb/article/${slug})`;
+          setReplyMessage((prev) => (prev ? `${prev}\n${linkText}` : linkText));
+          setSelectedKBArticleSlug(null);
+          toast.success('KB article link inserted');
+        }}
       />
     </>
   );

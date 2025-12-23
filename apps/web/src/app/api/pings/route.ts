@@ -4,6 +4,57 @@ import { generatePingTitle } from '@/lib/utils';
 import { createRoutingService } from '@/lib/services/routing-service';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+// Helper to lookup SLA policy and calculate due times
+async function getSlaForPing(
+  client: SupabaseClient,
+  tenantId: string,
+  priority: string
+): Promise<{
+  sla_policy_id: string | null;
+  sla_first_response_due: string | null;
+  sla_resolution_due: string | null;
+}> {
+  try {
+    const { data: policy } = await client
+      .from('sla_policies')
+      .select('id, first_response_minutes, resolution_minutes')
+      .eq('tenant_id', tenantId)
+      .eq('priority', priority)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (!policy) {
+      return {
+        sla_policy_id: null,
+        sla_first_response_due: null,
+        sla_resolution_due: null,
+      };
+    }
+
+    const now = new Date();
+    const firstResponseDue = new Date(
+      now.getTime() + policy.first_response_minutes * 60 * 1000
+    );
+    const resolutionDue = new Date(
+      now.getTime() + policy.resolution_minutes * 60 * 1000
+    );
+
+    return {
+      sla_policy_id: policy.id,
+      sla_first_response_due: firstResponseDue.toISOString(),
+      sla_resolution_due: resolutionDue.toISOString(),
+    };
+  } catch (error) {
+    console.error('Error looking up SLA policy:', error);
+    return {
+      sla_policy_id: null,
+      sla_first_response_due: null,
+      sla_resolution_due: null,
+    };
+  }
+}
 
 // Request validation schema
 const createPingSchema = z.object({
@@ -82,6 +133,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       // Fallback: No AI configured - create ping with status='new' immediately
       const title = generatePingTitle(message, 50);
       const adminClient = createAdminClient();
+      const defaultPriority = 'normal';
 
       // Get "Needs Review" category
       const { data: needsReviewCategory } = await supabase
@@ -98,6 +150,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
       const routingUpdates = routingService.applyRoutingToUpdate(routingResult);
 
+      // Lookup SLA policy for this priority
+      const slaFields = await getSlaForPing(
+        adminClient,
+        tenantId,
+        defaultPriority
+      );
+
       const { data: ping, error: pingError } = await adminClient
         .from('pings')
         .insert({
@@ -105,9 +164,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           created_by: user.id,
           title,
           status: 'new',
-          priority: 'normal',
+          priority: defaultPriority,
           category_id: needsReviewCategory?.id || null,
           ...routingUpdates,
+          ...slaFields,
         })
         .select('*')
         .single();

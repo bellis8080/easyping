@@ -18,6 +18,7 @@ import {
   GripVertical,
   Route,
   Trash2,
+  Clock,
 } from 'lucide-react';
 import UserManagementTable from './users/UserManagementTable';
 
@@ -29,6 +30,7 @@ type TabType =
   | 'supportProfile'
   | 'categories'
   | 'routing'
+  | 'sla'
   | 'security';
 
 interface TabConfig {
@@ -45,6 +47,7 @@ const tabs: TabConfig[] = [
   { id: 'supportProfile', label: 'Support Profile', icon: Building2 },
   { id: 'categories', label: 'Categories', icon: FolderTree },
   { id: 'routing', label: 'Routing Rules', icon: Route },
+  { id: 'sla', label: 'SLA Policies', icon: Clock },
   { id: 'security', label: 'Security', icon: Shield },
 ];
 
@@ -77,8 +80,8 @@ export default function SettingsPage() {
     if (tab.id === 'ai' || tab.id === 'users' || tab.id === 'supportProfile') {
       return userRole === 'owner';
     }
-    // Show categories and routing to managers and owners
-    if (tab.id === 'categories' || tab.id === 'routing') {
+    // Show categories, routing, and SLA to managers and owners
+    if (tab.id === 'categories' || tab.id === 'routing' || tab.id === 'sla') {
       return userRole === 'owner' || userRole === 'manager';
     }
     return true;
@@ -151,6 +154,8 @@ export default function SettingsPage() {
                 (userRole === 'owner' || userRole === 'manager') && (
                   <RoutingTab />
                 )}
+              {activeTab === 'sla' &&
+                (userRole === 'owner' || userRole === 'manager') && <SLATab />}
               {activeTab === 'security' && <SecurityTab />}
             </div>
           </div>
@@ -2254,6 +2259,485 @@ function RoutingTab() {
             </>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// SLA Policy types for the UI
+interface SLAPolicy {
+  id: string;
+  tenant_id: string;
+  name: string;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  first_response_minutes: number;
+  resolution_minutes: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+const PRIORITY_ORDER = ['urgent', 'high', 'normal', 'low'] as const;
+const PRIORITY_LABELS: Record<string, string> = {
+  urgent: 'Urgent',
+  high: 'High',
+  normal: 'Normal',
+  low: 'Low',
+};
+const PRIORITY_COLORS: Record<string, string> = {
+  urgent: 'bg-red-100 text-red-800 border-red-200',
+  high: 'bg-orange-100 text-orange-800 border-orange-200',
+  normal: 'bg-blue-100 text-blue-800 border-blue-200',
+  low: 'bg-slate-100 text-slate-800 border-slate-200',
+};
+
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 1440) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  }
+  const days = Math.floor(minutes / 1440);
+  const remainingHours = Math.floor((minutes % 1440) / 60);
+  return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
+}
+
+function SLATab() {
+  const [policies, setPolicies] = useState<SLAPolicy[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [editingPolicy, setEditingPolicy] = useState<SLAPolicy | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  // Form state
+  const [formName, setFormName] = useState('');
+  const [formPriority, setFormPriority] = useState<
+    'low' | 'normal' | 'high' | 'urgent'
+  >('normal');
+  const [formFirstResponse, setFormFirstResponse] = useState(480);
+  const [formResolution, setFormResolution] = useState(1440);
+
+  // Compute which priorities are already used by active policies
+  const usedPriorities = new Set(
+    policies.filter((p) => p.is_active).map((p) => p.priority)
+  );
+  const allPrioritiesCovered = usedPriorities.size >= 4;
+
+  // Get the first available priority for new policies
+  const getFirstAvailablePriority = ():
+    | 'low'
+    | 'normal'
+    | 'high'
+    | 'urgent' => {
+    for (const p of PRIORITY_ORDER) {
+      if (!usedPriorities.has(p)) return p;
+    }
+    return 'normal'; // fallback, shouldn't happen
+  };
+
+  // Fetch policies on mount
+  useEffect(() => {
+    fetchPolicies();
+  }, []);
+
+  async function fetchPolicies() {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/sla-policies');
+      if (!response.ok) throw new Error('Failed to fetch SLA policies');
+      const data = await response.json();
+      // Sort by priority order
+      const sorted = [...data].sort(
+        (a, b) =>
+          PRIORITY_ORDER.indexOf(a.priority) -
+          PRIORITY_ORDER.indexOf(b.priority)
+      );
+      setPolicies(sorted);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function openNewForm() {
+    setEditingPolicy(null);
+    setFormName('');
+    setFormPriority(getFirstAvailablePriority());
+    setFormFirstResponse(480);
+    setFormResolution(1440);
+    setShowForm(true);
+  }
+
+  function openEditForm(policy: SLAPolicy) {
+    setEditingPolicy(policy);
+    setFormName(policy.name);
+    setFormPriority(policy.priority);
+    setFormFirstResponse(policy.first_response_minutes);
+    setFormResolution(policy.resolution_minutes);
+    setShowForm(true);
+  }
+
+  async function handleSubmit() {
+    if (!formName.trim()) {
+      setError('Policy name is required');
+      return;
+    }
+    if (formFirstResponse <= 0) {
+      setError('First response time must be positive');
+      return;
+    }
+    if (formResolution <= 0) {
+      setError('Resolution time must be positive');
+      return;
+    }
+    if (formResolution < formFirstResponse) {
+      setError('Resolution time must be >= first response time');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError(null);
+
+      const payload = {
+        name: formName.trim(),
+        priority: formPriority,
+        first_response_minutes: formFirstResponse,
+        resolution_minutes: formResolution,
+      };
+
+      let response;
+      if (editingPolicy) {
+        response = await fetch(`/api/sla-policies/${editingPolicy.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        response = await fetch('/api/sla-policies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to save SLA policy');
+      }
+
+      setShowForm(false);
+      fetchPolicies();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(policyId: string) {
+    try {
+      setSaving(true);
+      setError(null);
+
+      const response = await fetch(`/api/sla-policies/${policyId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete SLA policy');
+      }
+
+      setDeleteConfirm(null);
+      fetchPolicies();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 mb-2">
+            SLA Policies
+          </h2>
+          <p className="text-sm text-slate-600">
+            Define response and resolution time targets for each priority level
+          </p>
+        </div>
+        <div className="relative group">
+          <button
+            onClick={openNewForm}
+            disabled={allPrioritiesCovered}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all ${
+              allPrioritiesCovered
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-lg shadow-orange-500/30'
+            }`}
+          >
+            <Plus className="w-4 h-4" />
+            Add Policy
+          </button>
+          {allPrioritiesCovered && (
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+              All priority levels have active policies
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Policy Form Modal */}
+      {showForm && (
+        <div className="bg-white rounded-lg border-2 border-orange-200 p-6 shadow-lg">
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">
+            {editingPolicy ? 'Edit SLA Policy' : 'New SLA Policy'}
+          </h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Policy Name
+              </label>
+              <input
+                type="text"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                placeholder="e.g., Urgent Priority SLA"
+                className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Priority Level
+              </label>
+              <select
+                value={formPriority}
+                onChange={(e) =>
+                  setFormPriority(
+                    e.target.value as 'low' | 'normal' | 'high' | 'urgent'
+                  )
+                }
+                disabled={!!editingPolicy}
+                className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-slate-100 disabled:cursor-not-allowed"
+              >
+                {PRIORITY_ORDER.map((p) => {
+                  const isUsed = usedPriorities.has(p);
+                  const isCurrentEdit = editingPolicy?.priority === p;
+                  return (
+                    <option
+                      key={p}
+                      value={p}
+                      disabled={isUsed && !isCurrentEdit && !editingPolicy}
+                    >
+                      {PRIORITY_LABELS[p]}
+                      {isUsed && !isCurrentEdit && !editingPolicy
+                        ? ' (already exists)'
+                        : ''}
+                    </option>
+                  );
+                })}
+              </select>
+              {editingPolicy ? (
+                <p className="text-xs text-slate-500 mt-1">
+                  Priority cannot be changed after creation
+                </p>
+              ) : (
+                <p className="text-xs text-slate-500 mt-1">
+                  Only available priorities are shown
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                First Response Time (minutes)
+              </label>
+              <input
+                type="number"
+                value={formFirstResponse}
+                onChange={(e) =>
+                  setFormFirstResponse(parseInt(e.target.value) || 0)
+                }
+                min="1"
+                className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                = {formatDuration(formFirstResponse)}
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Resolution Time (minutes)
+              </label>
+              <input
+                type="number"
+                value={formResolution}
+                onChange={(e) =>
+                  setFormResolution(parseInt(e.target.value) || 0)
+                }
+                min="1"
+                className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                = {formatDuration(formResolution)}
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 mt-6">
+            <button
+              onClick={() => setShowForm(false)}
+              className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg font-medium transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-orange-700 transition-all disabled:opacity-50"
+            >
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              {editingPolicy ? 'Save Changes' : 'Create Policy'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Policies List */}
+      <div className="bg-white rounded-lg border-2 border-slate-200 shadow-lg overflow-hidden">
+        {policies.length === 0 ? (
+          <div className="p-8 text-center text-slate-500">
+            <Clock className="w-12 h-12 mx-auto mb-4 text-slate-300" />
+            <p className="font-medium">No SLA policies defined</p>
+            <p className="text-sm mt-1">
+              Click "Add Policy" to create your first SLA policy
+            </p>
+          </div>
+        ) : (
+          <table className="w-full">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  Policy Name
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  Priority
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  First Response
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  Resolution
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {policies.map((policy) => (
+                <tr key={policy.id} className="hover:bg-slate-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="font-medium text-slate-900">
+                      {policy.name}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${PRIORITY_COLORS[policy.priority]}`}
+                    >
+                      {PRIORITY_LABELS[policy.priority]}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-slate-700">
+                    {formatDuration(policy.first_response_minutes)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-slate-700">
+                    {formatDuration(policy.resolution_minutes)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        policy.is_active
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {policy.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                    {deleteConfirm === policy.id ? (
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="text-sm text-slate-600">Delete?</span>
+                        <button
+                          onClick={() => handleDelete(policy.id)}
+                          disabled={saving}
+                          className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                        >
+                          Yes
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirm(null)}
+                          className="px-2 py-1 text-xs bg-slate-200 text-slate-700 rounded hover:bg-slate-300"
+                        >
+                          No
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEditForm(policy)}
+                          className="p-1.5 text-slate-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                          title="Edit policy"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirm(policy.id)}
+                          className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete policy"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <p className="text-sm text-blue-800">
+          <strong>Note:</strong> Changes to SLA policies apply to new pings
+          only. Existing pings retain their original SLA targets.
+        </p>
       </div>
     </div>
   );

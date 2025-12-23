@@ -60,6 +60,11 @@ export type {
   SemanticSearchResult,
   SearchOptions,
   KBSearchResponse,
+  // SLA Policies (Story 5.1)
+  SlaPolicyPriority,
+  SlaPolicy,
+  InsertSlaPolicy,
+  UpdateSlaPolicy,
 } from './models';
 
 // Re-export enums and helpers

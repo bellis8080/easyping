@@ -260,6 +260,54 @@ export async function POST(request: NextRequest) {
       throw new Error('Failed to create default categories');
     }
 
+    // Create default SLA policies
+    const defaultSlaPolicies = [
+      {
+        tenant_id: org.id,
+        name: 'Urgent SLA',
+        priority: 'urgent',
+        first_response_minutes: 60, // 1 hour
+        resolution_minutes: 240, // 4 hours
+        is_active: true,
+      },
+      {
+        tenant_id: org.id,
+        name: 'High Priority SLA',
+        priority: 'high',
+        first_response_minutes: 240, // 4 hours
+        resolution_minutes: 480, // 8 hours
+        is_active: true,
+      },
+      {
+        tenant_id: org.id,
+        name: 'Normal SLA',
+        priority: 'normal',
+        first_response_minutes: 480, // 8 hours
+        resolution_minutes: 1440, // 24 hours
+        is_active: true,
+      },
+      {
+        tenant_id: org.id,
+        name: 'Low Priority SLA',
+        priority: 'low',
+        first_response_minutes: 1440, // 24 hours
+        resolution_minutes: 4320, // 72 hours
+        is_active: true,
+      },
+    ];
+
+    const { error: slaPoliciesError } = await supabase
+      .from('sla_policies')
+      .insert(defaultSlaPolicies);
+
+    if (slaPoliciesError) {
+      console.error('SLA policies creation error:', slaPoliciesError);
+      // Rollback: delete organization and categories
+      await supabase.from('categories').delete().eq('tenant_id', org.id);
+      await supabase.from('organizations').delete().eq('id', org.id);
+      throw new Error('Failed to create default SLA policies');
+    }
+
     // Encrypt and save AI config if provided
     if (data.aiConfig.provider !== 'skip' && data.aiConfig.apiKey) {
       // Encrypt API key using database function
@@ -273,7 +321,9 @@ export async function POST(request: NextRequest) {
 
       if (encryptError || !encryptedKey) {
         console.error('API key encryption error:', encryptError);
-        // Rollback: delete organization
+        // Rollback: delete organization and related data
+        await supabase.from('sla_policies').delete().eq('tenant_id', org.id);
+        await supabase.from('categories').delete().eq('tenant_id', org.id);
         await supabase.from('organizations').delete().eq('id', org.id);
         throw new Error('Failed to encrypt API key');
       }
@@ -298,7 +348,9 @@ export async function POST(request: NextRequest) {
 
       if (updateError) {
         console.error('AI config update error:', updateError);
-        // Rollback: delete organization
+        // Rollback: delete organization and related data
+        await supabase.from('sla_policies').delete().eq('tenant_id', org.id);
+        await supabase.from('categories').delete().eq('tenant_id', org.id);
         await supabase.from('organizations').delete().eq('id', org.id);
         throw new Error('Failed to save AI configuration');
       }
@@ -318,7 +370,9 @@ export async function POST(request: NextRequest) {
 
     if (authError) {
       console.error('Auth user creation error:', authError);
-      // Rollback: delete organization
+      // Rollback: delete organization and related data
+      await supabase.from('sla_policies').delete().eq('tenant_id', org.id);
+      await supabase.from('categories').delete().eq('tenant_id', org.id);
       await supabase.from('organizations').delete().eq('id', org.id);
       throw new Error(`Failed to create admin user: ${authError.message}`);
     }
@@ -334,8 +388,10 @@ export async function POST(request: NextRequest) {
 
     if (profileError) {
       console.error('User profile creation error:', profileError);
-      // Rollback: delete auth user and organization
+      // Rollback: delete auth user, organization, and related data
       await supabase.auth.admin.deleteUser(authData.user.id);
+      await supabase.from('sla_policies').delete().eq('tenant_id', org.id);
+      await supabase.from('categories').delete().eq('tenant_id', org.id);
       await supabase.from('organizations').delete().eq('id', org.id);
       throw new Error(`Failed to create user profile: ${profileError.message}`);
     }

@@ -595,6 +595,9 @@ export type Database = {
           problem_statement_confirmed: boolean | null;
           resolved_at: string | null;
           sla_due_at: string | null;
+          sla_first_response_due: string | null;
+          sla_policy_id: string | null;
+          sla_resolution_due: string | null;
           status: string;
           status_changed_at: string | null;
           summary_updated_at: string | null;
@@ -622,6 +625,9 @@ export type Database = {
           problem_statement_confirmed?: boolean | null;
           resolved_at?: string | null;
           sla_due_at?: string | null;
+          sla_first_response_due?: string | null;
+          sla_policy_id?: string | null;
+          sla_resolution_due?: string | null;
           status?: string;
           status_changed_at?: string | null;
           summary_updated_at?: string | null;
@@ -649,6 +655,9 @@ export type Database = {
           problem_statement_confirmed?: boolean | null;
           resolved_at?: string | null;
           sla_due_at?: string | null;
+          sla_first_response_due?: string | null;
+          sla_policy_id?: string | null;
+          sla_resolution_due?: string | null;
           status?: string;
           status_changed_at?: string | null;
           summary_updated_at?: string | null;
@@ -677,6 +686,13 @@ export type Database = {
             columns: ['created_by'];
             isOneToOne: false;
             referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'pings_sla_policy_id_fkey';
+            columns: ['sla_policy_id'];
+            isOneToOne: false;
+            referencedRelation: 'sla_policies';
             referencedColumns: ['id'];
           },
           {
@@ -756,6 +772,50 @@ export type Database = {
           },
           {
             foreignKeyName: 'routing_rules_tenant_id_fkey';
+            columns: ['tenant_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      sla_policies: {
+        Row: {
+          created_at: string;
+          first_response_minutes: number;
+          id: string;
+          is_active: boolean;
+          name: string;
+          priority: string;
+          resolution_minutes: number;
+          tenant_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          first_response_minutes: number;
+          id?: string;
+          is_active?: boolean;
+          name: string;
+          priority: string;
+          resolution_minutes: number;
+          tenant_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          first_response_minutes?: number;
+          id?: string;
+          is_active?: boolean;
+          name?: string;
+          priority?: string;
+          resolution_minutes?: number;
+          tenant_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'sla_policies_tenant_id_fkey';
             columns: ['tenant_id'];
             isOneToOne: false;
             referencedRelation: 'organizations';

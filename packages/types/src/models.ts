@@ -72,13 +72,17 @@ export interface Ping {
   updated_at: string; // ISO timestamp
   resolved_at: string | null; // ISO timestamp
   closed_at: string | null; // ISO timestamp
-  sla_due_at: string | null; // ISO timestamp
+  sla_due_at: string | null; // ISO timestamp (deprecated, use sla_resolution_due)
   ai_summary: string | null;
   summary_updated_at: string | null; // ISO timestamp - when AI summary was last generated
   first_response_at: string | null; // ISO timestamp - when agent first replied
   last_user_reply_at: string | null; // ISO timestamp - last time user replied
   last_agent_reply_at: string | null; // ISO timestamp - last time agent replied
   status_changed_at: string | null; // ISO timestamp - last status change
+  // SLA tracking fields (Story 5.1)
+  sla_policy_id: string | null; // UUID - reference to SLA policy at creation time
+  sla_first_response_due: string | null; // ISO timestamp - when first response is due
+  sla_resolution_due: string | null; // ISO timestamp - when resolution is due
 }
 
 export interface PingMessage {
@@ -326,6 +330,33 @@ export type InsertKBArticleView = Omit<KBArticleView, 'id' | 'viewed_at'>;
 export type InsertKBArticleFeedback = Omit<
   KBArticleFeedback,
   'id' | 'created_at'
+>;
+
+// ============================================================================
+// SLA Policies (Story 5.1)
+// ============================================================================
+
+export type SlaPolicyPriority = 'low' | 'normal' | 'high' | 'urgent';
+
+export interface SlaPolicy {
+  id: string; // UUID
+  tenant_id: string; // UUID
+  name: string;
+  priority: SlaPolicyPriority;
+  first_response_minutes: number;
+  resolution_minutes: number;
+  is_active: boolean;
+  created_at: string; // ISO timestamp
+  updated_at: string; // ISO timestamp
+}
+
+// Insert/Update helper types for SLA tables
+export type InsertSlaPolicy = Omit<
+  SlaPolicy,
+  'id' | 'created_at' | 'updated_at'
+>;
+export type UpdateSlaPolicy = Partial<
+  Omit<SlaPolicy, 'id' | 'tenant_id' | 'created_at' | 'updated_at'>
 >;
 
 // ============================================================================

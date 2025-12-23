@@ -11,7 +11,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { createClient as createServiceClient } from '@supabase/supabase-js';
+import {
+  createClient as createServiceClient,
+  SupabaseClient,
+} from '@supabase/supabase-js';
 import {
   categorizeProblemStatement,
   generateTitle,
@@ -22,6 +25,56 @@ import {
   type ConversationMessage,
 } from '@/lib/services/echo-conversation-service';
 import { createRoutingService } from '@/lib/services/routing-service';
+
+// Helper to lookup SLA policy and calculate due times
+async function getSlaForPing(
+  client: SupabaseClient,
+  tenantId: string,
+  priority: string
+): Promise<{
+  sla_policy_id: string | null;
+  sla_first_response_due: string | null;
+  sla_resolution_due: string | null;
+}> {
+  try {
+    const { data: policy } = await client
+      .from('sla_policies')
+      .select('id, first_response_minutes, resolution_minutes')
+      .eq('tenant_id', tenantId)
+      .eq('priority', priority)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (!policy) {
+      return {
+        sla_policy_id: null,
+        sla_first_response_due: null,
+        sla_resolution_due: null,
+      };
+    }
+
+    const now = new Date();
+    const firstResponseDue = new Date(
+      now.getTime() + policy.first_response_minutes * 60 * 1000
+    );
+    const resolutionDue = new Date(
+      now.getTime() + policy.resolution_minutes * 60 * 1000
+    );
+
+    return {
+      sla_policy_id: policy.id,
+      sla_first_response_due: firstResponseDue.toISOString(),
+      sla_resolution_due: resolutionDue.toISOString(),
+    };
+  } catch (error) {
+    console.error('Error looking up SLA policy:', error);
+    return {
+      sla_policy_id: null,
+      sla_first_response_due: null,
+      sla_resolution_due: null,
+    };
+  }
+}
 
 export async function POST(
   request: NextRequest,
@@ -217,7 +270,15 @@ export async function POST(
     const routingResult = await routingService.routePing(matchedCategory.id);
     const routingUpdates = routingService.applyRoutingToUpdate(routingResult);
 
-    // Update ping to finalize it with routing
+    // Lookup SLA policy for this ping's priority (default is 'normal')
+    const pingPriority = ping.priority || 'normal';
+    const slaFields = await getSlaForPing(
+      supabaseAdmin,
+      tenantId,
+      pingPriority
+    );
+
+    // Update ping to finalize it with routing and SLA
     const { error: updateError } = await supabaseAdmin
       .from('pings')
       .update({
@@ -227,6 +288,7 @@ export async function POST(
         category_confidence: categoryResult.confidence,
         problem_statement_confirmed: true,
         ...routingUpdates,
+        ...slaFields,
       })
       .eq('id', ping.id);
 

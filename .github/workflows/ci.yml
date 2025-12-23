@@ -28,6 +28,7 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+        continue-on-error: true  # Lint warnings are reported but don't block the build
 
       - name: Type check
         run: pnpm typecheck

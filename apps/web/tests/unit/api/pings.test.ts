@@ -159,16 +159,27 @@ describe('POST /api/pings', () => {
       }),
     };
 
+    // Mock SLA policy lookup (returns no policy - SLA fields will be null)
+    const mockSlaQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: null,
+        error: null,
+      }),
+    };
+
     // Setup mock return values for supabase client (auth operations + reads)
     mockSupabaseClient.from
       .mockReturnValueOnce(mockProfileQuery) // First call: users table
       .mockReturnValueOnce(mockOrgQuery) // Second call: organizations table (AI config)
       .mockReturnValueOnce(mockCategoryQuery); // Third call: categories table
 
-    // Setup mock return values for admin client (writes)
+    // Setup mock return values for admin client (SLA lookup + writes)
     mockAdminClient.from
-      .mockReturnValueOnce(mockPingInsert) // First call: pings table insert
-      .mockReturnValueOnce(mockMessageInsert); // Second call: ping_messages table insert
+      .mockReturnValueOnce(mockSlaQuery) // First call: sla_policies table (lookup)
+      .mockReturnValueOnce(mockPingInsert) // Second call: pings table insert
+      .mockReturnValueOnce(mockMessageInsert); // Third call: ping_messages table insert
 
     const request = createMockRequest({ message: 'Test message content' });
     const response = await POST(request);
@@ -184,18 +195,24 @@ describe('POST /api/pings', () => {
     expect(mockSupabaseClient.from).toHaveBeenCalledWith('users');
     expect(mockSupabaseClient.from).toHaveBeenCalledWith('organizations');
     expect(mockSupabaseClient.from).toHaveBeenCalledWith('categories');
+    expect(mockAdminClient.from).toHaveBeenCalledWith('sla_policies');
     expect(mockAdminClient.from).toHaveBeenCalledWith('pings');
     expect(mockAdminClient.from).toHaveBeenCalledWith('ping_messages');
 
-    // Verify ping insert was called with correct data (fallback path includes category_id)
-    expect(mockPingInsert.insert).toHaveBeenCalledWith({
-      tenant_id: 'tenant-123',
-      created_by: 'user-123',
-      title: 'Test message content',
-      status: 'new',
-      priority: 'normal',
-      category_id: 'category-needs-review',
-    });
+    // Verify ping insert was called with correct data (fallback path includes category_id and SLA fields)
+    expect(mockPingInsert.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenant_id: 'tenant-123',
+        created_by: 'user-123',
+        title: 'Test message content',
+        status: 'new',
+        priority: 'normal',
+        category_id: 'category-needs-review',
+        sla_policy_id: null,
+        sla_first_response_due: null,
+        sla_resolution_due: null,
+      })
+    );
 
     // Verify message insert was called with correct data
     // Story 4.2.1: Include visibility field
@@ -387,14 +404,25 @@ describe('POST /api/pings', () => {
       }),
     };
 
+    // Mock SLA policy lookup (returns no policy - SLA fields will be null)
+    const mockSlaQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: null,
+        error: null,
+      }),
+    };
+
     // Setup mock return values for supabase client (auth operations + reads)
     mockSupabaseClient.from
       .mockReturnValueOnce(mockProfileQuery)
       .mockReturnValueOnce(mockOrgQuery)
       .mockReturnValueOnce(mockCategoryQuery);
 
-    // Setup mock return values for admin client (writes)
+    // Setup mock return values for admin client (SLA lookup + writes)
     mockAdminClient.from
+      .mockReturnValueOnce(mockSlaQuery)
       .mockReturnValueOnce(mockPingInsert)
       .mockReturnValueOnce(mockMessageInsert);
 
@@ -485,14 +513,25 @@ describe('POST /api/pings', () => {
       }),
     };
 
+    // Mock SLA policy lookup (returns no policy - SLA fields will be null)
+    const mockSlaQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: null,
+        error: null,
+      }),
+    };
+
     // Setup mock return values for supabase client (auth operations + reads)
     mockSupabaseClient.from
       .mockReturnValueOnce(mockProfileQuery)
       .mockReturnValueOnce(mockOrgQuery)
       .mockReturnValueOnce(mockCategoryQuery);
 
-    // Setup mock return values for admin client (writes)
+    // Setup mock return values for admin client (SLA lookup + writes)
     mockAdminClient.from
+      .mockReturnValueOnce(mockSlaQuery)
       .mockReturnValueOnce(mockPingInsert)
       .mockReturnValueOnce(mockMessageInsert);
 

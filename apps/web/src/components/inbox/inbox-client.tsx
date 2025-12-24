@@ -34,6 +34,13 @@ import { ConnectionStatusIndicator } from '@/components/inbox/connection-status-
 import { PingDetailHeader } from '@/components/pings/ping-detail-header';
 import { SlaTimerBadge } from '@/components/pings/sla-timer-badge';
 import {
+  calculateSlaRiskScore,
+  slaNotificationService,
+  showSlaBrowserNotification,
+  requestBrowserNotificationPermission,
+} from '@/lib/sla';
+import { processSlaNotifications } from '@/components/pings/sla-breach-toast';
+import {
   ResolutionNotesDialog,
   KBAction,
 } from '@/components/pings/resolution-notes-dialog';
@@ -167,7 +174,23 @@ export function InboxClient({
   );
   const [replyMessage, setReplyMessage] = useState('');
   const [showEcho, setShowEcho] = useState(true);
-  const [sortBy, setSortBy] = useState<'recent' | 'priority'>('recent');
+  // Story 5.3: Added 'sla_risk' sort option
+  const [sortBy, setSortBy] = useState<'recent' | 'priority' | 'sla_risk'>(
+    () => {
+      // Load persisted preference from localStorage
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('inbox-sort-preference');
+        if (
+          saved === 'recent' ||
+          saved === 'priority' ||
+          saved === 'sla_risk'
+        ) {
+          return saved;
+        }
+      }
+      return 'recent';
+    }
+  );
 
   // Read filter from URL params (default to 'all' when no filter specified)
   const urlFilter = searchParams.get('filter');
@@ -1396,6 +1419,12 @@ export function InboxClient({
         const priorityOrder = { urgent: 1, high: 2, normal: 3, low: 4 };
         return priorityOrder[a.priority] - priorityOrder[b.priority];
       }
+      // Story 5.3: SLA Risk sorting - breached first, then at-risk, then on-track
+      if (sortBy === 'sla_risk') {
+        const scoreA = calculateSlaRiskScore(a as unknown as Ping);
+        const scoreB = calculateSlaRiskScore(b as unknown as Ping);
+        return scoreA - scoreB;
+      }
       // Default: recent activity (sort by updated_at descending - most recent first)
       return (
         new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
@@ -1676,6 +1705,82 @@ export function InboxClient({
     };
   }, [isSendDropdownOpen]);
 
+  // Story 5.3: SLA Notification Handler
+  // Check pings for SLA at-risk/breach notifications on load and periodically
+  useEffect(() => {
+    // Handler to navigate to a ping when notification action is clicked
+    const handleViewPing = (pingNumber: number) => {
+      const ping = pings.find((p) => p.ping_number === pingNumber);
+      if (ping) {
+        setSelectedPing(ping);
+        markPingAsRead(ping);
+      }
+    };
+
+    // Check all pings for SLA notifications
+    const checkSlaNotifications = () => {
+      for (const ping of pings) {
+        // Skip pings not assigned to current user (unless unassigned)
+        const isAssignedToMe = ping.assigned_to?.id === currentUser.id;
+        const isUnassigned = !ping.assigned_to;
+
+        // Only notify for pings assigned to me or unassigned
+        if (!isAssignedToMe && !isUnassigned) {
+          continue;
+        }
+
+        // Check for notifications
+        const notifications = slaNotificationService.checkPingForNotifications(
+          ping as unknown as Ping
+        );
+
+        if (notifications.length > 0) {
+          // Mark as notified before showing toasts
+          for (const notification of notifications) {
+            slaNotificationService.markNotified(
+              ping as unknown as Ping,
+              notification.type,
+              notification.slaType
+            );
+          }
+
+          // Show toast notifications
+          processSlaNotifications(
+            ping as unknown as Ping,
+            notifications,
+            handleViewPing
+          );
+
+          // Show browser notification for breaches (if tab not focused)
+          for (const notification of notifications) {
+            if (notification.type === 'breached') {
+              // Request permission on first breach if not already granted
+              requestBrowserNotificationPermission().then((granted) => {
+                if (granted) {
+                  showSlaBrowserNotification(
+                    ping as unknown as Ping,
+                    notification.slaType,
+                    handleViewPing
+                  );
+                }
+              });
+            }
+          }
+        }
+      }
+    };
+
+    // Initial check
+    checkSlaNotifications();
+
+    // Set up interval for periodic checks (every 60 seconds per UX spec)
+    const interval = setInterval(checkSlaNotifications, 60000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [pings, currentUser.id]);
+
   return (
     <>
       {selectedPing && (
@@ -1702,13 +1807,20 @@ export function InboxClient({
               <label className="text-xs text-slate-400">Sort by:</label>
               <select
                 value={sortBy}
-                onChange={(e) =>
-                  setSortBy(e.target.value as 'recent' | 'priority')
-                }
+                onChange={(e) => {
+                  const value = e.target.value as
+                    | 'recent'
+                    | 'priority'
+                    | 'sla_risk';
+                  setSortBy(value);
+                  // Story 5.3: Persist sort preference to localStorage
+                  localStorage.setItem('inbox-sort-preference', value);
+                }}
                 className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
               >
                 <option value="recent">Recent Activity</option>
                 <option value="priority">Priority</option>
+                <option value="sla_risk">SLA Risk</option>
               </select>
             </div>
           </div>

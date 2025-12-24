@@ -32,12 +32,17 @@ export interface PingWithMessages
 
 /**
  * Strips markdown formatting from text for plain text display
- * Converts **bold** to plain text
+ * Converts **bold** to plain text and [links](url) to just link text
  */
 function stripMarkdown(text: string): string {
   if (!text) return '';
-  // Remove bold markers **text** → text
-  return text.replace(/\*\*([^*]+)\*\*/g, '$1');
+  return (
+    text
+      // Remove markdown links [text](url) → text
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      // Remove bold markers **text** → text
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+  );
 }
 
 // Format relative time

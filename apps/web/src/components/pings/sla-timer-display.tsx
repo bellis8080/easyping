@@ -69,8 +69,12 @@ function TimerItem({
       ? formatSlaTime(timeTakenMinutes, false)
       : 'N/A';
     displayText = `${label}: ${time} (within SLA)`;
-  } else if (status === 'breached' && timeOverMinutes !== null) {
-    displayText = `${label} BREACHED (${formatSlaTime(timeOverMinutes, false)} ago)`;
+  } else if (status === 'breached') {
+    // Use timeOverMinutes if available, otherwise calculate from negative timeRemainingMinutes
+    const overTime =
+      timeOverMinutes ??
+      (timeRemainingMinutes !== null ? Math.abs(timeRemainingMinutes) : 0);
+    displayText = `${label} BREACHED (${formatSlaTime(overTime, false)} ago)`;
   } else if (status === 'paused') {
     displayText = `${label} timer paused (waiting on user)`;
   } else if (timeRemainingMinutes !== null) {

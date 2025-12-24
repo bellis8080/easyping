@@ -18,6 +18,7 @@ import { ReplyingIndicator } from './replying-indicator';
 import { FileAttachmentInput } from './file-attachment-input';
 import { FilePreviewList } from './file-preview-list';
 import { SlaTimerDisplay } from './sla-timer-display';
+import { ResponseExpectation } from './response-expectation';
 import { createClient } from '@/lib/supabase/client';
 import { getStatusColor, getStatusLabel } from '@/lib/ping-status-utils';
 import type {
@@ -786,6 +787,15 @@ export function PingDetail({
                   className="mt-2"
                 />
               )}
+              {/* Story 5.3: Show "Resolved in X" for end users on resolved pings */}
+              {!canViewPrivateMessages(currentUser.role as UserRole) &&
+                (ping.status === 'resolved' || ping.status === 'closed') &&
+                ping.resolved_at && (
+                  <ResponseExpectation
+                    ping={ping as unknown as Ping}
+                    variant="resolved"
+                  />
+                )}
               <p className="text-sm text-slate-400">
                 Created {formatTimestamp(ping.created_at)}
               </p>

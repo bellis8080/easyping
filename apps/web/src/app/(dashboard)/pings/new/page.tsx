@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useKBSuggestions, KBSuggestion } from '@/hooks/use-kb-suggestions';
+import { getExpectedResponseTime } from '@/lib/sla/expectations';
 
 // KB Article Card component
 function KBArticleCard({
@@ -281,8 +282,24 @@ export default function CreatePingPage() {
         return;
       }
 
-      const { ping } = await response.json();
-      toast.success(`Ping #${ping.ping_number} created!`);
+      const data = await response.json();
+      const { ping, echoAvailable } = data;
+
+      // Show different toast based on whether Echo AI is handling the ping
+      if (echoAvailable) {
+        // Echo flow: ping is draft, SLA not yet applied
+        toast.success(`Ping #${ping.ping_number} created!`, {
+          description: 'Echo is analyzing your issue...',
+        });
+      } else {
+        // Direct creation: SLA is applied, show expected response time
+        const expectedTime = getExpectedResponseTime(ping);
+        toast.success(`Ping #${ping.ping_number} created!`, {
+          description: expectedTime
+            ? `We typically respond within ${expectedTime}.`
+            : "We'll get back to you as soon as possible.",
+        });
+      }
 
       // Clear form and any saved draft
       setMessage('');

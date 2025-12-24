@@ -35,6 +35,7 @@ async function getSlaForPing(
   sla_policy_id: string | null;
   sla_first_response_due: string | null;
   sla_resolution_due: string | null;
+  first_response_minutes: number | null;
 }> {
   try {
     const { data: policy } = await client
@@ -50,6 +51,7 @@ async function getSlaForPing(
         sla_policy_id: null,
         sla_first_response_due: null,
         sla_resolution_due: null,
+        first_response_minutes: null,
       };
     }
 
@@ -65,6 +67,7 @@ async function getSlaForPing(
       sla_policy_id: policy.id,
       sla_first_response_due: firstResponseDue.toISOString(),
       sla_resolution_due: resolutionDue.toISOString(),
+      first_response_minutes: policy.first_response_minutes,
     };
   } catch (error) {
     console.error('Error looking up SLA policy:', error);
@@ -72,8 +75,22 @@ async function getSlaForPing(
       sla_policy_id: null,
       sla_first_response_due: null,
       sla_resolution_due: null,
+      first_response_minutes: null,
     };
   }
+}
+
+// Format minutes into user-friendly duration (e.g., "2 hours", "30 minutes")
+function formatResponseTime(minutes: number): string {
+  if (minutes < 60) {
+    return minutes === 1 ? '1 minute' : `${minutes} minutes`;
+  }
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) {
+    return hours === 1 ? '1 hour' : `${hours} hours`;
+  }
+  const days = Math.round(hours / 24);
+  return days === 1 ? '1 day' : `${days} days`;
 }
 
 export async function POST(
@@ -278,6 +295,9 @@ export async function POST(
       pingPriority
     );
 
+    // Separate the fields for DB update vs message formatting
+    const { first_response_minutes, ...slaDbFields } = slaFields;
+
     // Update ping to finalize it with routing and SLA
     const { error: updateError } = await supabaseAdmin
       .from('pings')
@@ -288,7 +308,7 @@ export async function POST(
         category_confidence: categoryResult.confidence,
         problem_statement_confirmed: true,
         ...routingUpdates,
-        ...slaFields,
+        ...slaDbFields,
       })
       .eq('id', ping.id);
 
@@ -332,10 +352,15 @@ export async function POST(
       });
     }
 
+    // Build expected response time message
+    const responseTimeMessage = first_response_minutes
+      ? `We typically respond within ${formatResponseTime(first_response_minutes)}.`
+      : 'An agent will be with you shortly.';
+
     // Send confirmation to user (different message for escalation)
     const confirmationMessage = escalated
-      ? `No problem - I'm connecting you with a human agent right now. I've categorized this as ${categoryResult.category} to help route it to the right person. Someone will be with you shortly!`
-      : `Thanks! I've categorized this as ${categoryResult.category} and sent it to our team. An agent will be with you shortly.`;
+      ? `No problem - I'm connecting you with a human agent right now. I've categorized this as ${categoryResult.category} to help route it to the right person. ${responseTimeMessage}`
+      : `Thanks! I've categorized this as ${categoryResult.category} and sent it to our team. ${responseTimeMessage}`;
 
     await supabaseAdmin.from('ping_messages').insert({
       ping_id: ping.id,

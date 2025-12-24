@@ -19,3 +19,29 @@ export {
   isBusinessHours,
   calculateBusinessMinutes,
 } from './business-hours';
+
+export { calculateSlaRiskScore, sortBySlaRisk } from './sorting';
+
+export {
+  type SlaNotification,
+  slaNotificationService,
+  sendSlaBreachEmail,
+} from './notifications';
+
+export {
+  isBrowserNotificationSupported,
+  isBrowserNotificationPermitted,
+  requestBrowserNotificationPermission,
+  isTabFocused,
+  showSlaBrowserNotification,
+  showSlaAtRiskBrowserNotification,
+} from './browser-notifications';
+
+export {
+  formatDurationFriendly,
+  formatDurationCompact,
+  getExpectedResponseTime,
+  getResolvedDuration,
+  getCreationConfirmationMessage,
+  getResolutionMessage,
+} from './expectations';

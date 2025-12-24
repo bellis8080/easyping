@@ -6,10 +6,7 @@ import {
   Send,
   Sparkles,
   ChevronRight,
-  Clock,
   AlertCircle,
-  CheckCircle2,
-  Pause,
   ChevronDown,
   ChevronUp,
   RefreshCw,
@@ -35,6 +32,7 @@ import { useTabTitle } from '@/hooks/use-tab-title';
 import { playNotificationSound } from '@/lib/notification-sound';
 import { ConnectionStatusIndicator } from '@/components/inbox/connection-status-indicator';
 import { PingDetailHeader } from '@/components/pings/ping-detail-header';
+import { SlaTimerBadge } from '@/components/pings/sla-timer-badge';
 import {
   ResolutionNotesDialog,
   KBAction,
@@ -64,8 +62,15 @@ interface PingWithRelations {
   priority: Ping['priority'];
   created_at: string;
   updated_at: string;
-  sla_due_at: string | null;
   team_id?: string | null;
+  // Story 5.2: SLA tracking fields
+  sla_policy_id?: string | null;
+  sla_first_response_due?: string | null;
+  sla_resolution_due?: string | null;
+  first_response_at?: string | null;
+  resolved_at?: string | null;
+  sla_paused_at?: string | null;
+  sla_paused_duration_minutes?: number;
   created_by: Pick<User, 'id' | 'full_name' | 'email' | 'avatar_url'>;
   assigned_to: Pick<User, 'id' | 'full_name' | 'avatar_url'> | null;
   category: { id: string; name: string; color: string } | null;
@@ -87,85 +92,6 @@ interface InboxClientProps {
     User,
     'id' | 'full_name' | 'avatar_url' | 'role' | 'tenant_id'
   >;
-}
-
-// SLA Timer Component
-function SLATimer({ ping }: { ping: PingWithRelations }) {
-  // TODO: Calculate SLA from ping.sla_due_at
-  // For now, show simplified status
-  if (ping.status === 'waiting_on_user') {
-    return (
-      <div className="flex items-center gap-1.5 text-xs">
-        <Pause className="w-3.5 h-3.5 text-slate-400" />
-        <span className="text-slate-500 font-medium">Paused</span>
-      </div>
-    );
-  }
-
-  // Calculate time remaining from sla_due_at
-  const now = new Date();
-  const dueAt = ping.sla_due_at ? new Date(ping.sla_due_at) : null;
-
-  if (!dueAt) {
-    return null;
-  }
-
-  const diffMs = dueAt.getTime() - now.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-
-  let timeRemaining = '';
-  let status: 'on_track' | 'at_risk' | 'breached' = 'on_track';
-
-  if (diffMs < 0) {
-    status = 'breached';
-    timeRemaining = 'BREACHED';
-  } else if (diffHours < 1) {
-    status = 'at_risk';
-    timeRemaining = `${diffMins}m`;
-  } else {
-    status = 'on_track';
-    timeRemaining = `${diffHours}h ${diffMins % 60}m`;
-  }
-
-  const getStatusConfig = () => {
-    if (status === 'breached') {
-      return {
-        icon: AlertCircle,
-        color: 'text-red-500',
-        bgColor: 'bg-red-500/10',
-        label: 'BREACHED',
-      };
-    }
-    if (status === 'at_risk') {
-      return {
-        icon: Clock,
-        color: 'text-orange-500',
-        bgColor: 'bg-orange-500/10',
-        label: timeRemaining,
-      };
-    }
-    return {
-      icon: CheckCircle2,
-      color: 'text-emerald-500',
-      bgColor: 'bg-emerald-500/10',
-      label: timeRemaining,
-    };
-  };
-
-  const config = getStatusConfig();
-  const Icon = config.icon;
-
-  return (
-    <div
-      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full ${config.bgColor}`}
-    >
-      <Icon className={`w-3.5 h-3.5 ${config.color}`} />
-      <span className={`text-xs font-bold ${config.color}`}>
-        {config.label}
-      </span>
-    </div>
-  );
 }
 
 // Priority Badge
@@ -1037,6 +963,14 @@ export function InboxClient({
               summary_updated_at: newSummaryUpdatedAt,
               updated_at: updatedRecord.updated_at as string,
               assigned_to: assignedTo,
+              // Story 5.2: Include SLA tracking fields for real-time badge updates
+              first_response_at: updatedRecord.first_response_at as
+                | string
+                | null,
+              resolved_at: updatedRecord.resolved_at as string | null,
+              sla_paused_at: updatedRecord.sla_paused_at as string | null,
+              sla_paused_duration_minutes:
+                (updatedRecord.sla_paused_duration_minutes as number) || 0,
             };
           });
 
@@ -1072,6 +1006,14 @@ export function InboxClient({
                 summary_updated_at: newSummaryUpdatedAt,
                 updated_at: updatedRecord.updated_at as string,
                 assigned_to: assignedTo,
+                // Story 5.2: Include SLA tracking fields for real-time badge updates
+                first_response_at: updatedRecord.first_response_at as
+                  | string
+                  | null,
+                resolved_at: updatedRecord.resolved_at as string | null,
+                sla_paused_at: updatedRecord.sla_paused_at as string | null,
+                sla_paused_duration_minutes:
+                  (updatedRecord.sla_paused_duration_minutes as number) || 0,
               };
             })
           );
@@ -1219,21 +1161,43 @@ export function InboxClient({
           filter: `tenant_id=eq.${currentUser.tenant_id}`,
         },
         async (payload) => {
-          const newStatus = (payload.new as any).status;
-          const pingId = (payload.new as any).id;
+          const updatedRecord = payload.new as Record<string, unknown>;
+          const newStatus = updatedRecord.status as string;
+          const pingId = updatedRecord.id as string;
 
           // Handle ping finalization (status changed to non-draft)
           // If status is not draft and we don't have this ping in our list, add it
           if (newStatus !== 'draft') {
-            // Use a ref or callback to get current pings state to avoid stale closure
             setPings((currentPings) => {
-              const existsInList = currentPings.some((p) => p.id === pingId);
-              if (!existsInList) {
-                // Trigger the async handler but return current state
-                // The handleNewPing will update state separately
+              const existingPingIndex = currentPings.findIndex(
+                (p) => p.id === pingId
+              );
+
+              if (existingPingIndex === -1) {
+                // Ping not in list - trigger async handler to add it
                 handleNewPing(payload);
+                return currentPings;
               }
-              return currentPings;
+
+              // Story 5.2: Update existing ping with SLA fields for real-time badge updates
+              // This handles pings that are NOT currently selected but are in the list
+              const existingPing = currentPings[existingPingIndex];
+              const updatedPings = [...currentPings];
+              updatedPings[existingPingIndex] = {
+                ...existingPing,
+                status: newStatus as typeof existingPing.status,
+                priority:
+                  updatedRecord.priority as typeof existingPing.priority,
+                updated_at: updatedRecord.updated_at as string,
+                first_response_at: updatedRecord.first_response_at as
+                  | string
+                  | null,
+                resolved_at: updatedRecord.resolved_at as string | null,
+                sla_paused_at: updatedRecord.sla_paused_at as string | null,
+                sla_paused_duration_minutes:
+                  (updatedRecord.sla_paused_duration_minutes as number) || 0,
+              };
+              return updatedPings;
             });
           }
         }
@@ -1783,7 +1747,10 @@ export function InboxClient({
                           </span>
                         )}
                     </div>{' '}
-                    <SLATimer ping={ping} />
+                    <SlaTimerBadge
+                      ping={ping as unknown as Ping}
+                      showTooltip={true}
+                    />
                   </div>
                   <p className="text-sm font-medium text-slate-900 mb-2 line-clamp-1">
                     {ping.title}

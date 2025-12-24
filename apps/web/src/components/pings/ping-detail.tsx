@@ -17,6 +17,7 @@ import { PingMessage } from './ping-message';
 import { ReplyingIndicator } from './replying-indicator';
 import { FileAttachmentInput } from './file-attachment-input';
 import { FilePreviewList } from './file-preview-list';
+import { SlaTimerDisplay } from './sla-timer-display';
 import { createClient } from '@/lib/supabase/client';
 import { getStatusColor, getStatusLabel } from '@/lib/ping-status-utils';
 import type {
@@ -778,6 +779,13 @@ export function PingDetail({
                   </span>
                 )}
               </div>
+              {/* Story 5.2: SLA Timer Display (agent-only) */}
+              {canViewPrivateMessages(currentUser.role as UserRole) && (
+                <SlaTimerDisplay
+                  ping={ping as unknown as Ping}
+                  className="mt-2"
+                />
+              )}
               <p className="text-sm text-slate-400">
                 Created {formatTimestamp(ping.created_at)}
               </p>

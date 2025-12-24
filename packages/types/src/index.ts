@@ -65,6 +65,10 @@ export type {
   SlaPolicy,
   InsertSlaPolicy,
   UpdateSlaPolicy,
+  // SLA Time Tracking (Story 5.2)
+  SlaStatus,
+  SlaTimerStatus,
+  SlaTimerState,
 } from './models';
 
 // Re-export enums and helpers

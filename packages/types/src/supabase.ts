@@ -594,8 +594,9 @@ export type Database = {
           priority: string;
           problem_statement_confirmed: boolean | null;
           resolved_at: string | null;
-          sla_due_at: string | null;
           sla_first_response_due: string | null;
+          sla_paused_at: string | null;
+          sla_paused_duration_minutes: number;
           sla_policy_id: string | null;
           sla_resolution_due: string | null;
           status: string;
@@ -624,8 +625,9 @@ export type Database = {
           priority?: string;
           problem_statement_confirmed?: boolean | null;
           resolved_at?: string | null;
-          sla_due_at?: string | null;
           sla_first_response_due?: string | null;
+          sla_paused_at?: string | null;
+          sla_paused_duration_minutes?: number;
           sla_policy_id?: string | null;
           sla_resolution_due?: string | null;
           status?: string;
@@ -654,8 +656,9 @@ export type Database = {
           priority?: string;
           problem_statement_confirmed?: boolean | null;
           resolved_at?: string | null;
-          sla_due_at?: string | null;
           sla_first_response_due?: string | null;
+          sla_paused_at?: string | null;
+          sla_paused_duration_minutes?: number;
           sla_policy_id?: string | null;
           sla_resolution_due?: string | null;
           status?: string;

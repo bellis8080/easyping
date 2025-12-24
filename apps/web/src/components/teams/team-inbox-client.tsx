@@ -5,10 +5,7 @@ import {
   Send,
   Sparkles,
   ChevronRight,
-  Clock,
   AlertCircle,
-  CheckCircle2,
-  Pause,
   ChevronDown,
   ChevronUp,
   Users,
@@ -37,6 +34,7 @@ import { PingMessage as PingMessageComponent } from '@/components/pings/ping-mes
 import { useTabTitle } from '@/hooks/use-tab-title';
 import { ConnectionStatusIndicator } from '@/components/inbox/connection-status-indicator';
 import { PingDetailHeader } from '@/components/pings/ping-detail-header';
+import { SlaTimerBadge } from '@/components/pings/sla-timer-badge';
 import {
   ResolutionNotesDialog,
   KBAction,
@@ -55,8 +53,15 @@ interface PingWithRelations {
   priority: Ping['priority'];
   created_at: string;
   updated_at: string;
-  sla_due_at: string | null;
   team_id: string | null;
+  // Story 5.2: SLA tracking fields
+  sla_policy_id?: string | null;
+  sla_first_response_due?: string | null;
+  sla_resolution_due?: string | null;
+  first_response_at?: string | null;
+  resolved_at?: string | null;
+  sla_paused_at?: string | null;
+  sla_paused_duration_minutes?: number;
   created_by: Pick<User, 'id' | 'full_name' | 'email' | 'avatar_url'>;
   assigned_to: Pick<User, 'id' | 'full_name' | 'avatar_url'> | null;
   category: { id: string; name: string; color: string } | null;
@@ -97,82 +102,6 @@ interface TeamInboxClientProps {
     'id' | 'full_name' | 'avatar_url' | 'role' | 'tenant_id'
   >;
   isManagerOrOwner: boolean;
-}
-
-// SLA Timer Component
-function SLATimer({ ping }: { ping: PingWithRelations }) {
-  if (ping.status === 'waiting_on_user') {
-    return (
-      <div className="flex items-center gap-1.5 text-xs">
-        <Pause className="w-3.5 h-3.5 text-slate-400" />
-        <span className="text-slate-500 font-medium">Paused</span>
-      </div>
-    );
-  }
-
-  const now = new Date();
-  const dueAt = ping.sla_due_at ? new Date(ping.sla_due_at) : null;
-
-  if (!dueAt) {
-    return null;
-  }
-
-  const diffMs = dueAt.getTime() - now.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-
-  let timeRemaining = '';
-  let status: 'on_track' | 'at_risk' | 'breached' = 'on_track';
-
-  if (diffMs < 0) {
-    status = 'breached';
-    timeRemaining = 'BREACHED';
-  } else if (diffHours < 1) {
-    status = 'at_risk';
-    timeRemaining = `${diffMins}m`;
-  } else {
-    status = 'on_track';
-    timeRemaining = `${diffHours}h ${diffMins % 60}m`;
-  }
-
-  const getStatusConfig = () => {
-    if (status === 'breached') {
-      return {
-        icon: AlertCircle,
-        color: 'text-red-500',
-        bgColor: 'bg-red-500/10',
-        label: 'BREACHED',
-      };
-    }
-    if (status === 'at_risk') {
-      return {
-        icon: Clock,
-        color: 'text-orange-500',
-        bgColor: 'bg-orange-500/10',
-        label: timeRemaining,
-      };
-    }
-    return {
-      icon: CheckCircle2,
-      color: 'text-emerald-500',
-      bgColor: 'bg-emerald-500/10',
-      label: timeRemaining,
-    };
-  };
-
-  const config = getStatusConfig();
-  const Icon = config.icon;
-
-  return (
-    <div
-      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full ${config.bgColor}`}
-    >
-      <Icon className={`w-3.5 h-3.5 ${config.color}`} />
-      <span className={`text-xs font-bold ${config.color}`}>
-        {config.label}
-      </span>
-    </div>
-  );
 }
 
 // Priority Badge
@@ -1758,7 +1687,10 @@ export function TeamInboxClient({
                           </span>
                         )}
                     </div>
-                    <SLATimer ping={ping} />
+                    <SlaTimerBadge
+                      ping={ping as unknown as Ping}
+                      showTooltip={true}
+                    />
                   </div>
                   <p className="text-sm font-medium text-slate-900 mb-2 line-clamp-1">
                     {ping.title}

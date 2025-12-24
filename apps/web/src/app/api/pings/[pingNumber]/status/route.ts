@@ -64,12 +64,14 @@ export async function PATCH(
 
     const { status: newStatus } = validationResult.data;
 
-    // Fetch ping
+    // Fetch ping (include SLA fields for pause/resume tracking)
     const { pingNumber } = await params;
     const supabaseAdmin = createAdminClient();
     const { data: ping, error: pingError } = await supabaseAdmin
       .from('pings')
-      .select('*, created_by_user:users!pings_created_by_fkey(full_name)')
+      .select(
+        '*, sla_paused_at, sla_paused_duration_minutes, created_by_user:users!pings_created_by_fkey(full_name)'
+      )
       .eq('ping_number', parseInt(pingNumber))
       .eq('tenant_id', userProfile.tenant_id)
       .single();
@@ -96,17 +98,70 @@ export async function PATCH(
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    // Update ping status
-    const timestampUpdates: Record<string, string | null> = {
+    // Update ping status with SLA tracking logic (Story 5.2)
+    const timestampUpdates: Record<string, string | number | null> = {
       status_changed_at: new Date().toISOString(),
     };
 
-    if (newStatus === 'resolved' && !ping.resolved_at) {
-      timestampUpdates.resolved_at = new Date().toISOString();
+    const currentStatus = ping.status as PingStatus;
+    const now = new Date();
+
+    // Story 5.2 Task 4: Resolution time tracking
+    if (newStatus === 'resolved') {
+      timestampUpdates.resolved_at = now.toISOString();
+
+      // If timer was paused, finalize the pause duration
+      if (ping.sla_paused_at) {
+        const pauseStart = new Date(ping.sla_paused_at);
+        const pauseDurationMinutes = Math.floor(
+          (now.getTime() - pauseStart.getTime()) / (1000 * 60)
+        );
+        timestampUpdates.sla_paused_duration_minutes =
+          (ping.sla_paused_duration_minutes || 0) + pauseDurationMinutes;
+        timestampUpdates.sla_paused_at = null; // Clear active pause
+      }
+    }
+
+    // Story 5.2 Task 4.2: Re-opening a resolved ping
+    if (currentStatus === 'resolved' && newStatus !== 'resolved') {
+      timestampUpdates.resolved_at = null; // Clear resolved timestamp
+    }
+
+    // Story 5.2 Task 5: Resolution timer pause/resume
+    // Pause when entering "waiting_on_user"
+    if (
+      newStatus === 'waiting_on_user' &&
+      currentStatus !== 'waiting_on_user'
+    ) {
+      if (!ping.sla_paused_at) {
+        timestampUpdates.sla_paused_at = now.toISOString();
+        console.log('⏸️ SLA timer paused for ping:', ping.id);
+      }
+    }
+
+    // Resume when leaving "waiting_on_user"
+    if (
+      currentStatus === 'waiting_on_user' &&
+      newStatus !== 'waiting_on_user'
+    ) {
+      if (ping.sla_paused_at) {
+        const pauseStart = new Date(ping.sla_paused_at);
+        const pauseDurationMinutes = Math.floor(
+          (now.getTime() - pauseStart.getTime()) / (1000 * 60)
+        );
+        timestampUpdates.sla_paused_duration_minutes =
+          (ping.sla_paused_duration_minutes || 0) + pauseDurationMinutes;
+        timestampUpdates.sla_paused_at = null; // Resume timer
+        console.log(
+          '▶️ SLA timer resumed for ping:',
+          ping.id,
+          `(paused for ${pauseDurationMinutes} minutes)`
+        );
+      }
     }
 
     if (newStatus === 'closed' && !ping.closed_at) {
-      timestampUpdates.closed_at = new Date().toISOString();
+      timestampUpdates.closed_at = now.toISOString();
     }
 
     const { data: updatedPing, error: updateError } = await supabaseAdmin

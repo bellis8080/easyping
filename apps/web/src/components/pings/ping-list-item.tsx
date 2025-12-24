@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { User } from 'lucide-react';
 import { getStatusColor, getStatusLabel } from '@/lib/ping-status-utils';
+import { SlaTimerBadge } from './sla-timer-badge';
+import { Ping } from '@easyping/types';
 
 /**
  * Strips markdown formatting from text for plain text display
@@ -16,10 +18,14 @@ function stripMarkdown(text: string): string {
 }
 
 interface PingListItemProps {
-  ping: any;
+  ping: Ping & {
+    messages?: { content: string }[];
+    assigned_to?: { full_name: string } | null;
+  };
+  showSlaBadge?: boolean; // Story 5.2: Show SLA badge for agents
 }
 
-export function PingListItem({ ping }: PingListItemProps) {
+export function PingListItem({ ping, showSlaBadge = true }: PingListItemProps) {
   const formatTimestamp = (timestamp: string): string => {
     return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
   };
@@ -44,6 +50,8 @@ export function PingListItem({ ping }: PingListItemProps) {
               >
                 {getStatusLabel(ping.status)}
               </span>
+              {/* Story 5.2: SLA Timer Badge (agent-only) */}
+              {showSlaBadge && <SlaTimerBadge ping={ping} />}
             </div>
 
             {/* Title */}

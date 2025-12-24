@@ -105,7 +105,7 @@ export async function POST(
   const { data: ping, error: pingError } = await supabaseAdmin
     .from('pings')
     .select(
-      'id, tenant_id, status, created_by, assigned_to, summary_updated_at, created_by_user:users!pings_created_by_fkey(full_name)'
+      'id, tenant_id, status, created_by, assigned_to, summary_updated_at, first_response_at, sla_paused_at, sla_paused_duration_minutes, created_by_user:users!pings_created_by_fkey(full_name)'
     )
     .eq('ping_number', parseInt(pingNumber))
     .eq('tenant_id', userProfile.tenant_id)
@@ -206,6 +206,25 @@ export async function POST(
     attachments: createdAttachments,
   };
 
+  // Story 5.2: Track first agent response for SLA measurement
+  // Only count public agent messages (not internal notes) as first response
+  const isAgentRole = ['agent', 'manager', 'owner'].includes(userProfile.role);
+  const isPublicMessage = requestedVisibility === 'public';
+  const isFirstResponse = ping.first_response_at === null;
+
+  if (isAgentRole && isPublicMessage && isFirstResponse) {
+    const { error: firstResponseError } = await supabaseAdmin
+      .from('pings')
+      .update({ first_response_at: new Date().toISOString() })
+      .eq('id', ping.id);
+
+    if (firstResponseError) {
+      console.error('Error recording first_response_at:', firstResponseError);
+    } else {
+      console.log('✅ Recorded first_response_at for ping:', ping.id);
+    }
+  }
+
   // Story 3.3: If ping is in draft status, route to Echo conversation
   if (ping.status === 'draft') {
     const apiUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:4000';
@@ -289,18 +308,55 @@ export async function POST(
     ping.assigned_to,
     userProfile.full_name || 'Agent',
     creatorName,
-    null // first_response_at - column doesn't exist yet
+    ping.first_response_at // Story 5.2: Now available for status transition logic
   );
 
   console.log('📊 Transition result:', transition);
 
   if (transition) {
     // Update ping status and timestamps
-    const updatePayload: any = {
+    const updatePayload: Record<string, string | number | null> = {
       status: transition.newStatus,
       updated_at: new Date().toISOString(),
       ...transition.timestampUpdates,
     };
+
+    // Story 5.2 Task 5.3-5.4: Handle SLA pause/resume on status transition
+    const currentStatus = ping.status as PingStatus;
+    const newStatus = transition.newStatus as PingStatus;
+    const now = new Date();
+
+    // Resume timer when leaving "waiting_on_user" (e.g., agent replies)
+    if (
+      currentStatus === 'waiting_on_user' &&
+      newStatus !== 'waiting_on_user'
+    ) {
+      if (ping.sla_paused_at) {
+        const pauseStart = new Date(ping.sla_paused_at);
+        const pauseDurationMinutes = Math.floor(
+          (now.getTime() - pauseStart.getTime()) / (1000 * 60)
+        );
+        updatePayload.sla_paused_duration_minutes =
+          (ping.sla_paused_duration_minutes || 0) + pauseDurationMinutes;
+        updatePayload.sla_paused_at = null; // Resume timer
+        console.log(
+          '▶️ SLA timer resumed via message:',
+          ping.id,
+          `(paused for ${pauseDurationMinutes} minutes)`
+        );
+      }
+    }
+
+    // Pause timer when entering "waiting_on_user"
+    if (
+      newStatus === 'waiting_on_user' &&
+      currentStatus !== 'waiting_on_user'
+    ) {
+      if (!ping.sla_paused_at) {
+        updatePayload.sla_paused_at = now.toISOString();
+        console.log('⏸️ SLA timer paused via message for ping:', ping.id);
+      }
+    }
 
     // Auto-assign to agent on first response (if unassigned)
     console.log(

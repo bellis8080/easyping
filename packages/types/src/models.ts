@@ -72,7 +72,6 @@ export interface Ping {
   updated_at: string; // ISO timestamp
   resolved_at: string | null; // ISO timestamp
   closed_at: string | null; // ISO timestamp
-  sla_due_at: string | null; // ISO timestamp (deprecated, use sla_resolution_due)
   ai_summary: string | null;
   summary_updated_at: string | null; // ISO timestamp - when AI summary was last generated
   first_response_at: string | null; // ISO timestamp - when agent first replied
@@ -83,6 +82,9 @@ export interface Ping {
   sla_policy_id: string | null; // UUID - reference to SLA policy at creation time
   sla_first_response_due: string | null; // ISO timestamp - when first response is due
   sla_resolution_due: string | null; // ISO timestamp - when resolution is due
+  // SLA pause tracking fields (Story 5.2)
+  sla_paused_at: string | null; // ISO timestamp - when resolution SLA timer was paused (NULL when not paused)
+  sla_paused_duration_minutes: number; // Accumulated pause time in minutes (does not include current pause if active)
 }
 
 export interface PingMessage {
@@ -398,4 +400,39 @@ export interface KBSearchResponse {
   searchType: SearchType;
   success: boolean;
   error?: string;
+}
+
+// ============================================================================
+// SLA Time Tracking (Story 5.2)
+// ============================================================================
+
+/**
+ * SLA status based on time remaining percentage
+ * - on_track: >50% time remaining (green)
+ * - at_risk: 20-50% time remaining (yellow)
+ * - breached: <20% remaining or past due (red)
+ */
+export type SlaStatus = 'on_track' | 'at_risk' | 'breached';
+
+/**
+ * Extended SLA status that includes completion and pause states
+ */
+export type SlaTimerStatus =
+  | 'on_track'
+  | 'at_risk'
+  | 'breached'
+  | 'completed'
+  | 'paused';
+
+/**
+ * State of an individual SLA timer (first response or resolution)
+ */
+export interface SlaTimerState {
+  status: SlaTimerStatus;
+  is_paused: boolean;
+  time_remaining_minutes: number | null; // null if no SLA or already completed
+  time_over_minutes: number | null; // minutes past SLA if breached
+  time_taken_minutes: number | null; // actual time taken if completed
+  due_at: string | null; // ISO timestamp
+  completed_at: string | null; // ISO timestamp
 }

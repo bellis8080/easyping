@@ -200,10 +200,15 @@ describe('GET /api/analytics/agents', () => {
       single: vi.fn().mockResolvedValue({ data: mockUserProfile, error: null }),
     });
 
-    // Mock pings query for agent
+    // Mock pings query for agent - needs to handle both resolved pings (.in()) and assigned pings (.not())
     const mockPingsChain = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      not: vi.fn().mockResolvedValue({
+        data: [],
+        error: null,
+      }),
       gte: vi.fn().mockReturnThis(),
       lt: vi.fn().mockResolvedValue({
         data: [
@@ -274,10 +279,15 @@ describe('GET /api/analytics/agents', () => {
       }),
     };
 
-    // Mock pings query
+    // Mock pings query - needs to handle both resolved pings (.in()) and assigned pings (.not())
     const mockPingsChain = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      not: vi.fn().mockResolvedValue({
+        data: [],
+        error: null,
+      }),
       gte: vi.fn().mockReturnThis(),
       lt: vi.fn().mockResolvedValue({
         data: [],
@@ -370,10 +380,15 @@ describe('GET /api/analytics/agents', () => {
       single: vi.fn().mockResolvedValue({ data: mockUserProfile, error: null }),
     });
 
-    // Mock pings query
+    // Mock pings query - needs to handle both resolved pings (.in()) and assigned pings (.not())
     const mockPingsChain = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      not: vi.fn().mockResolvedValue({
+        data: [],
+        error: null,
+      }),
       gte: vi.fn().mockReturnThis(),
       lt: vi.fn().mockResolvedValue({
         data: [],
@@ -433,10 +448,15 @@ describe('GET /api/analytics/agents', () => {
       single: vi.fn().mockResolvedValue({ data: mockUserProfile, error: null }),
     });
 
-    // Mock pings query
+    // Mock pings query - needs to handle both resolved pings (.in()) and assigned pings (.not())
     const mockPingsChain = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      not: vi.fn().mockResolvedValue({
+        data: [],
+        error: null,
+      }),
       gte: vi.fn().mockReturnThis(),
       lt: vi.fn().mockResolvedValue({
         data: [],

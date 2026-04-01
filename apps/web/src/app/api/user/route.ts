@@ -5,22 +5,23 @@ import { getUserProfile } from '@/lib/auth/helpers';
 
 /**
  * GET /api/user - Get current user profile
+ *
+ * Uses the admin client (via getUserProfile) to bypass RLS and retrieve the
+ * full user row, including echo_enabled and avatar_url.  A previous version
+ * made a second PostgREST query with the user-scoped SSR client to fetch those
+ * two extra columns; that extra hop was both unnecessary (getUserProfile already
+ * selects '*') and a potential failure point when the SSR client's cookie-based
+ * auth wasn't recognised by PostgREST (e.g. right after setup before the
+ * session cookie is fully established).
  */
 export async function GET() {
   try {
     const userProfile = await getUserProfile();
 
     if (!userProfile) {
+      console.warn('GET /api/user: No user profile found (unauthenticated or profile missing)');
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
-
-    // Fetch full user data including echo_enabled
-    const supabase = await createClient();
-    const { data: userData } = await supabase
-      .from('users')
-      .select('echo_enabled, avatar_url')
-      .eq('id', userProfile.id)
-      .single();
 
     return NextResponse.json({
       id: userProfile.id,
@@ -28,8 +29,8 @@ export async function GET() {
       full_name: userProfile.full_name,
       role: userProfile.role,
       tenant_id: userProfile.tenant_id,
-      avatar_url: userData?.avatar_url || null,
-      echo_enabled: userData?.echo_enabled ?? true,
+      avatar_url: userProfile.avatar_url || null,
+      echo_enabled: userProfile.echo_enabled ?? true,
     });
   } catch (error) {
     console.error('Error fetching user profile:', error);
@@ -77,9 +78,9 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // Use service client to update user
+    // Use service client to update user (admin client bypasses RLS)
     const supabaseAdmin = createServiceClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 

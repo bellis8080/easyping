@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { createClient } from '@/lib/supabase/client';
 import { StepIndicator } from './step-indicator';
 import { OrganizationStep } from './organization-step';
 import { AdminAccountStep } from './admin-account-step';
@@ -173,8 +174,26 @@ export function SetupWizard() {
         throw new Error(errorData.error || 'Setup failed');
       }
 
-      // Redirect to dashboard on success
-      router.push('/dashboard');
+      // Sign the admin in so they land on the dashboard with an active session.
+      // Without this step, the browser has no session cookie and the middleware
+      // would redirect them back to /login.
+      const supabase = createClient();
+      const adminData = adminForm.getValues();
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: adminData.email,
+        password: adminData.password,
+      });
+
+      if (signInError) {
+        // Setup succeeded — sign-in is best-effort.  Send to login so the admin
+        // can authenticate manually.
+        console.warn('Setup complete but auto-sign-in failed:', signInError.message);
+        window.location.href = '/login';
+        return;
+      }
+
+      // Redirect to dashboard on success (full page reload to flush session state)
+      window.location.href = '/dashboard/analytics';
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       setIsSubmitting(false);

@@ -61,6 +61,11 @@ export async function updateSession(request: NextRequest) {
 
   // If authenticated, set tenant context for RLS policies
   if (user && !authError) {
+    // Always set x-user-id from the GoTrue identity so that protected-route
+    // checks in the outer middleware work even when the public.users profile
+    // lookup below fails (e.g. right after a partial setup).
+    response.headers.set('x-user-id', user.id);
+
     try {
       // Create admin client to bypass RLS for initial tenant_id lookup
       // This is necessary because we need the tenant_id to SET the tenant context
@@ -89,8 +94,7 @@ export async function updateSession(request: NextRequest) {
           tenant_uuid: userProfile.tenant_id,
         });
 
-        // Add user ID, tenant ID, and role to response headers for middleware consumption
-        response.headers.set('x-user-id', user.id);
+        // Add tenant ID and role to response headers for middleware consumption
         response.headers.set('x-tenant-id', userProfile.tenant_id);
         response.headers.set('x-user-role', userProfile.role);
       }

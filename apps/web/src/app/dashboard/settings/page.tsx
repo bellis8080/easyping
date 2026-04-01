@@ -192,6 +192,8 @@ function ProfileTab() {
           setProfile(data);
           setFullName(data.full_name || '');
           setEchoEnabled(data.echo_enabled ?? true);
+        } else {
+          console.error('Error fetching profile: HTTP', response.status, response.statusText);
         }
       } catch (error) {
         console.error('Error fetching profile:', error);

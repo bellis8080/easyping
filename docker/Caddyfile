@@ -45,24 +45,16 @@
 	handle /api/auth/v1/* {
 		uri strip_prefix /api/auth/v1
 		reverse_proxy gotrue:9999 {
-			# Pass original client information
 			header_up X-Real-IP {remote_host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Forwarded-Host {host}
 		}
 	}
 
-	# Route PostgREST database API requests (most specific first)
+	# Route PostgREST database API requests
 	# Strips /api/rest/v1 prefix so /api/rest/v1/users becomes /users
 	handle /api/rest/v1/* {
 		uri strip_prefix /api/rest/v1
 		reverse_proxy postgrest:3000 {
-			# Pass original client information
 			header_up X-Real-IP {remote_host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Forwarded-Host {host}
 		}
 	}
 
@@ -72,9 +64,6 @@
 		uri strip_prefix /api/realtime/v1
 		reverse_proxy realtime:4000 {
 			header_up X-Real-IP {remote_host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Forwarded-Host {host}
 		}
 	}
 
@@ -84,21 +73,14 @@
 		uri strip_prefix /api/storage/v1
 		reverse_proxy storage:5000 {
 			header_up X-Real-IP {remote_host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Forwarded-Host {host}
 		}
 	}
 
 	# Catch-all for /api/* requests not matched above → Next.js API routes
-	# This handles /api/health, /api/auth/create-profile, /api/setup, /api/pings/*, etc.
+	# Handles /api/health, /api/auth/create-profile, /api/setup, /api/pings/*, etc.
 	handle /api/* {
 		reverse_proxy web:8000 {
-			# Pass original client information
 			header_up X-Real-IP {remote_host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Forwarded-Host {host}
 		}
 	}
 
@@ -118,22 +100,19 @@
 				read_timeout 60s
 			}
 
-			# Pass original client information
 			header_up X-Real-IP {remote_host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Forwarded-Host {host}
 		}
 	}
 
 	# TLS configuration
-	# When TLS_EMAIL is set, Caddy uses Let's Encrypt for real certificates
-	# When TLS_EMAIL is empty and domain is localhost, Caddy auto-generates self-signed
+	# When TLS_EMAIL is set (production): Caddy uses it as the ACME/Let's Encrypt contact email
+	# When TLS_EMAIL is unset (localhost dev): falls back to "internal" for self-signed certs
+	# Note: Caddy skips ACME for localhost/IP addresses regardless of this setting
 	tls {$TLS_EMAIL:internal} {
 		protocols tls1.2 tls1.3
 	}
 
-	# Custom error pages (optional)
+	# Custom error pages
 	handle_errors {
 		@5xx expression `{err.status_code} >= 500 && {err.status_code} < 600`
 		handle @5xx {
@@ -148,7 +127,7 @@
 }
 
 # HTTP-only endpoint for internal service-to-service communication
-# This allows the web container to connect without SSL issues
+# Allows the web container and Supabase Studio to talk to Caddy without SSL
 :80 {
 	# Logging configuration
 	log {
@@ -162,21 +141,15 @@
 		uri strip_prefix /api/auth/v1
 		reverse_proxy gotrue:9999 {
 			header_up X-Real-IP {remote_host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Forwarded-Host {host}
 		}
 	}
 
-	# Route PostgREST database API requests (most specific first)
+	# Route PostgREST database API requests
 	# Strips /api/rest/v1 prefix so /api/rest/v1/users becomes /users
 	handle /api/rest/v1/* {
 		uri strip_prefix /api/rest/v1
 		reverse_proxy postgrest:3000 {
 			header_up X-Real-IP {remote_host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Forwarded-Host {host}
 		}
 	}
 
@@ -185,9 +158,6 @@
 		uri strip_prefix /api/realtime/v1
 		reverse_proxy realtime:4000 {
 			header_up X-Real-IP {remote_host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Forwarded-Host {host}
 		}
 	}
 
@@ -196,9 +166,6 @@
 		uri strip_prefix /api/storage/v1
 		reverse_proxy storage:5000 {
 			header_up X-Real-IP {remote_host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Forwarded-Host {host}
 		}
 	}
 
@@ -206,9 +173,6 @@
 	handle /api/* {
 		reverse_proxy web:8000 {
 			header_up X-Real-IP {remote_host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Forwarded-Host {host}
 		}
 	}
 

@@ -41,8 +41,12 @@ done
 echo "  PostgreSQL is ready!"
 
 echo ""
-echo "Step 5: Initializing database..."
+echo "Step 5: Initializing database (roles, schemas, extensions)..."
 ./scripts/init-db.sh
+
+echo ""
+echo "Step 5b: Running all migrations from supabase/migrations/..."
+./scripts/run-migrations.sh
 
 echo ""
 echo "Step 6: Restarting services to pick up database changes..."

@@ -140,63 +140,62 @@ services:
     networks:
       - easyping-network
 
-  # Supabase Storage API (DISABLED - complex initialization, enable later)
-  # storage:
-  #   image: supabase/storage-api:v0.40.4
-  #   container_name: easyping-storage
-  #   restart: unless-stopped
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     postgrest:
-  #       condition: service_started
-  #   environment:
-  #     ANON_KEY: ${SUPABASE_ANON_KEY}
-  #     SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
-  #     POSTGREST_URL: http://postgrest:3000
-  #     PGRST_JWT_SECRET: ${GOTRUE_JWT_SECRET}
-  #     DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-postgres}
-  #     FILE_SIZE_LIMIT: ${FILE_SIZE_LIMIT:-52428800}
-  #     STORAGE_BACKEND: ${STORAGE_BACKEND:-file}
-  #     FILE_STORAGE_BACKEND_PATH: /var/lib/storage
-  #     TENANT_ID: stub
-  #     REGION: stub
-  #     GLOBAL_S3_BUCKET: stub
-  #     ENABLE_IMAGE_TRANSFORMATION: "true"
-  #     IMGPROXY_URL: http://imgproxy:8080
-  #   volumes:
-  #     - storage_data:/var/lib/storage
-  #   networks:
-  #     - easyping-network
+  # Supabase Storage API
+  storage:
+    image: supabase/storage-api:v0.40.4
+    container_name: easyping-storage
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgrest:
+        condition: service_started
+    environment:
+      ANON_KEY: ${SUPABASE_ANON_KEY}
+      SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://postgrest:3000
+      PGRST_JWT_SECRET: ${GOTRUE_JWT_SECRET}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-postgres}
+      FILE_SIZE_LIMIT: ${FILE_SIZE_LIMIT:-52428800}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-file}
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: stub
+      GLOBAL_S3_BUCKET: stub
+      ENABLE_IMAGE_TRANSFORMATION: "false"
+    volumes:
+      - storage_data:/var/lib/storage
+    networks:
+      - easyping-network
 
-  # Supabase Realtime (DISABLED - complex initialization, enable later)
-  # realtime:
-  #   image: supabase/realtime:v2.25.35
-  #   container_name: easyping-realtime
-  #   restart: unless-stopped
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   environment:
-  #     PORT: 4000
-  #     DB_HOST: postgres
-  #     DB_PORT: 5432
-  #     DB_USER: postgres
-  #     DB_PASSWORD: ${POSTGRES_PASSWORD}
-  #     DB_NAME: ${POSTGRES_DB:-postgres}
-  #     DB_AFTER_CONNECT_QUERY: 'SET search_path TO _realtime'
-  #     DB_ENC_KEY: supabaserealtime
-  #     API_JWT_SECRET: ${GOTRUE_JWT_SECRET}
-  #     FLY_ALLOC_ID: stub
-  #     FLY_APP_NAME: stub
-  #     SECRET_KEY_BASE: ${REALTIME_SECRET_KEY_BASE:-UpNVntn3cDxHJpq99YMc1T1AQgQpc8kfYTuRgBiYa3OFWdYdNvE7OvkbokLdcNYP}
-  #     ERL_AFLAGS: -proto_dist inet_tcp
-  #     ENABLE_TAILSCALE: "false"
-  #     DNS_NODES: "''"
-  #   command: >
-  #     sh -c "/app/bin/migrate && /app/bin/realtime eval 'Realtime.Release.seeds(Realtime.Repo)' && /app/bin/server"
-  #   networks:
-  #     - easyping-network
+  # Supabase Realtime
+  realtime:
+    image: supabase/realtime:v2.25.35
+    container_name: easyping-realtime
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 4000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB:-postgres}
+      DB_AFTER_CONNECT_QUERY: 'SET search_path TO _realtime'
+      DB_ENC_KEY: supabaserealtime
+      API_JWT_SECRET: ${GOTRUE_JWT_SECRET}
+      FLY_ALLOC_ID: stub
+      FLY_APP_NAME: stub
+      SECRET_KEY_BASE: ${REALTIME_SECRET_KEY_BASE:-UpNVntn3cDxHJpq99YMc1T1AQgQpc8kfYTuRgBiYa3OFWdYdNvE7OvkbokLdcNYP}
+      ERL_AFLAGS: -proto_dist inet_tcp
+      ENABLE_TAILSCALE: "false"
+      DNS_NODES: "''"
+    command: >
+      sh -c "/app/bin/migrate && /app/bin/realtime eval 'Realtime.Release.seeds(Realtime.Repo)' && /app/bin/server"
+    networks:
+      - easyping-network
 
   # Next.js Web Application
   web:
@@ -216,10 +215,10 @@ services:
         condition: service_started
       gotrue:
         condition: service_started
-      # storage:
-      #   condition: service_started
-      # realtime:
-      #   condition: service_started
+      storage:
+        condition: service_started
+      realtime:
+        condition: service_started
     environment:
       NODE_ENV: production
       # Public URL for client-side (browser) - goes through Caddy with HTTPS

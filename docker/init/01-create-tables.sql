@@ -87,8 +87,7 @@ GRANT ALL ON TABLE public.users TO anon;
 GRANT ALL ON TABLE public.users TO authenticated;
 GRANT ALL ON TABLE public.users TO service_role;
 
--- Enable pgcrypto extension for encryption (Story 1.6)
-CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA extensions;
+-- pgcrypto extension already created in 00-init-schemas.sql (public schema)
 
 -- Create encryption functions for AI API keys (Story 1.6)
 CREATE OR REPLACE FUNCTION public.encrypt_data(data TEXT, key TEXT)
@@ -97,7 +96,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-  RETURN encode(extensions.pgp_sym_encrypt(data, key), 'base64');
+  RETURN encode(pgp_sym_encrypt(data, key), 'base64');
 END;
 $$;
 
@@ -107,7 +106,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-  RETURN extensions.pgp_sym_decrypt(decode(encrypted_data, 'base64'), key);
+  RETURN pgp_sym_decrypt(decode(encrypted_data, 'base64'), key);
 EXCEPTION
   WHEN OTHERS THEN
     RAISE EXCEPTION 'Decryption failed: %', SQLERRM;

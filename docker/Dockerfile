@@ -2,7 +2,7 @@
 # Optimized for Turborepo monorepo with minimal image size
 
 # Stage 1: Base - Install dependencies
-FROM node:18-alpine AS base
+FROM node:20-alpine AS base
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -47,7 +47,7 @@ COPY turbo.json turbo.json
 RUN pnpm build --filter=@easyping/web
 
 # Stage 4: Runner - Production runtime
-FROM node:18-alpine AS runner
+FROM node:20-alpine AS runner
 WORKDIR /app
 
 # Set production environment

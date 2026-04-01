@@ -96,5 +96,9 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
   GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
 
 -- Enable pgcrypto extension for encryption (Story 1.6)
--- NOTE: Skipping pgcrypto here due to Supabase image restrictions
--- Will be created in 01-create-tables.sql after roles are fully configured
+-- Install in public schema so migrations can reference pgcrypto functions without schema prefix
+CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA public;
+
+-- Also install uuid-ossp and vector extensions (required by migrations)
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA public;
+CREATE EXTENSION IF NOT EXISTS "vector";

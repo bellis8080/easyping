@@ -1,7 +1,7 @@
 # Development Dockerfile for EasyPing Next.js application
 # Optimized for hot module replacement and fast iteration
 
-FROM node:18-alpine AS development
+FROM node:20-alpine AS development
 
 # Install system dependencies
 RUN apk add --no-cache libc6-compat

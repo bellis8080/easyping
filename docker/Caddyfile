@@ -66,10 +66,11 @@
 		}
 	}
 
-	# Route Next.js API requests (like /api/health, /api/auth/create-profile)
-	handle /api/health {
-		reverse_proxy web:8000 {
-			# Pass original client information
+	# Route Supabase Realtime WebSocket connections
+	# Strips /api/realtime/v1 prefix, so /api/realtime/v1/websocket becomes /websocket
+	handle /api/realtime/v1/* {
+		uri strip_prefix /api/realtime/v1
+		reverse_proxy realtime:4000 {
 			header_up X-Real-IP {remote_host}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Proto {scheme}
@@ -77,9 +78,11 @@
 		}
 	}
 
-	handle /api/auth/* {
-		reverse_proxy web:8000 {
-			# Pass original client information
+	# Route Supabase Storage API requests
+	# Strips /api/storage/v1 prefix
+	handle /api/storage/v1/* {
+		uri strip_prefix /api/storage/v1
+		reverse_proxy storage:5000 {
 			header_up X-Real-IP {remote_host}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Proto {scheme}
@@ -87,21 +90,10 @@
 		}
 	}
 
-	# Route Next.js setup wizard API (Story 1.6)
-	handle /api/setup {
-		reverse_proxy web:8000 {
-			# Pass original client information
-			header_up X-Real-IP {remote_host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Forwarded-Host {host}
-		}
-	}
-
-	# Catch-all for other /api/* requests (fallback)
+	# Catch-all for /api/* requests not matched above → Next.js API routes
+	# This handles /api/health, /api/auth/create-profile, /api/setup, /api/pings/*, etc.
 	handle /api/* {
-		uri strip_prefix /api
-		reverse_proxy postgrest:3000 {
+		reverse_proxy web:8000 {
 			# Pass original client information
 			header_up X-Real-IP {remote_host}
 			header_up X-Forwarded-For {remote_host}
@@ -135,9 +127,9 @@
 	}
 
 	# TLS configuration
-	# For localhost, Caddy auto-generates self-signed certificate
-	# For production with a real domain, configure TLS_EMAIL in .env
-	tls internal {
+	# When TLS_EMAIL is set, Caddy uses Let's Encrypt for real certificates
+	# When TLS_EMAIL is empty and domain is localhost, Caddy auto-generates self-signed
+	tls {$TLS_EMAIL:internal} {
 		protocols tls1.2 tls1.3
 	}
 
@@ -188,9 +180,10 @@
 		}
 	}
 
-	# Route Next.js API requests (internal use)
-	handle /api/auth/* {
-		reverse_proxy web:8000 {
+	# Route Supabase Realtime WebSocket connections (internal)
+	handle /api/realtime/v1/* {
+		uri strip_prefix /api/realtime/v1
+		reverse_proxy realtime:4000 {
 			header_up X-Real-IP {remote_host}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Proto {scheme}
@@ -198,9 +191,10 @@
 		}
 	}
 
-	# Route Next.js setup wizard API (Story 1.6 - internal use)
-	handle /api/setup {
-		reverse_proxy web:8000 {
+	# Route Supabase Storage API requests (internal)
+	handle /api/storage/v1/* {
+		uri strip_prefix /api/storage/v1
+		reverse_proxy storage:5000 {
 			header_up X-Real-IP {remote_host}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Proto {scheme}
@@ -208,10 +202,9 @@
 		}
 	}
 
-	# Catch-all for other /api/* requests (fallback)
+	# Catch-all for /api/* requests not matched above → Next.js API routes
 	handle /api/* {
-		uri strip_prefix /api
-		reverse_proxy postgrest:3000 {
+		reverse_proxy web:8000 {
 			header_up X-Real-IP {remote_host}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Proto {scheme}

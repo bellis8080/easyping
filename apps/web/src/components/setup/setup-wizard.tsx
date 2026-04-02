@@ -190,8 +190,13 @@ export function SetupWizard() {
         return;
       }
 
-      // Redirect to dashboard on success (full page reload to flush session state)
-      window.location.href = '/dashboard/analytics';
+      // Wait for session cookies to be persisted before redirecting
+      // (mirrors the same 100ms delay used in login/page.tsx)
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Redirect to root with welcome param — the root page smart-routes based on role
+      // (full page reload to flush session state)
+      window.location.href = '/?welcome=true';
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       setIsSubmitting(false);

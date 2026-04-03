@@ -189,9 +189,7 @@ function formatDateLabel(dateStr: string, period: string): string {
 /**
  * Aggregate volume data by week for 90-day view
  */
-function aggregateVolumeByWeek(
-  data: VolumeEntry[]
-): VolumeEntry[] {
+function aggregateVolumeByWeek(data: VolumeEntry[]): VolumeEntry[] {
   const weekMap = new Map<string, number>();
 
   data.forEach((entry) => {
@@ -216,7 +214,9 @@ interface PingAnalyticsTabProps {
 export function PingAnalyticsTab({ dateRange }: PingAnalyticsTabProps) {
   const router = useRouter();
   const [data, setData] = useState<PingAnalyticsResponse | null>(null);
-  const [agentData, setAgentData] = useState<AgentAnalyticsResponse | null>(null);
+  const [agentData, setAgentData] = useState<AgentAnalyticsResponse | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [isAgentLoading, setIsAgentLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -377,13 +377,16 @@ export function PingAnalyticsTab({ dateRange }: PingAnalyticsTabProps) {
   }
 
   // Loading state - wait for both pings and agent data to load
-  if (isLoading && isAgentLoading) {
+  if (isLoading || isAgentLoading) {
     return (
       <div className="space-y-8">
         {/* Metrics Cards skeleton */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="rounded-lg border-2 border-slate-200 bg-white p-6 shadow-lg">
+            <div
+              key={i}
+              className="rounded-lg border-2 border-slate-200 bg-white p-6 shadow-lg"
+            >
               <div className="animate-pulse space-y-3">
                 <div className="h-4 w-24 rounded bg-slate-200" />
                 <div className="h-8 w-16 rounded bg-slate-200" />
@@ -412,7 +415,9 @@ export function PingAnalyticsTab({ dateRange }: PingAnalyticsTabProps) {
 
   // Empty state
   const isEmpty =
-    !isLoading && data?.totals?.totalPings === 0 && data?.totals?.openPings === 0;
+    !isLoading &&
+    data?.totals?.totalPings === 0 &&
+    data?.totals?.openPings === 0;
 
   if (isEmpty) {
     return (
@@ -448,7 +453,8 @@ export function PingAnalyticsTab({ dateRange }: PingAnalyticsTabProps) {
         {/* Header for agent view */}
         <div className="rounded-lg border-2 border-blue-100 bg-blue-50 p-4">
           <p className="text-sm text-blue-700">
-            Viewing your personal performance metrics for {agentPeriodLabel.toLowerCase()}
+            Viewing your personal performance metrics for{' '}
+            {agentPeriodLabel.toLowerCase()}
           </p>
         </div>
 
@@ -456,7 +462,9 @@ export function PingAnalyticsTab({ dateRange }: PingAnalyticsTabProps) {
         <div className="rounded-lg border-2 border-slate-200 bg-white p-6 shadow-lg">
           <div className="mb-6 flex items-center gap-3">
             <Users className="h-5 w-5 text-slate-400" />
-            <h3 className="text-lg font-bold text-slate-900">Your Performance</h3>
+            <h3 className="text-lg font-bold text-slate-900">
+              Your Performance
+            </h3>
           </div>
 
           {isAgentLoading ? (
@@ -491,7 +499,9 @@ export function PingAnalyticsTab({ dateRange }: PingAnalyticsTabProps) {
                     <tr
                       key={agent.agentId}
                       onClick={() =>
-                        router.push(`/dashboard/analytics/agents/${agent.agentId}`)
+                        router.push(
+                          `/dashboard/analytics/agents/${agent.agentId}`
+                        )
                       }
                       className="cursor-pointer border-b border-slate-100 transition-colors hover:bg-slate-50"
                     >
@@ -547,7 +557,9 @@ export function PingAnalyticsTab({ dateRange }: PingAnalyticsTabProps) {
                       </td>
                       <td className="py-4 pr-4 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <span className="text-slate-600">{agent.pingsAssigned}</span>
+                          <span className="text-slate-600">
+                            {agent.pingsAssigned}
+                          </span>
                           <ChevronRight className="h-4 w-4 text-slate-400" />
                         </div>
                       </td>
@@ -612,11 +624,13 @@ export function PingAnalyticsTab({ dateRange }: PingAnalyticsTabProps) {
           value={
             isLoading
               ? '-'
-              : formatResolutionTime(data?.totals?.avgResolutionTimeMinutes ?? null)
+              : formatResolutionTime(
+                  data?.totals?.avgResolutionTimeMinutes ?? null
+                )
           }
           trend={
-            data?.totals?.avgResolutionTimeMinutes !== null &&
-            data?.totals?.previousPeriod?.avgResolutionTimeMinutes !== null
+            data?.totals?.avgResolutionTimeMinutes != null &&
+            data?.totals?.previousPeriod?.avgResolutionTimeMinutes != null
               ? calculateTrend(
                   data!.totals.avgResolutionTimeMinutes!,
                   data!.totals.previousPeriod.avgResolutionTimeMinutes!
@@ -638,8 +652,8 @@ export function PingAnalyticsTab({ dateRange }: PingAnalyticsTabProps) {
                 : 'N/A'
           }
           trend={
-            data?.totals?.slaComplianceRate !== null &&
-            data?.totals?.previousPeriod?.slaComplianceRate !== null
+            data?.totals?.slaComplianceRate != null &&
+            data?.totals?.previousPeriod?.slaComplianceRate != null
               ? calculateTrend(
                   data!.totals.slaComplianceRate!,
                   data!.totals.previousPeriod.slaComplianceRate!
@@ -706,9 +720,7 @@ export function PingAnalyticsTab({ dateRange }: PingAnalyticsTabProps) {
                         className="w-full cursor-pointer rounded-t-lg bg-gradient-to-t from-blue-500 to-blue-400 transition-all hover:from-orange-500 hover:to-orange-400"
                         style={{
                           height:
-                            entry.count > 0
-                              ? `${Math.max(height, 5)}%`
-                              : '4px',
+                            entry.count > 0 ? `${Math.max(height, 5)}%` : '4px',
                           minHeight: entry.count > 0 ? '20px' : '4px',
                           opacity: entry.count > 0 ? 1 : 0.3,
                         }}
@@ -789,7 +801,9 @@ export function PingAnalyticsTab({ dateRange }: PingAnalyticsTabProps) {
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Users className="h-5 w-5 text-slate-400" />
-            <h3 className="text-lg font-bold text-slate-900">Agent Performance</h3>
+            <h3 className="text-lg font-bold text-slate-900">
+              Agent Performance
+            </h3>
           </div>
           {agentData && agentData.agents.length > 1 && (
             <span className="text-sm text-slate-500">
@@ -830,7 +844,9 @@ export function PingAnalyticsTab({ dateRange }: PingAnalyticsTabProps) {
                   <tr
                     key={agent.agentId}
                     onClick={() =>
-                      router.push(`/dashboard/analytics/agents/${agent.agentId}`)
+                      router.push(
+                        `/dashboard/analytics/agents/${agent.agentId}`
+                      )
                     }
                     className={`cursor-pointer border-b border-slate-100 transition-colors hover:bg-slate-50 ${
                       index === 0 && agentData.agents.length > 1
@@ -899,7 +915,9 @@ export function PingAnalyticsTab({ dateRange }: PingAnalyticsTabProps) {
                     </td>
                     <td className="py-4 pr-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <span className="text-slate-600">{agent.pingsAssigned}</span>
+                        <span className="text-slate-600">
+                          {agent.pingsAssigned}
+                        </span>
                         <ChevronRight className="h-4 w-4 text-slate-400" />
                       </div>
                     </td>
